@@ -1,13 +1,17 @@
 import React from "react";
 import { Info } from "lucide-react";
-import type { CloudFile } from "@/lib/shared/types";
+import type { CloudFile, Project } from "@/lib/shared/types";
 import { formatBytes } from "./FileGrid";
 
 type DetailDrawerProps = {
   file: CloudFile | null;
+  projects?: Project[];
+  isBusy?: boolean;
+  onArchive?: (file: CloudFile) => void;
+  onAssignProject?: (file: CloudFile, projectId: string) => void;
 };
 
-export function DetailDrawer({ file }: DetailDrawerProps) {
+export function DetailDrawer({ file, projects = [], isBusy = false, onArchive, onAssignProject }: DetailDrawerProps) {
   if (!file) {
     return (
       <aside className="h-full rounded-md border border-line bg-panel p-4 shadow-panel" aria-label="File details">
@@ -28,6 +32,47 @@ export function DetailDrawer({ file }: DetailDrawerProps) {
         <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">Selected File</p>
         <h2 className="mt-2 truncate text-base font-semibold text-ink">{file.name}</h2>
       </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <a
+          className="inline-flex h-9 items-center justify-center rounded-md bg-accent px-3 text-sm font-semibold text-white"
+          href={`/api/files/${encodeURIComponent(file.id)}/download`}
+        >
+          Download
+        </a>
+        <button
+          type="button"
+          className="inline-flex h-9 items-center justify-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink"
+          onClick={() => onArchive?.(file)}
+          disabled={isBusy}
+        >
+          Archive
+        </button>
+        <button
+          type="button"
+          className="inline-flex h-9 items-center justify-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink"
+          onClick={() => void navigator.clipboard?.writeText(file.storagePath)}
+        >
+          Copy path
+        </button>
+      </div>
+
+      <label className="mt-4 block text-sm font-semibold text-ink">
+        Project
+        <select
+          className="mt-2 h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink"
+          value={file.projectId ?? ""}
+          onChange={(event) => onAssignProject?.(file, event.target.value)}
+          disabled={isBusy}
+        >
+          <option value="">Inbox</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <dl className="mt-5 grid grid-cols-1 gap-3 text-sm">
         <DetailRow label="Size" value={formatBytes(file.sizeBytes)} />
