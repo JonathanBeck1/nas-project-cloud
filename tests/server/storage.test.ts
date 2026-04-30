@@ -103,6 +103,7 @@ describe("storage service", () => {
     const details = await storage.fileDetails(stored.relativePath);
 
     expect(details.sizeBytes).toBe(6);
+    expect(path.isAbsolute(details.absolutePath)).toBe(true);
     expect(details.absolutePath.endsWith("manual.pdf")).toBe(true);
   });
 
