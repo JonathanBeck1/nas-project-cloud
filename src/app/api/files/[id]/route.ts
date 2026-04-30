@@ -4,10 +4,13 @@ import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
 
-const updateFileSchema = z.object({
-  projectId: z.string().min(1).nullable().optional(),
-  categoryId: z.string().min(1).nullable().optional()
-});
+const updateFileSchema = z
+  .object({
+    projectId: z.string().min(1).nullable().optional(),
+    categoryId: z.string().min(1).nullable().optional()
+  })
+  .strict()
+  .refine((data) => data.projectId !== undefined || data.categoryId !== undefined);
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -45,6 +48,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (parsed.data.categoryId !== undefined) {
     update.categoryId = parsed.data.categoryId;
+    if (parsed.data.categoryId) {
+      const categoryExists = repo.listCategories().some((category) => category.id === parsed.data.categoryId);
+      if (!categoryExists) {
+        return NextResponse.json({ error: "category not found" }, { status: 404 });
+      }
+    }
   }
 
   if (parsed.data.projectId !== undefined) {

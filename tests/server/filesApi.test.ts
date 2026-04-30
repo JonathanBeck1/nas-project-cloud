@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
     createFile: vi.fn(),
     getFileById: vi.fn(),
     getProjectById: vi.fn(),
+    listCategories: vi.fn(),
     updateFile: vi.fn()
   };
   const storage = {
@@ -61,6 +62,7 @@ describe("files API module", () => {
     mocks.repo.listFiles.mockReturnValue([]);
     mocks.repo.getFileById.mockReturnValue(null);
     mocks.repo.getProjectById.mockReturnValue(null);
+    mocks.repo.listCategories.mockReturnValue([{ id: "cat_cad", name: "CAD", slug: "cad" }]);
     mocks.repo.createFile.mockImplementation((input) => ({
       id: "file_1",
       uploadedAt: "2026-04-30T00:00:00.000Z",
@@ -228,6 +230,27 @@ describe("files API module", () => {
     expect(mocks.repo.updateFile).not.toHaveBeenCalled();
   });
 
+  it.each([["empty", {}], ["unknown", { bogus: true }]])(
+    "returns 400 when patch body is %s",
+    async (_label, body) => {
+      const { PATCH } = await import("@/app/api/files/[id]/route");
+
+      const response = await PATCH(
+        new Request("http://localhost/api/files/file_123", {
+          method: "PATCH",
+          body: JSON.stringify(body)
+        }),
+        { params: Promise.resolve({ id: "file_123" }) }
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({ error: "invalid file update" });
+      expect(mocks.repo.getFileById).not.toHaveBeenCalled();
+      expect(mocks.storage.moveToProject).not.toHaveBeenCalled();
+      expect(mocks.repo.updateFile).not.toHaveBeenCalled();
+    }
+  );
+
   it.each([
     ["missing", null],
     [
@@ -253,6 +276,35 @@ describe("files API module", () => {
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({ error: "file not found" });
+    expect(mocks.repo.updateFile).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 before moving storage when patch category is missing", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      status: "active",
+      storagePath: "Inbox/Browser/bracket.stl"
+    });
+    mocks.repo.getProjectById.mockReturnValue({
+      id: "proj_123",
+      slug: "print-parts",
+      name: "Print Parts"
+    });
+    mocks.repo.listCategories.mockReturnValue([{ id: "cat_cad", name: "CAD", slug: "cad" }]);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: "proj_123", categoryId: "cat_missing" })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "category not found" });
+    expect(mocks.storage.moveToProject).not.toHaveBeenCalled();
     expect(mocks.repo.updateFile).not.toHaveBeenCalled();
   });
 
