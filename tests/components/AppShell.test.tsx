@@ -143,6 +143,53 @@ describe("AppShell", () => {
     expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
   });
 
+  it("hides detail actions when the selected file is filtered out", async () => {
+    const user = userEvent.setup();
+    const imageFile = {
+      ...uploadedFile,
+      id: "file_image",
+      name: "render.png",
+      extension: "png",
+      family: "image" as const,
+      mimeType: "image/png",
+      storagePath: "/nas/inbox/render.png"
+    };
+
+    render(<AppShell initialData={{ files: [uploadedFile, imageFile], projects: [], categories: [], tags: [] }} />);
+
+    await user.click(screen.getByRole("button", { name: "manual.pdf" }));
+
+    const details = screen.getByRole("complementary", { name: "File details" });
+    expect(within(details).getByRole("link", { name: "Download" })).toHaveAttribute(
+      "href",
+      "/api/files/file_manual/download"
+    );
+    expect(within(details).getByRole("button", { name: "Archive" })).toBeVisible();
+
+    await user.type(screen.getByRole("searchbox", { name: "Search files" }), "render");
+
+    expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
+    expect(within(details).getByText("Select a file to inspect its project metadata.")).toBeVisible();
+    expect(within(details).queryByRole("link", { name: "Download" })).not.toBeInTheDocument();
+    expect(within(details).queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+  });
+
+  it("filters visible files by source device metadata", async () => {
+    const user = userEvent.setup();
+    const scannerFile = {
+      ...notesFile,
+      sourceDevice: "Scanner",
+      storagePath: "/nas/inbox/notes.txt"
+    };
+
+    render(<AppShell initialData={{ files: [uploadedFile, scannerFile], projects: [], categories: [], tags: [] }} />);
+
+    await user.type(screen.getByRole("searchbox", { name: "Search files" }), "browser");
+
+    expect(screen.getByRole("button", { name: "manual.pdf" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "notes.txt" })).not.toBeInTheDocument();
+  });
+
   it("archives a selected file and removes it from the grid", async () => {
     const user = userEvent.setup();
     const archivedFile = { ...uploadedFile, status: "archived" as const, archivedAt: "2026-04-30T00:00:00.000Z" };

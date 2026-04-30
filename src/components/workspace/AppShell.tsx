@@ -26,7 +26,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [fileActionError, setFileActionError] = useState("");
   const [isFileActionBusy, setIsFileActionBusy] = useState(false);
   const visibleFiles = files.filter((file) => matchesQuery(file, query));
-  const selectedFile = files.find((file) => file.id === selectedFileId) ?? null;
+  const selectedFile = visibleFiles.find((file) => file.id === selectedFileId) ?? null;
 
   const handleCreateProject = async (project: ProjectDialogInput) => {
     const response = await fetch("/api/projects", {
