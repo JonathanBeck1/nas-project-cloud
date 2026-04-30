@@ -1,0 +1,61 @@
+import React from "react";
+import { FolderPlus, Inbox, UploadCloud } from "lucide-react";
+import { CommandBar } from "./CommandBar";
+import { Sidebar } from "./Sidebar";
+
+export function AppShell() {
+  return (
+    <div className="min-h-screen bg-surface text-ink">
+      <div className="grid min-h-screen grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="min-h-0">
+          <Sidebar />
+        </div>
+
+        <div className="flex min-w-0 flex-col">
+          <CommandBar />
+
+          <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 lg:px-6">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+              <section className="rounded-md border border-line bg-panel shadow-panel" aria-labelledby="inbox-heading">
+                <div className="flex flex-col gap-4 border-b border-line px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">Local Library</p>
+                    <h1 id="inbox-heading" className="mt-1 text-xl font-semibold text-ink">
+                      Inbox
+                    </h1>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-white shadow-panel transition hover:bg-accent/90"
+                  >
+                    <FolderPlus aria-hidden="true" className="h-4 w-4" />
+                    New Project
+                  </button>
+                </div>
+
+                <div className="px-4 py-5">
+                  <div className="flex min-h-[360px] flex-col items-center justify-center rounded-md border border-dashed border-line bg-surface/70 px-4 py-10 text-center">
+                    <div className="grid h-12 w-12 place-items-center rounded-md border border-line bg-panel text-accent">
+                      <Inbox aria-hidden="true" className="h-5 w-5" />
+                    </div>
+                    <h2 className="mt-5 text-base font-semibold text-ink">Inbox</h2>
+                    <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
+                      Drop files here to move them onto the NAS now and organize them into projects when ready.
+                    </p>
+                    <button
+                      type="button"
+                      className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted"
+                    >
+                      <UploadCloud aria-hidden="true" className="h-4 w-4" />
+                      Drop files
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+}
