@@ -54,7 +54,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     try {
       await archiveFile(file.id);
       setFiles((currentFiles) => currentFiles.filter((candidate) => candidate.id !== file.id));
-      setSelectedFileId(null);
+      setSelectedFileId((currentSelectedId) => (currentSelectedId === file.id ? null : currentSelectedId));
       setFileActionMessage(`Archived ${file.name}`);
     } catch (error) {
       setFileActionError(error instanceof Error ? error.message : "Could not archive file");
@@ -70,7 +70,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     try {
       const updated = await updateFileAssignment(file.id, { projectId: projectId || null });
       setFiles((currentFiles) => currentFiles.map((candidate) => (candidate.id === updated.id ? updated : candidate)));
-      setSelectedFileId(updated.id);
+      setSelectedFileId((currentSelectedId) => (currentSelectedId === file.id ? updated.id : currentSelectedId));
       setFileActionMessage(`Updated ${updated.name}`);
     } catch (error) {
       setFileActionError(error instanceof Error ? error.message : "Could not update file");

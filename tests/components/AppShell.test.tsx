@@ -1,9 +1,9 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/workspace/AppShell";
-import type { CloudFile } from "@/lib/shared/types";
+import type { CloudFile, Project } from "@/lib/shared/types";
 
 const uploadedFile: CloudFile = {
   id: "file_manual",
@@ -22,6 +22,28 @@ const uploadedFile: CloudFile = {
   uploadedAt: "2026-04-30T12:00:00.000Z",
   updatedAt: "2026-04-30T12:00:00.000Z",
   tags: []
+};
+
+const notesFile: CloudFile = {
+  ...uploadedFile,
+  id: "file_notes",
+  name: "notes.txt",
+  extension: "txt",
+  mimeType: "text/plain",
+  sizeBytes: 512,
+  checksum: "sha256-notes",
+  storagePath: "/nas/inbox/notes.txt"
+};
+
+const project: Project = {
+  id: "proj_123",
+  name: "Printer Upgrade",
+  slug: "printer-upgrade",
+  description: "Printer upgrade docs",
+  categoryId: null,
+  status: "active",
+  createdAt: "2026-04-30T12:00:00.000Z",
+  updatedAt: "2026-04-30T12:00:00.000Z"
 };
 
 describe("AppShell", () => {
@@ -117,4 +139,68 @@ describe("AppShell", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/files/file_manual/archive", { method: "POST" }));
     expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
   });
+
+  it("updates project assignment and keeps the selected file open", async () => {
+    const user = userEvent.setup();
+    const updatedFile = {
+      ...uploadedFile,
+      projectId: "proj_123",
+      storagePath: "/nas/projects/printer-upgrade/manual.pdf",
+      updatedAt: "2026-04-30T12:30:00.000Z"
+    };
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ file: updatedFile }), { status: 200 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell initialData={{ files: [uploadedFile], projects: [project], categories: [], tags: [] }} />);
+
+    await user.click(screen.getByRole("button", { name: "manual.pdf" }));
+    await user.selectOptions(screen.getByLabelText("Project"), "proj_123");
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/files/file_manual",
+        expect.objectContaining({
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: "proj_123" })
+        })
+      )
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Updated manual.pdf");
+    expect(screen.getByRole("button", { name: "manual.pdf" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("href", "/api/files/file_manual/download");
+    expect(screen.getByLabelText("Project")).toHaveValue("proj_123");
+    expect(screen.getByText("/nas/projects/printer-upgrade/manual.pdf")).toBeVisible();
+  });
+
+  it("preserves a newer file selection when archiving another file finishes", async () => {
+    const user = userEvent.setup();
+    const archivedFile = { ...uploadedFile, status: "archived" as const, archivedAt: "2026-04-30T00:00:00.000Z" };
+    const archiveResponse = deferred<Response>();
+    const fetchMock = vi.fn<typeof fetch>(() => archiveResponse.promise);
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell initialData={{ files: [uploadedFile, notesFile], projects: [], categories: [], tags: [] }} />);
+
+    await user.click(screen.getByRole("button", { name: "manual.pdf" }));
+    await user.click(screen.getByRole("button", { name: "Archive" }));
+    await user.click(screen.getByRole("button", { name: "notes.txt" }));
+
+    archiveResponse.resolve(new Response(JSON.stringify({ file: archivedFile }), { status: 200 }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "notes.txt" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(screen.getByRole("complementary", { name: "File details" })).getByText("notes.txt")).toBeVisible();
+  });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+
+  return { promise, resolve };
+}
