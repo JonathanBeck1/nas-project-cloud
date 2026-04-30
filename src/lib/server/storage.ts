@@ -36,6 +36,14 @@ export type StoredFile = {
 
 export function createStorageService(root = appConfig.storageRoot) {
   const storageRoot = path.resolve(root);
+  const absolutePathFor = (relativePath: string) => {
+    const absolutePath = path.resolve(storageRoot, relativePath);
+    const resolvedRelativePath = path.relative(storageRoot, absolutePath);
+    if (resolvedRelativePath.startsWith("..") || path.isAbsolute(resolvedRelativePath)) {
+      throw new Error("Storage path escapes configured root");
+    }
+    return absolutePath;
+  };
 
   return {
     async writeUpload(input: WriteUploadInput): Promise<StoredFile> {
@@ -57,17 +65,10 @@ export function createStorageService(root = appConfig.storageRoot) {
       };
     },
 
-    absolutePathFor(relativePath: string) {
-      const absolutePath = path.resolve(storageRoot, relativePath);
-      const resolvedRelativePath = path.relative(storageRoot, absolutePath);
-      if (resolvedRelativePath.startsWith("..") || path.isAbsolute(resolvedRelativePath)) {
-        throw new Error("Storage path escapes configured root");
-      }
-      return absolutePath;
-    },
+    absolutePathFor,
 
     async fileDetails(relativePath: string) {
-      const absolutePath = this.absolutePathFor(relativePath);
+      const absolutePath = absolutePathFor(relativePath);
       const stats = await fs.stat(absolutePath);
       if (!stats.isFile()) {
         throw new Error("Storage path is not a file");
@@ -82,7 +83,7 @@ export function createStorageService(root = appConfig.storageRoot) {
     async moveToProject(
       input: MoveToProjectInput
     ): Promise<{ absolutePath: string; relativePath: string }> {
-      const from = this.absolutePathFor(input.currentRelativePath);
+      const from = absolutePathFor(input.currentRelativePath);
       const directory = path.join(
         storageRoot,
         "Projects",
@@ -101,7 +102,7 @@ export function createStorageService(root = appConfig.storageRoot) {
       input: ArchiveFileInput
     ): Promise<{ absolutePath: string; relativePath: string }> {
       const now = input.now ?? new Date();
-      const from = this.absolutePathFor(input.currentRelativePath);
+      const from = absolutePathFor(input.currentRelativePath);
       const year = String(now.getUTCFullYear());
       const month = String(now.getUTCMonth() + 1).padStart(2, "0");
       const directory = path.join(storageRoot, "Archive", year, month);
@@ -157,12 +158,48 @@ async function moveIntoDirectory(input: {
   filename: string;
 }): Promise<{ absolutePath: string; relativePath: string }> {
   await fs.mkdir(input.directory, { recursive: true });
-  const absolutePath = await nextAvailablePath(input.directory, sanitizeFilename(input.filename));
-  await fs.rename(input.from, absolutePath);
+  const absolutePath = await linkIntoAvailablePath(
+    input.directory,
+    sanitizeFilename(input.filename),
+    input.from
+  );
   return {
     absolutePath,
     relativePath: path.relative(input.storageRoot, absolutePath).split(path.sep).join("/")
   };
+}
+
+async function linkIntoAvailablePath(
+  directory: string,
+  filename: string,
+  from: string
+): Promise<string> {
+  const parsed = path.parse(filename);
+  for (let index = 1; index < 10_000; index += 1) {
+    const candidateName = index === 1 ? filename : `${parsed.name}-${index}${parsed.ext}`;
+    const candidatePath = path.join(directory, candidateName);
+    try {
+      await fs.link(from, candidatePath);
+      try {
+        await fs.unlink(from);
+      } catch (error) {
+        await fs.unlink(candidatePath).catch(() => undefined);
+        throw error;
+      }
+      return candidatePath;
+    } catch (error) {
+      if (isNodeError(error) && error.code === "EEXIST") {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error(`Could not allocate filename for ${filename}`);
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 function sha256(bytes: Buffer): string {

@@ -107,6 +107,23 @@ describe("storage service", () => {
     expect(details.absolutePath.endsWith("manual.pdf")).toBe(true);
   });
 
+  it("returns file stats when the method is destructured", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const stored = await storage.writeUpload({
+      target: { kind: "inbox", sourceDevice: "Browser" },
+      filename: "manual.pdf",
+      mimeType: "application/pdf",
+      bytes: Buffer.from("manual")
+    });
+    const { fileDetails } = storage;
+
+    const details = await fileDetails(stored.relativePath);
+
+    expect(details.sizeBytes).toBe(6);
+  });
+
   it("moves files into a project and archive without leaving storage root", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
     createdDirs.push(dir);
@@ -133,6 +150,34 @@ describe("storage service", () => {
     });
     expect(archived.relativePath).toBe("Archive/2026/04/bracket.stl");
     expect(fs.existsSync(path.join(dir, archived.relativePath))).toBe(true);
+  });
+
+  it("moves files to the next suffix without overwriting an existing destination", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const existingPath = path.join(dir, "Projects", "print-parts", "Inbox", "bracket.stl");
+    fs.mkdirSync(path.dirname(existingPath), { recursive: true });
+    fs.writeFileSync(existingPath, "existing");
+    const stored = await storage.writeUpload({
+      target: { kind: "inbox", sourceDevice: "Browser" },
+      filename: "bracket.stl",
+      mimeType: "model/stl",
+      bytes: Buffer.from("incoming")
+    });
+    const originalSourcePath = stored.absolutePath;
+    const { moveToProject } = storage;
+
+    const moved = await moveToProject({
+      currentRelativePath: stored.relativePath,
+      projectSlug: "print-parts",
+      filename: "bracket.stl"
+    });
+
+    expect(moved.relativePath).toBe("Projects/print-parts/Inbox/bracket-2.stl");
+    expect(fs.readFileSync(existingPath, "utf8")).toBe("existing");
+    expect(fs.readFileSync(path.join(dir, moved.relativePath), "utf8")).toBe("incoming");
+    expect(fs.existsSync(originalSourcePath)).toBe(false);
   });
 
   it("rejects paths escaping to a sibling root with the same prefix", () => {
