@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { FileGrid } from "@/components/workspace/FileGrid";
 import type { CloudFile } from "@/lib/shared/types";
 
@@ -30,5 +31,19 @@ describe("FileGrid", () => {
     expect(screen.getByText("bracket.stl")).toBeVisible();
     expect(screen.getByText("2 KB")).toBeVisible();
     expect(screen.getByText("Windows-PC")).toBeVisible();
+  });
+
+  it("selects a file card", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+
+    render(<FileGrid files={[fixture]} selectedFileId={fixture.id} onSelectFile={onSelect} />);
+
+    const card = screen.getByRole("button", { name: "bracket.stl" });
+    expect(card).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(card);
+
+    expect(onSelect).toHaveBeenCalledWith(fixture);
   });
 });

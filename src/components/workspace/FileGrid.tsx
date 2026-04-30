@@ -5,6 +5,8 @@ import type { CloudFile, FileFamily } from "@/lib/shared/types";
 
 type FileGridProps = {
   files: CloudFile[];
+  selectedFileId?: string | null;
+  onSelectFile?: (file: CloudFile) => void;
 };
 
 const familyIcons: Partial<Record<FileFamily, LucideIcon>> = {
@@ -35,7 +37,7 @@ function formatNumber(value: number): string {
   return Number.isInteger(value) ? value.toString() : value.toFixed(1);
 }
 
-export function FileGrid({ files }: FileGridProps) {
+export function FileGrid({ files, selectedFileId = null, onSelectFile }: FileGridProps) {
   if (files.length === 0) {
     return (
       <div className="flex min-h-[220px] flex-col items-center justify-center rounded-md border border-dashed border-line bg-surface/70 px-4 py-8 text-center">
@@ -54,9 +56,16 @@ export function FileGrid({ files }: FileGridProps) {
         const Icon = familyIcons[file.family] ?? File;
 
         return (
-          <article
+          <button
             key={file.id}
-            className="min-w-0 rounded-md border border-line bg-panel p-3 shadow-panel transition hover:border-muted"
+            type="button"
+            aria-label={file.name}
+            aria-pressed={selectedFileId === file.id}
+            onClick={() => onSelectFile?.(file)}
+            className={[
+              "min-w-0 rounded-md border bg-panel p-3 text-left shadow-panel transition hover:border-muted",
+              selectedFileId === file.id ? "border-accent ring-2 ring-accent/20" : "border-line"
+            ].join(" ")}
           >
             <div className="flex min-w-0 items-start gap-3">
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line bg-surface text-accent">
@@ -70,7 +79,7 @@ export function FileGrid({ files }: FileGridProps) {
                 </div>
               </div>
             </div>
-          </article>
+          </button>
         );
       })}
     </div>
