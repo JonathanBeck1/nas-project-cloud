@@ -1,0 +1,18 @@
+services:
+  nas-project-cloud:
+    image: ghcr.io/YOUR_GITHUB_ORG/nas-project-cloud:latest
+    container_name: nas-project-cloud
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NAS_CLOUD_STORAGE_ROOT: /mnt/nas-cloud
+      NAS_CLOUD_DB_PATH: /data/nas-cloud.sqlite
+      NAS_CLOUD_PUBLIC_BASE_PATH: /files
+      NAS_CLOUD_MAX_UPLOAD_BYTES: "2147483648"
+    volumes:
+      - /mnt/tank/nas-project-cloud:/mnt/nas-cloud
+      - nas-project-cloud-data:/data
+
+volumes:
+  nas-project-cloud-data:

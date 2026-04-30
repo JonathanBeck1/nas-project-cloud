@@ -1,0 +1,10 @@
+.data
+.git
+.next
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+docs/superpowers
+tests
