@@ -119,7 +119,14 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                       </p>
                       <label
                         htmlFor="workspace-file-upload"
-                        className="mt-6 inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.currentTarget.control?.click();
+                          }
+                        }}
+                        className="mt-6 inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                       >
                         <UploadCloud aria-hidden="true" className="h-4 w-4" />
                         Drop files

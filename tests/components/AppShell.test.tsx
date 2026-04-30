@@ -87,6 +87,27 @@ describe("AppShell", () => {
     expect(screen.getByText("manual.pdf")).toBeVisible();
   });
 
+  it("lets keyboard users focus and activate the visible upload control", async () => {
+    const user = userEvent.setup();
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+
+    render(<AppShell />);
+
+    const uploadControl = screen.getByText("Drop files");
+
+    uploadControl.focus();
+    expect(uploadControl).toHaveFocus();
+
+    await user.keyboard(" ");
+    await user.keyboard("{Enter}");
+
+    expect(inputClick).toHaveBeenCalledTimes(2);
+    expect(inputClick.mock.instances).toEqual([
+      screen.getByLabelText("Choose files"),
+      screen.getByLabelText("Choose files")
+    ]);
+  });
+
   it("posts a project JSON payload from the project dialog", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn<typeof fetch>(() =>
