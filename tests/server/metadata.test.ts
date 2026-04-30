@@ -82,4 +82,81 @@ describe("metadata repository", () => {
       db.close();
     }
   });
+
+  it("gets files by id and excludes archived files by default", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const active = repo.createFile({
+        name: "active.png",
+        extension: "png",
+        family: "image",
+        mimeType: "image/png",
+        sizeBytes: 10,
+        checksum: "active",
+        storagePath: "Inbox/Browser/active.png",
+        sourceDevice: "Browser"
+      });
+      const archived = repo.createFile({
+        name: "archived.png",
+        extension: "png",
+        family: "image",
+        mimeType: "image/png",
+        sizeBytes: 10,
+        checksum: "archived",
+        storagePath: "Archive/2026/04/archived.png",
+        sourceDevice: "Browser",
+        status: "archived",
+        archivedAt: "2026-04-30T00:00:00.000Z"
+      });
+
+      expect(repo.getFileById(active.id)?.name).toBe("active.png");
+      expect(repo.getFileById("missing")).toBeNull();
+      expect(repo.listFiles().map((file) => file.id)).toEqual([active.id]);
+      expect(repo.listFiles({ includeArchived: true }).map((file) => file.id)).toEqual([archived.id, active.id]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("updates file project, category, storage path, and archive state", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const project = repo.createProject({ name: "Print Parts" });
+      const file = repo.createFile({
+        name: "bracket.stl",
+        extension: "stl",
+        family: "cad",
+        mimeType: "model/stl",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/bracket.stl",
+        sourceDevice: "Browser"
+      });
+
+      const assigned = repo.updateFile(file.id, {
+        projectId: project.id,
+        categoryId: "cat_cad",
+        storagePath: "Projects/print-parts/Inbox/bracket.stl"
+      });
+      expect(assigned?.projectId).toBe(project.id);
+      expect(assigned?.categoryId).toBe("cat_cad");
+      expect(assigned?.storagePath).toBe("Projects/print-parts/Inbox/bracket.stl");
+
+      const archived = repo.updateFile(file.id, {
+        status: "archived",
+        archivedAt: "2026-04-30T00:00:00.000Z",
+        storagePath: "Archive/2026/04/bracket.stl"
+      });
+      expect(archived?.status).toBe("archived");
+      expect(archived?.archivedAt).toBe("2026-04-30T00:00:00.000Z");
+    } finally {
+      db.close();
+    }
+  });
 });

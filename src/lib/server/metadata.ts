@@ -71,6 +71,15 @@ type ListFilesFilters = {
   query?: string;
   projectId?: string | null;
   categoryId?: string | null;
+  includeArchived?: boolean;
+};
+
+type UpdateFileInput = {
+  projectId?: string | null;
+  categoryId?: string | null;
+  storagePath?: string;
+  status?: FileStatus;
+  archivedAt?: string | null;
 };
 
 export function slugify(value: string): string {
@@ -175,9 +184,53 @@ export function createMetadataRepository(db: AppDatabase) {
         .map(projectFromRow);
     },
 
+    getFileById(id: string): CloudFile | null {
+      const row = db.prepare<[string], FileRow>("select * from files where id = ? limit 1").get(id);
+      return row ? filesFromRowsWithTags(db, [row])[0] : null;
+    },
+
+    getProjectById(id: string): Project | null {
+      const row = db.prepare<[string], ProjectRow>("select * from projects where id = ? limit 1").get(id);
+      return row ? projectFromRow(row) : null;
+    },
+
+    updateFile(id: string, input: UpdateFileInput): CloudFile | null {
+      const existing = this.getFileById(id);
+      if (!existing) {
+        return null;
+      }
+
+      const next = {
+        id,
+        projectId: input.projectId !== undefined ? input.projectId : existing.projectId,
+        categoryId: input.categoryId !== undefined ? input.categoryId : existing.categoryId,
+        storagePath: input.storagePath ?? existing.storagePath,
+        status: input.status ?? existing.status,
+        archivedAt: input.archivedAt !== undefined ? input.archivedAt : existing.archivedAt,
+        updatedAt: new Date().toISOString()
+      };
+
+      db.prepare(`
+        update files
+        set project_id = @projectId,
+            category_id = @categoryId,
+            storage_path = @storagePath,
+            status = @status,
+            archived_at = @archivedAt,
+            updated_at = @updatedAt
+        where id = @id
+      `).run(next);
+
+      return this.getFileById(id);
+    },
+
     listFiles(filters: ListFilesFilters = {}): CloudFile[] {
       const where: string[] = [];
       const params: Record<string, string | null> = {};
+
+      if (!filters.includeArchived) {
+        where.push("status = 'active'");
+      }
 
       if (filters.query) {
         where.push("(name like @query or storage_path like @query)");
@@ -194,7 +247,9 @@ export function createMetadataRepository(db: AppDatabase) {
         params.categoryId = filters.categoryId;
       }
 
-      const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name`;
+      const sql = `select * from files${
+        where.length ? ` where ${where.join(" and ")}` : ""
+      } order by uploaded_at desc, rowid desc, name`;
       const files = db.prepare<Record<string, string | null>, FileRow>(sql).all(params);
       return filesFromRowsWithTags(db, files);
     },
