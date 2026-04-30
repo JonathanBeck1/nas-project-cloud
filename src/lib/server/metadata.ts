@@ -247,9 +247,7 @@ export function createMetadataRepository(db: AppDatabase) {
         params.categoryId = filters.categoryId;
       }
 
-      const sql = `select * from files${
-        where.length ? ` where ${where.join(" and ")}` : ""
-      } order by uploaded_at desc, rowid desc, name`;
+      const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name`;
       const files = db.prepare<Record<string, string | null>, FileRow>(sql).all(params);
       return filesFromRowsWithTags(db, files);
     },

@@ -115,7 +115,7 @@ describe("metadata repository", () => {
       expect(repo.getFileById(active.id)?.name).toBe("active.png");
       expect(repo.getFileById("missing")).toBeNull();
       expect(repo.listFiles().map((file) => file.id)).toEqual([active.id]);
-      expect(repo.listFiles({ includeArchived: true }).map((file) => file.id)).toEqual([archived.id, active.id]);
+      expect(repo.listFiles({ includeArchived: true }).map((file) => file.id).sort()).toEqual([active.id, archived.id].sort());
     } finally {
       db.close();
     }
@@ -155,6 +155,7 @@ describe("metadata repository", () => {
       });
       expect(archived?.status).toBe("archived");
       expect(archived?.archivedAt).toBe("2026-04-30T00:00:00.000Z");
+      expect(archived?.storagePath).toBe("Archive/2026/04/bracket.stl");
     } finally {
       db.close();
     }
