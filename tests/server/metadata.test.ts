@@ -58,4 +58,28 @@ describe("metadata repository", () => {
     expect(project.status).toBe("active");
     expect(repo.listProjects()).toEqual([project]);
   });
+
+  it("returns active lifecycle fields for new files", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const file = repo.createFile({
+        name: "bracket.stl",
+        extension: "stl",
+        family: "cad",
+        mimeType: "model/stl",
+        sizeBytes: 2048,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/bracket.stl",
+        sourceDevice: "Browser"
+      });
+
+      expect(file.status).toBe("active");
+      expect(file.archivedAt).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
 });

@@ -1,5 +1,7 @@
 export type FileFamily = "cad" | "image" | "video" | "document" | "archive" | "software" | "other";
 
+export type FileStatus = "active" | "archived";
+
 export type ProjectStatus = "active" | "paused" | "complete" | "archived";
 
 export type Category = {
@@ -40,6 +42,8 @@ export type CloudFile = {
   projectId: string | null;
   categoryId: string | null;
   sourceDevice: string;
+  status: FileStatus;
+  archivedAt: string | null;
   uploadedAt: string;
   updatedAt: string;
   tags: Tag[];

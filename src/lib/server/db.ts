@@ -81,6 +81,16 @@ function migrate(db: AppDatabase) {
     create index if not exists files_family_idx on files(family);
     create index if not exists files_uploaded_at_idx on files(uploaded_at);
   `);
+
+  addColumnIfMissing(db, "files", "status", "text not null default 'active'");
+  addColumnIfMissing(db, "files", "archived_at", "text");
+}
+
+function addColumnIfMissing(db: AppDatabase, table: string, column: string, definition: string) {
+  const columns = db.prepare(`pragma table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((existing) => existing.name === column)) {
+    db.exec(`alter table ${table} add column ${column} ${definition}`);
+  }
 }
 
 function seedDefaults(db: AppDatabase) {

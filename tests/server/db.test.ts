@@ -37,4 +37,19 @@ describe("createDatabase", () => {
       db.close();
     }
   });
+
+  it("adds lifecycle columns to files", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-db-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const columns = db.prepare("pragma table_info(files)").all() as Array<{ name: string; dflt_value: string | null }>;
+
+      expect(columns.map((column) => column.name)).toContain("status");
+      expect(columns.map((column) => column.name)).toContain("archived_at");
+      expect(columns.find((column) => column.name === "status")?.dflt_value).toBe("'active'");
+    } finally {
+      db.close();
+    }
+  });
 });

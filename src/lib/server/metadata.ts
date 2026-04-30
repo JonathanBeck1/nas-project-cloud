@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import type { AppDatabase } from "@/lib/server/db";
-import type { Category, CloudFile, FileFamily, Project, ProjectStatus, Tag } from "@/lib/shared/types";
+import type { Category, CloudFile, FileFamily, FileStatus, Project, ProjectStatus, Tag } from "@/lib/shared/types";
 
 type CategoryRow = {
   id: string;
@@ -34,6 +34,8 @@ export type FileRow = {
   project_id: string | null;
   category_id: string | null;
   source_device: string;
+  status: FileStatus;
+  archived_at: string | null;
   uploaded_at: string;
   updated_at: string;
 };
@@ -61,6 +63,8 @@ type CreateFileInput = {
   projectId?: string | null;
   categoryId?: string | null;
   sourceDevice: string;
+  status?: FileStatus;
+  archivedAt?: string | null;
 };
 
 type ListFilesFilters = {
@@ -92,6 +96,8 @@ export function fileFromRow(row: FileRow, tags: Tag[] = []): CloudFile {
     projectId: row.project_id,
     categoryId: row.category_id,
     sourceDevice: row.source_device,
+    status: row.status,
+    archivedAt: row.archived_at,
     uploadedAt: row.uploaded_at,
     updatedAt: row.updated_at,
     tags
@@ -135,6 +141,8 @@ export function createMetadataRepository(db: AppDatabase) {
         projectId: input.projectId ?? null,
         categoryId: input.categoryId ?? null,
         sourceDevice: input.sourceDevice,
+        status: input.status ?? "active",
+        archivedAt: input.archivedAt ?? null,
         uploadedAt: now,
         updatedAt: now
       };
@@ -142,11 +150,11 @@ export function createMetadataRepository(db: AppDatabase) {
       db.prepare(`
         insert into files (
           id, name, extension, family, mime_type, size_bytes, checksum, storage_path,
-          project_id, category_id, source_device, uploaded_at, updated_at
+          project_id, category_id, source_device, status, archived_at, uploaded_at, updated_at
         )
         values (
           @id, @name, @extension, @family, @mimeType, @sizeBytes, @checksum, @storagePath,
-          @projectId, @categoryId, @sourceDevice, @uploadedAt, @updatedAt
+          @projectId, @categoryId, @sourceDevice, @status, @archivedAt, @uploadedAt, @updatedAt
         )
       `).run(file);
 
