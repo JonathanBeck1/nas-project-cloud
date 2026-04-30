@@ -1,18 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileFamily } from "@/lib/shared/types";
 
 const mocks = vi.hoisted(() => {
   const repo = {
     listFiles: vi.fn(),
-    createFile: vi.fn()
+    createFile: vi.fn(),
+    getFileById: vi.fn()
   };
   const storage = {
-    writeUpload: vi.fn()
+    writeUpload: vi.fn(),
+    absolutePathFor: vi.fn()
   };
 
   return {
     appConfig: {
-      maxUploadBytes: 10
+      maxUploadBytes: 10,
+      storageRoot: ""
     },
     db: {},
     repo,
@@ -20,6 +26,8 @@ const mocks = vi.hoisted(() => {
     classifyFile: vi.fn()
   };
 });
+
+const createdDirs: string[] = [];
 
 vi.mock("@/lib/server/config", () => ({
   appConfig: mocks.appConfig
@@ -45,7 +53,9 @@ describe("files API module", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.appConfig.maxUploadBytes = 10;
+    mocks.appConfig.storageRoot = os.tmpdir();
     mocks.repo.listFiles.mockReturnValue([]);
+    mocks.repo.getFileById.mockReturnValue(null);
     mocks.repo.createFile.mockImplementation((input) => ({
       id: "file_1",
       uploadedAt: "2026-04-30T00:00:00.000Z",
@@ -60,10 +70,19 @@ describe("files API module", () => {
       checksum: "checksum",
       mimeType: "model/stl"
     });
+    mocks.storage.absolutePathFor.mockImplementation((relativePath: string) =>
+      path.join(mocks.appConfig.storageRoot, relativePath)
+    );
     mocks.classifyFile.mockReturnValue({
       extension: "stl",
       family: "cad" as FileFamily
     });
+  });
+
+  afterEach(() => {
+    while (createdDirs.length > 0) {
+      fs.rmSync(createdDirs.pop()!, { force: true, recursive: true });
+    }
   });
 
   it("passes GET filters to the repository", async () => {
@@ -82,6 +101,87 @@ describe("files API module", () => {
       projectId: "proj_1",
       categoryId: "cat_1"
     });
+  });
+
+  it("returns file detail by id", async () => {
+    const { GET } = await import("@/app/api/files/[id]/route");
+    const file = {
+      id: "file_123",
+      name: "manual.pdf",
+      storagePath: "Inbox/Browser/manual.pdf"
+    };
+    mocks.repo.getFileById.mockReturnValue(file);
+
+    const response = await GET(new Request("http://localhost/api/files/file_123"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ file });
+  });
+
+  it("streams a file download with safe headers", async () => {
+    const { GET } = await import("@/app/api/files/[id]/download/route");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-api-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Inbox", "Browser", "manual.pdf"), "manual");
+    mocks.appConfig.storageRoot = dir;
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      mimeType: "application/pdf",
+      status: "active",
+      storagePath: "Inbox/Browser/manual.pdf"
+    });
+
+    const response = await GET(new Request("http://localhost/api/files/file_123/download"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/pdf");
+    expect(response.headers.get("content-disposition")).toContain('filename="manual.pdf"');
+    await expect(response.text()).resolves.toBe("manual");
+  });
+
+  it("returns 404 when downloading an archived file", async () => {
+    const { GET } = await import("@/app/api/files/[id]/download/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      mimeType: "application/pdf",
+      status: "archived",
+      storagePath: "Inbox/Browser/manual.pdf"
+    });
+
+    const response = await GET(new Request("http://localhost/api/files/file_123/download"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "file not found" });
+  });
+
+  it("returns 404 when the download file is missing on disk", async () => {
+    const { GET } = await import("@/app/api/files/[id]/download/route");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-api-"));
+    createdDirs.push(dir);
+    mocks.appConfig.storageRoot = dir;
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      mimeType: "application/pdf",
+      status: "active",
+      storagePath: "Inbox/Browser/manual.pdf"
+    });
+
+    const response = await GET(new Request("http://localhost/api/files/file_123/download"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "file not found" });
   });
 
   it("returns 400 when POST is missing a file", async () => {
