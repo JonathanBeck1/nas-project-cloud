@@ -90,4 +90,31 @@ describe("AppShell", () => {
       )
     );
   });
+
+  it("selects a file and shows its actions in the detail drawer", async () => {
+    const user = userEvent.setup();
+    render(<AppShell initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+
+    await user.click(screen.getByRole("button", { name: "manual.pdf" }));
+
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("href", "/api/files/file_manual/download");
+    expect(screen.getByRole("button", { name: "Archive" })).toBeVisible();
+  });
+
+  it("archives a selected file and removes it from the grid", async () => {
+    const user = userEvent.setup();
+    const archivedFile = { ...uploadedFile, status: "archived" as const, archivedAt: "2026-04-30T00:00:00.000Z" };
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ file: archivedFile }), { status: 200 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+
+    await user.click(screen.getByRole("button", { name: "manual.pdf" }));
+    await user.click(screen.getByRole("button", { name: "Archive" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/files/file_manual/archive", { method: "POST" }));
+    expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
+  });
 });

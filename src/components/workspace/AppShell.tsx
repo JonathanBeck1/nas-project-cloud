@@ -8,6 +8,7 @@ import { DropZone } from "./DropZone";
 import { FileGrid } from "./FileGrid";
 import { ProjectDialog } from "./ProjectDialog";
 import { Sidebar } from "./Sidebar";
+import { archiveFile, updateFileAssignment } from "@/lib/client/fileActions";
 import type { CloudFile } from "@/lib/shared/types";
 import type { WorkspaceData } from "@/lib/server/workspaceData";
 import type { ProjectDialogInput } from "./ProjectDialog";
@@ -19,6 +20,11 @@ type AppShellProps = {
 
 export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [fileActionMessage, setFileActionMessage] = useState("");
+  const [fileActionError, setFileActionError] = useState("");
+  const [isFileActionBusy, setIsFileActionBusy] = useState(false);
+  const selectedFile = files.find((file) => file.id === selectedFileId) ?? null;
 
   const handleCreateProject = async (project: ProjectDialogInput) => {
     const response = await fetch("/api/projects", {
@@ -38,6 +44,38 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
       }
 
       throw new Error(message);
+    }
+  };
+
+  const handleArchiveFile = async (file: CloudFile) => {
+    setIsFileActionBusy(true);
+    setFileActionMessage("");
+    setFileActionError("");
+    try {
+      await archiveFile(file.id);
+      setFiles((currentFiles) => currentFiles.filter((candidate) => candidate.id !== file.id));
+      setSelectedFileId(null);
+      setFileActionMessage(`Archived ${file.name}`);
+    } catch (error) {
+      setFileActionError(error instanceof Error ? error.message : "Could not archive file");
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
+  const handleAssignProject = async (file: CloudFile, projectId: string) => {
+    setIsFileActionBusy(true);
+    setFileActionMessage("");
+    setFileActionError("");
+    try {
+      const updated = await updateFileAssignment(file.id, { projectId: projectId || null });
+      setFiles((currentFiles) => currentFiles.map((candidate) => (candidate.id === updated.id ? updated : candidate)));
+      setSelectedFileId(updated.id);
+      setFileActionMessage(`Updated ${updated.name}`);
+    } catch (error) {
+      setFileActionError(error instanceof Error ? error.message : "Could not update file");
+    } finally {
+      setIsFileActionBusy(false);
     }
   };
 
@@ -84,14 +122,37 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                     </div>
                   </DropZone>
 
+                  {fileActionMessage ? (
+                    <p
+                      role="status"
+                      className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700"
+                    >
+                      {fileActionMessage}
+                    </p>
+                  ) : null}
+                  {fileActionError ? (
+                    <p
+                      role="alert"
+                      className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700"
+                    >
+                      {fileActionError}
+                    </p>
+                  ) : null}
+
                   <div aria-label="Inbox files">
-                    <FileGrid files={files} />
+                    <FileGrid files={files} selectedFileId={selectedFileId} onSelectFile={(file) => setSelectedFileId(file.id)} />
                   </div>
                 </div>
               </section>
 
               <div className="min-w-0 xl:sticky xl:top-5 xl:h-[calc(100vh-6.5rem)]">
-                <DetailDrawer file={null} />
+                <DetailDrawer
+                  file={selectedFile}
+                  projects={initialData?.projects ?? []}
+                  isBusy={isFileActionBusy}
+                  onArchive={handleArchiveFile}
+                  onAssignProject={handleAssignProject}
+                />
               </div>
             </div>
           </main>
