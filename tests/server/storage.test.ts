@@ -89,6 +89,51 @@ describe("storage service", () => {
     expect(fs.readFileSync(second.absolutePath, "utf8")).toBe("second");
   });
 
+  it("returns file stats for a stored relative path", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const stored = await storage.writeUpload({
+      target: { kind: "inbox", sourceDevice: "Browser" },
+      filename: "manual.pdf",
+      mimeType: "application/pdf",
+      bytes: Buffer.from("manual")
+    });
+
+    const details = await storage.fileDetails(stored.relativePath);
+
+    expect(details.sizeBytes).toBe(6);
+    expect(details.absolutePath.endsWith("manual.pdf")).toBe(true);
+  });
+
+  it("moves files into a project and archive without leaving storage root", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const stored = await storage.writeUpload({
+      target: { kind: "inbox", sourceDevice: "Browser" },
+      filename: "bracket.stl",
+      mimeType: "model/stl",
+      bytes: Buffer.from("model")
+    });
+
+    const moved = await storage.moveToProject({
+      currentRelativePath: stored.relativePath,
+      projectSlug: "print-parts",
+      filename: "bracket.stl"
+    });
+    expect(moved.relativePath).toBe("Projects/print-parts/Inbox/bracket.stl");
+    expect(fs.existsSync(path.join(dir, moved.relativePath))).toBe(true);
+
+    const archived = await storage.archiveFile({
+      currentRelativePath: moved.relativePath,
+      filename: "bracket.stl",
+      now: new Date("2026-04-30T00:00:00.000Z")
+    });
+    expect(archived.relativePath).toBe("Archive/2026/04/bracket.stl");
+    expect(fs.existsSync(path.join(dir, archived.relativePath))).toBe(true);
+  });
+
   it("rejects paths escaping to a sibling root with the same prefix", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
     createdDirs.push(root);

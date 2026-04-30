@@ -14,6 +14,18 @@ export type WriteUploadInput = {
   bytes: Buffer;
 };
 
+export type MoveToProjectInput = {
+  currentRelativePath: string;
+  projectSlug: string;
+  filename: string;
+};
+
+export type ArchiveFileInput = {
+  currentRelativePath: string;
+  filename: string;
+  now?: Date;
+};
+
 export type StoredFile = {
   absolutePath: string;
   relativePath: string;
@@ -52,6 +64,53 @@ export function createStorageService(root = appConfig.storageRoot) {
         throw new Error("Storage path escapes configured root");
       }
       return absolutePath;
+    },
+
+    async fileDetails(relativePath: string) {
+      const absolutePath = this.absolutePathFor(relativePath);
+      const stats = await fs.stat(absolutePath);
+      if (!stats.isFile()) {
+        throw new Error("Storage path is not a file");
+      }
+      return {
+        absolutePath,
+        sizeBytes: stats.size,
+        modifiedAt: stats.mtime.toISOString()
+      };
+    },
+
+    async moveToProject(
+      input: MoveToProjectInput
+    ): Promise<{ absolutePath: string; relativePath: string }> {
+      const from = this.absolutePathFor(input.currentRelativePath);
+      const directory = path.join(
+        storageRoot,
+        "Projects",
+        sanitizePathSegment(input.projectSlug),
+        "Inbox"
+      );
+      return moveIntoDirectory({
+        storageRoot,
+        from,
+        directory,
+        filename: input.filename
+      });
+    },
+
+    async archiveFile(
+      input: ArchiveFileInput
+    ): Promise<{ absolutePath: string; relativePath: string }> {
+      const now = input.now ?? new Date();
+      const from = this.absolutePathFor(input.currentRelativePath);
+      const year = String(now.getUTCFullYear());
+      const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+      const directory = path.join(storageRoot, "Archive", year, month);
+      return moveIntoDirectory({
+        storageRoot,
+        from,
+        directory,
+        filename: input.filename
+      });
     }
   };
 }
@@ -89,6 +148,21 @@ async function nextAvailablePath(directory: string, filename: string): Promise<s
   }
 
   throw new Error(`Could not allocate filename for ${filename}`);
+}
+
+async function moveIntoDirectory(input: {
+  storageRoot: string;
+  from: string;
+  directory: string;
+  filename: string;
+}): Promise<{ absolutePath: string; relativePath: string }> {
+  await fs.mkdir(input.directory, { recursive: true });
+  const absolutePath = await nextAvailablePath(input.directory, sanitizeFilename(input.filename));
+  await fs.rename(input.from, absolutePath);
+  return {
+    absolutePath,
+    relativePath: path.relative(input.storageRoot, absolutePath).split(path.sep).join("/")
+  };
 }
 
 function sha256(bytes: Buffer): string {
