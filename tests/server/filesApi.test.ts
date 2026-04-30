@@ -211,6 +211,23 @@ describe("files API module", () => {
     expect(mocks.repo.getFileById).not.toHaveBeenCalled();
   });
 
+  it("returns 400 when patch projectId is empty", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: "" })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid file update" });
+    expect(mocks.storage.moveToProject).not.toHaveBeenCalled();
+    expect(mocks.repo.updateFile).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["missing", null],
     [
@@ -330,6 +347,14 @@ describe("files API module", () => {
       currentRelativePath: "Inbox/Browser/manual.pdf",
       filename: "manual.pdf"
     });
+    expect(mocks.repo.updateFile).toHaveBeenCalledWith(
+      "file_123",
+      expect.objectContaining({
+        storagePath: "Archive/2026/04/manual.pdf",
+        status: "archived",
+        archivedAt: expect.any(String)
+      })
+    );
   });
 
   it.each([

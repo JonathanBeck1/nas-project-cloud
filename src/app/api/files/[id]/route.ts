@@ -5,8 +5,8 @@ import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
 
 const updateFileSchema = z.object({
-  projectId: z.string().nullable().optional(),
-  categoryId: z.string().nullable().optional()
+  projectId: z.string().min(1).nullable().optional(),
+  categoryId: z.string().min(1).nullable().optional()
 });
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
