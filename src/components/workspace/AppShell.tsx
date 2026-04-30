@@ -9,14 +9,16 @@ import { FileGrid } from "./FileGrid";
 import { ProjectDialog } from "./ProjectDialog";
 import { Sidebar } from "./Sidebar";
 import type { CloudFile } from "@/lib/shared/types";
+import type { WorkspaceData } from "@/lib/server/workspaceData";
 import type { ProjectDialogInput } from "./ProjectDialog";
 
 type AppShellProps = {
+  initialData?: WorkspaceData;
   initialFiles?: CloudFile[];
 };
 
-export function AppShell({ initialFiles = [] }: AppShellProps) {
-  const [files, setFiles] = useState<CloudFile[]>(initialFiles);
+export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
+  const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
 
   const handleCreateProject = async (project: ProjectDialogInput) => {
     const response = await fetch("/api/projects", {
