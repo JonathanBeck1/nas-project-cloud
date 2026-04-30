@@ -36,14 +36,28 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     headers: {
       "content-type": safeMimeType(file.mimeType),
       "content-length": String(size),
-      "content-disposition": `attachment; filename="${safeDownloadFilename(file.name)}"`
+      "content-disposition": contentDispositionFor(file.name)
     }
   });
 }
 
 function safeDownloadFilename(name: string): string {
-  const filename = basename(name).replace(/["\\\x00-\x1F\x7F]/g, "_").trim();
+  const filename = safeFilenameBase(name).replace(/[^\x20-\x7E]/g, "_").trim();
   return filename && filename !== "." && filename !== ".." ? filename : "download.bin";
+}
+
+function contentDispositionFor(name: string): string {
+  const fallback = safeDownloadFilename(name);
+  const utf8Filename = safeFilenameBase(name).trim();
+  const encodedFilename = utf8Filename && utf8Filename !== "." && utf8Filename !== ".."
+    ? encodeURIComponent(utf8Filename)
+    : encodeURIComponent("download.bin");
+
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encodedFilename}`;
+}
+
+function safeFilenameBase(name: string): string {
+  return basename(name).replace(/["\\\x00-\x1F\x7F]/g, "_");
 }
 
 function safeMimeType(mimeType: string | null | undefined): string {

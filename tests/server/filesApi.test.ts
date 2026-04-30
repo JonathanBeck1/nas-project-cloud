@@ -195,6 +195,33 @@ describe("files API module", () => {
     await expect(response.text()).resolves.toBe("manual");
   });
 
+  it("keeps unicode download filenames header-safe", async () => {
+    const { GET } = await import("@/app/api/files/[id]/download/route");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-api-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Inbox", "Browser", "render.png"), "image");
+    mocks.appConfig.storageRoot = dir;
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "render🚀.png",
+      mimeType: "image/png",
+      status: "active",
+      storagePath: "Inbox/Browser/render.png"
+    });
+
+    const response = await GET(new Request("http://localhost/api/files/file_123/download"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+    const contentDisposition = response.headers.get("content-disposition") ?? "";
+
+    expect(response.status).toBe(200);
+    expect(contentDisposition).toContain('filename="render__.png"');
+    expect(contentDisposition).toContain("filename*=UTF-8''render%F0%9F%9A%80.png");
+    expect([...contentDisposition].every((character) => character.charCodeAt(0) <= 0x7f)).toBe(true);
+    await expect(response.text()).resolves.toBe("image");
+  });
+
   it.each(["", "   ", "text/plain\r\nx-bad: y", "text/plain; charset=utf-8", "text/plain,image/png"])(
     "falls back to octet-stream for invalid MIME metadata %#",
     async (mimeType) => {
