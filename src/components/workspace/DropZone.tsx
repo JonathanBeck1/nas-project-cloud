@@ -6,6 +6,7 @@ import type { CloudFile } from "@/lib/shared/types";
 
 type DropZoneProps = {
   children: React.ReactNode;
+  inputId?: string;
   onUploaded?: (files: CloudFile[]) => void;
 };
 
@@ -14,7 +15,7 @@ type UploadStatus = {
   message: string;
 };
 
-export function DropZone({ children, onUploaded }: DropZoneProps) {
+export function DropZone({ children, inputId, onUploaded }: DropZoneProps) {
   const [dragDepth, setDragDepth] = useState(0);
   const [status, setStatus] = useState<UploadStatus | null>(null);
   const isDragging = dragDepth > 0;
@@ -86,6 +87,19 @@ export function DropZone({ children, onUploaded }: DropZoneProps) {
       }}
     >
       {children}
+
+      <input
+        id={inputId}
+        aria-label="Choose files"
+        className="sr-only"
+        multiple
+        type="file"
+        onChange={(event) => {
+          const selectedFiles = Array.from(event.target.files ?? []);
+          event.target.value = "";
+          void uploadFiles(selectedFiles);
+        }}
+      />
 
       {status ? (
         <p

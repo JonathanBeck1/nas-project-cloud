@@ -105,7 +105,10 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                 </div>
 
                 <div className="space-y-4 px-4 py-5">
-                  <DropZone onUploaded={(uploadedFiles) => setFiles((currentFiles) => [...uploadedFiles, ...currentFiles])}>
+                  <DropZone
+                    inputId="workspace-file-upload"
+                    onUploaded={(uploadedFiles) => setFiles((currentFiles) => [...uploadedFiles, ...currentFiles])}
+                  >
                     <div className="flex min-h-[220px] flex-col items-center justify-center rounded-md border border-dashed border-line bg-surface/70 px-4 py-8 text-center">
                       <div className="grid h-12 w-12 place-items-center rounded-md border border-line bg-panel text-accent">
                         <Inbox aria-hidden="true" className="h-5 w-5" />
@@ -114,13 +117,13 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                       <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
                         Drop files here to move them onto the NAS now and organize them into projects when ready.
                       </p>
-                      <button
-                        type="button"
-                        className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted"
+                      <label
+                        htmlFor="workspace-file-upload"
+                        className="mt-6 inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted"
                       >
                         <UploadCloud aria-hidden="true" className="h-4 w-4" />
                         Drop files
-                      </button>
+                      </label>
                     </div>
                   </DropZone>
 
