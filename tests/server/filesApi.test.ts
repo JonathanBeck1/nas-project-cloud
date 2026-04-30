@@ -8,11 +8,15 @@ const mocks = vi.hoisted(() => {
   const repo = {
     listFiles: vi.fn(),
     createFile: vi.fn(),
-    getFileById: vi.fn()
+    getFileById: vi.fn(),
+    getProjectById: vi.fn(),
+    updateFile: vi.fn()
   };
   const storage = {
     writeUpload: vi.fn(),
-    absolutePathFor: vi.fn()
+    absolutePathFor: vi.fn(),
+    moveToProject: vi.fn(),
+    archiveFile: vi.fn()
   };
 
   return {
@@ -56,6 +60,7 @@ describe("files API module", () => {
     mocks.appConfig.storageRoot = os.tmpdir();
     mocks.repo.listFiles.mockReturnValue([]);
     mocks.repo.getFileById.mockReturnValue(null);
+    mocks.repo.getProjectById.mockReturnValue(null);
     mocks.repo.createFile.mockImplementation((input) => ({
       id: "file_1",
       uploadedAt: "2026-04-30T00:00:00.000Z",
@@ -63,6 +68,7 @@ describe("files API module", () => {
       tags: [],
       ...input
     }));
+    mocks.repo.updateFile.mockReturnValue(null);
     mocks.storage.writeUpload.mockResolvedValue({
       absolutePath: "/storage/Inbox/Mac/part.stl",
       relativePath: "Inbox/Mac/part.stl",
@@ -73,6 +79,14 @@ describe("files API module", () => {
     mocks.storage.absolutePathFor.mockImplementation((relativePath: string) =>
       path.join(mocks.appConfig.storageRoot, relativePath)
     );
+    mocks.storage.moveToProject.mockResolvedValue({
+      absolutePath: "/storage/Projects/project/Inbox/part.stl",
+      relativePath: "Projects/project/Inbox/part.stl"
+    });
+    mocks.storage.archiveFile.mockResolvedValue({
+      absolutePath: "/storage/Archive/2026/04/part.stl",
+      relativePath: "Archive/2026/04/part.stl"
+    });
     mocks.classifyFile.mockReturnValue({
       extension: "stl",
       family: "cad" as FileFamily
@@ -118,6 +132,248 @@ describe("files API module", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ file });
+  });
+
+  it("moves a file into a project on patch", async () => {
+    const { PATCH: fileDetailPatch } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      storagePath: "Inbox/Browser/bracket.stl",
+      status: "active"
+    });
+    mocks.repo.getProjectById.mockReturnValue({
+      id: "proj_123",
+      slug: "print-parts",
+      name: "Print Parts"
+    });
+    mocks.storage.moveToProject.mockResolvedValue({
+      absolutePath: "/tmp/Projects/print-parts/Inbox/bracket.stl",
+      relativePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
+    mocks.repo.updateFile.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      projectId: "proj_123",
+      storagePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
+
+    const response = await fileDetailPatch(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: "proj_123", categoryId: "cat_cad" })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.storage.moveToProject).toHaveBeenCalledWith({
+      currentRelativePath: "Inbox/Browser/bracket.stl",
+      projectSlug: "print-parts",
+      filename: "bracket.stl"
+    });
+    expect(mocks.repo.updateFile).toHaveBeenCalledWith("file_123", {
+      projectId: "proj_123",
+      categoryId: "cat_cad",
+      storagePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
+  });
+
+  it("returns 400 when patch body is invalid JSON", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: "{"
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid file update" });
+    expect(mocks.repo.getFileById).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when patch body has an invalid schema", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: 123 })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid file update" });
+    expect(mocks.repo.getFileById).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["missing", null],
+    [
+      "archived",
+      {
+        id: "file_123",
+        name: "manual.pdf",
+        status: "archived",
+        storagePath: "Inbox/Browser/manual.pdf"
+      }
+    ]
+  ])("returns 404 when patching a %s file", async (_label, file) => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue(file);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ categoryId: "cat_1" })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "file not found" });
+    expect(mocks.repo.updateFile).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when moving a file to a missing project", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      status: "active",
+      storagePath: "Inbox/Browser/bracket.stl"
+    });
+    mocks.repo.getProjectById.mockReturnValue(null);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: "proj_missing" })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "project not found" });
+    expect(mocks.storage.moveToProject).not.toHaveBeenCalled();
+    expect(mocks.repo.updateFile).not.toHaveBeenCalled();
+  });
+
+  it("does not move storage when clearing a file project on patch", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      projectId: "proj_123",
+      status: "active",
+      storagePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
+    mocks.repo.updateFile.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      projectId: null,
+      storagePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: null })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.storage.moveToProject).not.toHaveBeenCalled();
+    expect(mocks.repo.updateFile).toHaveBeenCalledWith("file_123", { projectId: null });
+  });
+
+  it("archives a file by moving storage and updating metadata", async () => {
+    const { POST: fileArchivePost } = await import("@/app/api/files/[id]/archive/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      storagePath: "Inbox/Browser/manual.pdf",
+      status: "active"
+    });
+    mocks.storage.archiveFile.mockResolvedValue({
+      absolutePath: "/tmp/Archive/2026/04/manual.pdf",
+      relativePath: "Archive/2026/04/manual.pdf"
+    });
+    mocks.repo.updateFile.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      status: "archived",
+      archivedAt: "2026-04-30T00:00:00.000Z",
+      storagePath: "Archive/2026/04/manual.pdf"
+    });
+
+    const response = await fileArchivePost(
+      new Request("http://localhost/api/files/file_123/archive", { method: "POST" }),
+      {
+        params: Promise.resolve({ id: "file_123" })
+      }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      file: {
+        id: "file_123",
+        status: "archived"
+      }
+    });
+    expect(mocks.storage.archiveFile).toHaveBeenCalledWith({
+      currentRelativePath: "Inbox/Browser/manual.pdf",
+      filename: "manual.pdf"
+    });
+  });
+
+  it.each([
+    ["missing", null],
+    [
+      "archived",
+      {
+        id: "file_123",
+        name: "manual.pdf",
+        status: "archived",
+        storagePath: "Inbox/Browser/manual.pdf"
+      }
+    ]
+  ])("returns 404 when archiving a %s file", async (_label, file) => {
+    const { POST } = await import("@/app/api/files/[id]/archive/route");
+    mocks.repo.getFileById.mockReturnValue(file);
+
+    const response = await POST(new Request("http://localhost/api/files/file_123/archive"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "file not found" });
+    expect(mocks.storage.archiveFile).not.toHaveBeenCalled();
+    expect(mocks.repo.updateFile).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 and skips metadata update when archive storage move fails", async () => {
+    const { POST } = await import("@/app/api/files/[id]/archive/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      status: "active",
+      storagePath: "Inbox/Browser/manual.pdf"
+    });
+    mocks.storage.archiveFile.mockRejectedValue(new Error("missing"));
+
+    const response = await POST(new Request("http://localhost/api/files/file_123/archive"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "file not found" });
+    expect(mocks.repo.updateFile).not.toHaveBeenCalled();
   });
 
   it("streams a file download with safe headers", async () => {
