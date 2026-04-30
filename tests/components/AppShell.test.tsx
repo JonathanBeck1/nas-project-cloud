@@ -123,6 +123,26 @@ describe("AppShell", () => {
     expect(screen.getByRole("button", { name: "Archive" })).toBeVisible();
   });
 
+  it("filters visible files by search text", async () => {
+    const user = userEvent.setup();
+    const secondFile = {
+      ...uploadedFile,
+      id: "file_image",
+      name: "render.png",
+      extension: "png",
+      family: "image" as const,
+      mimeType: "image/png",
+      storagePath: "Inbox/Browser/render.png"
+    };
+
+    render(<AppShell initialData={{ files: [uploadedFile, secondFile], projects: [], categories: [], tags: [] }} />);
+
+    await user.type(screen.getByRole("searchbox", { name: "Search files" }), "render");
+
+    expect(screen.getByRole("button", { name: "render.png" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
+  });
+
   it("archives a selected file and removes it from the grid", async () => {
     const user = userEvent.setup();
     const archivedFile = { ...uploadedFile, status: "archived" as const, archivedAt: "2026-04-30T00:00:00.000Z" };

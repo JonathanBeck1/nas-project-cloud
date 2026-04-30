@@ -1,6 +1,11 @@
 import React from "react";
 import { Grid2X2, List, Search, Upload } from "lucide-react";
 
+type CommandBarProps = {
+  query?: string;
+  onQueryChange?: (query: string) => void;
+};
+
 function IconButton({
   label,
   children,
@@ -27,7 +32,7 @@ function IconButton({
   );
 }
 
-export function CommandBar() {
+export function CommandBar({ query = "", onQueryChange }: CommandBarProps) {
   return (
     <header className="flex min-h-16 flex-col gap-3 border-b border-line bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
       <div className="relative min-w-0 flex-1 sm:max-w-xl">
@@ -39,6 +44,8 @@ export function CommandBar() {
           type="search"
           aria-label="Search files"
           placeholder="Search files"
+          value={query}
+          onChange={(event) => onQueryChange?.(event.target.value)}
           className="h-10 w-full rounded-md border border-line bg-panel py-2 pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
       </div>

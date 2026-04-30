@@ -20,10 +20,12 @@ type AppShellProps = {
 
 export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
+  const [query, setQuery] = useState("");
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [fileActionMessage, setFileActionMessage] = useState("");
   const [fileActionError, setFileActionError] = useState("");
   const [isFileActionBusy, setIsFileActionBusy] = useState(false);
+  const visibleFiles = files.filter((file) => matchesQuery(file, query));
   const selectedFile = files.find((file) => file.id === selectedFileId) ?? null;
 
   const handleCreateProject = async (project: ProjectDialogInput) => {
@@ -87,7 +89,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
         </div>
 
         <div className="flex min-w-0 flex-col">
-          <CommandBar />
+          <CommandBar query={query} onQueryChange={setQuery} />
 
           <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 lg:px-6">
             <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -140,7 +142,11 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                   ) : null}
 
                   <div aria-label="Inbox files">
-                    <FileGrid files={files} selectedFileId={selectedFileId} onSelectFile={(file) => setSelectedFileId(file.id)} />
+                    <FileGrid
+                      files={visibleFiles}
+                      selectedFileId={selectedFileId}
+                      onSelectFile={(file) => setSelectedFileId(file.id)}
+                    />
                   </div>
                 </div>
               </section>
@@ -159,5 +165,16 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+function matchesQuery(file: CloudFile, query: string): boolean {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  return [file.name, file.storagePath, file.sourceDevice, file.extension, file.family].some((value) =>
+    value.toLowerCase().includes(normalized)
   );
 }
