@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/workspace/AppShell";
 import type { CloudFile } from "@/lib/shared/types";
@@ -60,5 +61,31 @@ describe("AppShell", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/files", expect.objectContaining({ method: "POST" })));
     expect(await screen.findByRole("status")).toHaveTextContent("Uploaded manual.pdf");
     expect(screen.getByText("manual.pdf")).toBeVisible();
+  });
+
+  it("posts a project JSON payload from the project dialog", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ project: { id: "project_print_parts" } }), { status: 201 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell />);
+
+    await user.click(screen.getByRole("button", { name: "New Project" }));
+    await user.type(screen.getByLabelText("Project name"), "Print Parts");
+    await user.type(screen.getByLabelText("Description"), "Printer upgrades");
+    await user.click(screen.getByRole("button", { name: "Create project" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/projects",
+        expect.objectContaining({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "Print Parts", description: "Printer upgrades" })
+        })
+      )
+    );
   });
 });

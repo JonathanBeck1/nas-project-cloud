@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import { FolderPlus, Inbox, UploadCloud } from "lucide-react";
+import { Inbox, UploadCloud } from "lucide-react";
 import { CommandBar } from "./CommandBar";
 import { DetailDrawer } from "./DetailDrawer";
 import { DropZone } from "./DropZone";
 import { FileGrid } from "./FileGrid";
+import { ProjectDialog } from "./ProjectDialog";
 import { Sidebar } from "./Sidebar";
 import type { CloudFile } from "@/lib/shared/types";
+import type { ProjectDialogInput } from "./ProjectDialog";
 
 type AppShellProps = {
   initialFiles?: CloudFile[];
@@ -15,6 +17,27 @@ type AppShellProps = {
 
 export function AppShell({ initialFiles = [] }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialFiles);
+
+  const handleCreateProject = async (project: ProjectDialogInput) => {
+    const response = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(project)
+    });
+
+    if (!response.ok) {
+      let message = "Could not create project";
+
+      try {
+        const payload = (await response.json()) as { error?: string; message?: string };
+        message = payload.error ?? payload.message ?? message;
+      } catch {
+        message = response.statusText ? `Could not create project: ${response.statusText}` : message;
+      }
+
+      throw new Error(message);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-surface text-ink">
@@ -36,13 +59,7 @@ export function AppShell({ initialFiles = [] }: AppShellProps) {
                       Inbox
                     </h1>
                   </div>
-                  <button
-                    type="button"
-                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-white shadow-panel transition hover:bg-accent/90"
-                  >
-                    <FolderPlus aria-hidden="true" className="h-4 w-4" />
-                    New Project
-                  </button>
+                  <ProjectDialog onCreate={handleCreateProject} />
                 </div>
 
                 <div className="space-y-4 px-4 py-5">
