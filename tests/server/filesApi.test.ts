@@ -142,8 +142,85 @@ describe("files API module", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/pdf");
     expect(response.headers.get("content-disposition")).toContain('filename="manual.pdf"');
+    expect(mocks.storage.absolutePathFor).toHaveBeenCalledWith("Inbox/Browser/manual.pdf");
     await expect(response.text()).resolves.toBe("manual");
   });
+
+  it("sanitizes unsafe download filenames without throwing", async () => {
+    const { GET } = await import("@/app/api/files/[id]/download/route");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-api-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Inbox", "Browser", "manual.pdf"), "manual");
+    mocks.appConfig.storageRoot = dir;
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: 'bad"\\\r\n\u0001.pdf',
+      mimeType: "application/pdf",
+      status: "active",
+      storagePath: "Inbox/Browser/manual.pdf"
+    });
+
+    const response = await GET(new Request("http://localhost/api/files/file_123/download"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toContain('filename="bad_____.pdf"');
+    expect(mocks.storage.absolutePathFor).toHaveBeenCalledWith("Inbox/Browser/manual.pdf");
+    await expect(response.text()).resolves.toBe("manual");
+  });
+
+  it("uses basename for path-like download filenames", async () => {
+    const { GET } = await import("@/app/api/files/[id]/download/route");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-api-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Inbox", "Browser", "manual.pdf"), "manual");
+    mocks.appConfig.storageRoot = dir;
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "../manual.pdf",
+      mimeType: "application/pdf",
+      status: "active",
+      storagePath: "Inbox/Browser/manual.pdf"
+    });
+
+    const response = await GET(new Request("http://localhost/api/files/file_123/download"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toContain('filename="manual.pdf"');
+    await expect(response.text()).resolves.toBe("manual");
+  });
+
+  it.each(["", "   ", "text/plain\r\nx-bad: y", "text/plain; charset=utf-8", "text/plain,image/png"])(
+    "falls back to octet-stream for invalid MIME metadata %#",
+    async (mimeType) => {
+      const { GET } = await import("@/app/api/files/[id]/download/route");
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-api-"));
+      createdDirs.push(dir);
+      fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "Inbox", "Browser", "manual.pdf"), "manual");
+      mocks.appConfig.storageRoot = dir;
+      mocks.repo.getFileById.mockReturnValue({
+        id: "file_123",
+        name: "manual.pdf",
+        mimeType,
+        status: "active",
+        storagePath: "Inbox/Browser/manual.pdf"
+      });
+
+      const response = await GET(new Request("http://localhost/api/files/file_123/download"), {
+        params: Promise.resolve({ id: "file_123" })
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("application/octet-stream");
+      await expect(response.text()).resolves.toBe("manual");
+    }
+  );
 
   it("returns 404 when downloading an archived file", async () => {
     const { GET } = await import("@/app/api/files/[id]/download/route");

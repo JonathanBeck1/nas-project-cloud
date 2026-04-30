@@ -34,13 +34,23 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const stream = Readable.toWeb(createReadStream(absolutePath));
   return new Response(stream as ReadableStream<Uint8Array>, {
     headers: {
-      "content-type": file.mimeType || "application/octet-stream",
+      "content-type": safeMimeType(file.mimeType),
       "content-length": String(size),
-      "content-disposition": `attachment; filename="${encodeFilename(basename(file.name))}"`
+      "content-disposition": `attachment; filename="${safeDownloadFilename(file.name)}"`
     }
   });
 }
 
-function encodeFilename(filename: string): string {
-  return filename.replace(/["\\]/g, "_");
+function safeDownloadFilename(name: string): string {
+  const filename = basename(name).replace(/["\\\x00-\x1F\x7F]/g, "_").trim();
+  return filename && filename !== "." && filename !== ".." ? filename : "download.bin";
+}
+
+function safeMimeType(mimeType: string | null | undefined): string {
+  const value = mimeType?.trim() ?? "";
+  if (/^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*$/.test(value)) {
+    return value;
+  }
+
+  return "application/octet-stream";
 }
