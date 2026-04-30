@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DetailDrawer } from "@/components/workspace/DetailDrawer";
-import type { CloudFile } from "@/lib/shared/types";
+import type { CloudFile, Project } from "@/lib/shared/types";
 
 const fixture: CloudFile = {
   id: "file_manual",
@@ -24,6 +24,17 @@ const fixture: CloudFile = {
   tags: []
 };
 
+const project: Project = {
+  id: "proj_123",
+  name: "Print Parts",
+  slug: "print-parts",
+  description: "",
+  categoryId: null,
+  status: "active",
+  createdAt: "2026-04-30T00:00:00.000Z",
+  updatedAt: "2026-04-30T00:00:00.000Z"
+};
+
 describe("DetailDrawer", () => {
   it("shows selected file storage path metadata", () => {
     render(<DetailDrawer file={fixture} />);
@@ -39,18 +50,7 @@ describe("DetailDrawer", () => {
     render(
       <DetailDrawer
         file={fixture}
-        projects={[
-          {
-            id: "proj_123",
-            name: "Print Parts",
-            slug: "print-parts",
-            description: "",
-            categoryId: null,
-            status: "active",
-            createdAt: "2026-04-30T00:00:00.000Z",
-            updatedAt: "2026-04-30T00:00:00.000Z"
-          }
-        ]}
+        projects={[project]}
         onArchive={onArchive}
         onAssignProject={onAssignProject}
       />
@@ -74,5 +74,24 @@ describe("DetailDrawer", () => {
     await user.click(screen.getByRole("button", { name: "Archive" }));
 
     expect(onArchive).toHaveBeenCalledWith(fixture);
+  });
+
+  it("calls project assignment action with the selected project", async () => {
+    const user = userEvent.setup();
+    const onAssignProject = vi.fn();
+
+    render(<DetailDrawer file={fixture} projects={[project]} onAssignProject={onAssignProject} />);
+
+    await user.selectOptions(screen.getByLabelText("Project"), "proj_123");
+
+    expect(onAssignProject).toHaveBeenCalledWith(fixture, "proj_123");
+  });
+
+  it("disables server-mutating actions while busy", () => {
+    render(<DetailDrawer file={fixture} projects={[project]} isBusy onArchive={vi.fn()} onAssignProject={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Archive" })).toBeDisabled();
+    expect(screen.getByLabelText("Project")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Copy path" })).toBeEnabled();
   });
 });

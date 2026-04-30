@@ -51,7 +51,7 @@ export function DetailDrawer({ file, projects = [], isBusy = false, onArchive, o
         <button
           type="button"
           className="inline-flex h-9 items-center justify-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink"
-          onClick={() => void navigator.clipboard?.writeText(file.storagePath)}
+          onClick={() => copyPath(file.storagePath)}
         >
           Copy path
         </button>
@@ -86,6 +86,10 @@ export function DetailDrawer({ file, projects = [], isBusy = false, onArchive, o
       </dl>
     </aside>
   );
+}
+
+function copyPath(path: string) {
+  void navigator.clipboard?.writeText(path).catch(() => undefined);
 }
 
 function DetailRow({ label, value, wrap = false }: { label: string; value: string; wrap?: boolean }) {
