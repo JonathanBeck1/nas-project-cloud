@@ -1,9 +1,21 @@
-import React from "react";
+"use client";
+
+import React, { useState } from "react";
 import { FolderPlus, Inbox, UploadCloud } from "lucide-react";
 import { CommandBar } from "./CommandBar";
+import { DetailDrawer } from "./DetailDrawer";
+import { DropZone } from "./DropZone";
+import { FileGrid } from "./FileGrid";
 import { Sidebar } from "./Sidebar";
+import type { CloudFile } from "@/lib/shared/types";
 
-export function AppShell() {
+type AppShellProps = {
+  initialFiles?: CloudFile[];
+};
+
+export function AppShell({ initialFiles = [] }: AppShellProps) {
+  const [files, setFiles] = useState<CloudFile[]>(initialFiles);
+
   return (
     <div className="min-h-screen bg-surface text-ink">
       <div className="grid min-h-screen grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
@@ -15,7 +27,7 @@ export function AppShell() {
           <CommandBar />
 
           <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 lg:px-6">
-            <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+            <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
               <section className="rounded-md border border-line bg-panel shadow-panel" aria-labelledby="inbox-heading">
                 <div className="flex flex-col gap-4 border-b border-line px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
@@ -33,25 +45,35 @@ export function AppShell() {
                   </button>
                 </div>
 
-                <div className="px-4 py-5">
-                  <div className="flex min-h-[360px] flex-col items-center justify-center rounded-md border border-dashed border-line bg-surface/70 px-4 py-10 text-center">
-                    <div className="grid h-12 w-12 place-items-center rounded-md border border-line bg-panel text-accent">
-                      <Inbox aria-hidden="true" className="h-5 w-5" />
+                <div className="space-y-4 px-4 py-5">
+                  <DropZone onUploaded={(uploadedFiles) => setFiles((currentFiles) => [...uploadedFiles, ...currentFiles])}>
+                    <div className="flex min-h-[220px] flex-col items-center justify-center rounded-md border border-dashed border-line bg-surface/70 px-4 py-8 text-center">
+                      <div className="grid h-12 w-12 place-items-center rounded-md border border-line bg-panel text-accent">
+                        <Inbox aria-hidden="true" className="h-5 w-5" />
+                      </div>
+                      <h2 className="mt-5 text-base font-semibold text-ink">Inbox</h2>
+                      <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
+                        Drop files here to move them onto the NAS now and organize them into projects when ready.
+                      </p>
+                      <button
+                        type="button"
+                        className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted"
+                      >
+                        <UploadCloud aria-hidden="true" className="h-4 w-4" />
+                        Drop files
+                      </button>
                     </div>
-                    <h2 className="mt-5 text-base font-semibold text-ink">Inbox</h2>
-                    <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
-                      Drop files here to move them onto the NAS now and organize them into projects when ready.
-                    </p>
-                    <button
-                      type="button"
-                      className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted"
-                    >
-                      <UploadCloud aria-hidden="true" className="h-4 w-4" />
-                      Drop files
-                    </button>
+                  </DropZone>
+
+                  <div aria-label="Inbox files">
+                    <FileGrid files={files} />
                   </div>
                 </div>
               </section>
+
+              <div className="min-w-0 xl:sticky xl:top-5 xl:h-[calc(100vh-6.5rem)]">
+                <DetailDrawer file={null} />
+              </div>
             </div>
           </main>
         </div>
