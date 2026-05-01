@@ -248,6 +248,40 @@ describe("files API module", () => {
     });
   });
 
+  it("reports repair required when project move rollback fails", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      storagePath: "Inbox/Browser/bracket.stl",
+      status: "active"
+    });
+    mocks.repo.getProjectById.mockReturnValue({
+      id: "proj_123",
+      slug: "print-parts",
+      name: "Print Parts"
+    });
+    mocks.storage.moveToProject.mockResolvedValue({
+      absolutePath: "/tmp/Projects/print-parts/Inbox/bracket.stl",
+      relativePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
+    mocks.repo.updateFile.mockImplementation(() => {
+      throw new Error("database unavailable");
+    });
+    mocks.storage.restoreFile.mockRejectedValue(new Error("restore failed"));
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: "proj_123" })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "file operation requires manual repair" });
+  });
+
   it("rolls back a project move when metadata update misses the row", async () => {
     const { PATCH } = await import("@/app/api/files/[id]/route");
     mocks.repo.getFileById.mockReturnValue({
@@ -545,6 +579,31 @@ describe("files API module", () => {
       currentRelativePath: "Archive/2026/04/manual.pdf",
       targetRelativePath: "Inbox/Browser/manual.pdf"
     });
+  });
+
+  it("reports repair required when archive rollback fails", async () => {
+    const { POST } = await import("@/app/api/files/[id]/archive/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      storagePath: "Inbox/Browser/manual.pdf",
+      status: "active"
+    });
+    mocks.storage.archiveFile.mockResolvedValue({
+      absolutePath: "/tmp/Archive/2026/04/manual.pdf",
+      relativePath: "Archive/2026/04/manual.pdf"
+    });
+    mocks.repo.updateFile.mockImplementation(() => {
+      throw new Error("database unavailable");
+    });
+    mocks.storage.restoreFile.mockRejectedValue(new Error("restore failed"));
+
+    const response = await POST(new Request("http://localhost/api/files/file_123/archive", { method: "POST" }), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "file operation requires manual repair" });
   });
 
   it("rolls back an archive move when metadata update misses the row", async () => {

@@ -36,12 +36,20 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
       { storagePath: file.storagePath, status: "active" }
     );
   } catch {
-    await rollbackMovedFile(storage, moved.relativePath, file.storagePath);
+    try {
+      await rollbackMovedFile(storage, moved.relativePath, file.storagePath);
+    } catch {
+      return NextResponse.json({ error: "file operation requires manual repair" }, { status: 500 });
+    }
     return NextResponse.json({ error: "file metadata update failed" }, { status: 500 });
   }
 
   if (!updated) {
-    await rollbackMovedFile(storage, moved.relativePath, file.storagePath);
+    try {
+      await rollbackMovedFile(storage, moved.relativePath, file.storagePath);
+    } catch {
+      return NextResponse.json({ error: "file operation requires manual repair" }, { status: 500 });
+    }
   }
 
   return updated
@@ -54,5 +62,5 @@ async function rollbackMovedFile(
   currentRelativePath: string,
   targetRelativePath: string
 ) {
-  await storage.restoreFile({ currentRelativePath, targetRelativePath }).catch(() => undefined);
+  await storage.restoreFile({ currentRelativePath, targetRelativePath });
 }

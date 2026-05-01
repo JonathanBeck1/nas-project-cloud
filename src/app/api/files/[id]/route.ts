@@ -78,12 +78,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     updated = repo.updateFile(id, update, { storagePath: file.storagePath, status: "active" });
   } catch {
-    await rollbackMovedFile(storage, moved?.relativePath, file.storagePath);
+    try {
+      await rollbackMovedFile(storage, moved?.relativePath, file.storagePath);
+    } catch {
+      return NextResponse.json({ error: "file operation requires manual repair" }, { status: 500 });
+    }
     return NextResponse.json({ error: "file metadata update failed" }, { status: 500 });
   }
 
   if (!updated) {
-    await rollbackMovedFile(storage, moved?.relativePath, file.storagePath);
+    try {
+      await rollbackMovedFile(storage, moved?.relativePath, file.storagePath);
+    } catch {
+      return NextResponse.json({ error: "file operation requires manual repair" }, { status: 500 });
+    }
   }
 
   return updated
@@ -100,5 +108,5 @@ async function rollbackMovedFile(
     return;
   }
 
-  await storage.restoreFile({ currentRelativePath, targetRelativePath }).catch(() => undefined);
+  await storage.restoreFile({ currentRelativePath, targetRelativePath });
 }
