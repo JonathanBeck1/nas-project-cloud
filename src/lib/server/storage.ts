@@ -130,6 +130,10 @@ export function createStorageService(root = appConfig.storageRoot) {
         absolutePath: to,
         relativePath: path.relative(storageRoot, to).split(path.sep).join("/")
       };
+    },
+
+    async deleteFile(relativePath: string): Promise<void> {
+      await fs.unlink(absolutePathFor(relativePath));
     }
   };
 }

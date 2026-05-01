@@ -18,7 +18,8 @@ const mocks = vi.hoisted(() => {
     absolutePathFor: vi.fn(),
     moveToProject: vi.fn(),
     archiveFile: vi.fn(),
-    restoreFile: vi.fn()
+    restoreFile: vi.fn(),
+    deleteFile: vi.fn()
   };
 
   return {
@@ -94,6 +95,7 @@ describe("files API module", () => {
       absolutePath: "/storage/Inbox/Browser/part.stl",
       relativePath: "Inbox/Browser/part.stl"
     });
+    mocks.storage.deleteFile.mockResolvedValue(undefined);
     mocks.classifyFile.mockReturnValue({
       extension: "stl",
       family: "cad" as FileFamily
@@ -902,7 +904,7 @@ describe("files API module", () => {
       formRequest({
         file: uploadFile("hello"),
         sourceDevice: "Mac",
-        categoryId: "cat_1"
+        categoryId: "cat_cad"
       })
     );
 
@@ -917,7 +919,7 @@ describe("files API module", () => {
       expect.objectContaining({
         name: "part.stl",
         projectId: null,
-        categoryId: "cat_1",
+        categoryId: "cat_cad",
         sourceDevice: "Mac",
         storagePath: "Inbox/Mac/part.stl"
       })
@@ -926,6 +928,18 @@ describe("files API module", () => {
 
   it("stores project uploads under projectSlug and records projectId metadata", async () => {
     const { POST } = await import("@/app/api/files/route");
+    mocks.repo.getProjectById.mockReturnValue({
+      id: "proj_1",
+      slug: "garage-build",
+      name: "Garage Build"
+    });
+    mocks.storage.writeUpload.mockResolvedValue({
+      absolutePath: "/storage/Projects/garage-build/Inbox/part.stl",
+      relativePath: "Projects/garage-build/Inbox/part.stl",
+      sizeBytes: 5,
+      checksum: "checksum",
+      mimeType: "model/stl"
+    });
 
     const response = await POST(
       formRequest({
@@ -947,9 +961,111 @@ describe("files API module", () => {
       expect.objectContaining({
         projectId: "proj_1",
         sourceDevice: "Mac",
-        storagePath: "Inbox/Mac/part.stl"
+        storagePath: "Projects/garage-build/Inbox/part.stl"
       })
     );
+  });
+
+  it("rejects project uploads for a missing project before writing storage", async () => {
+    const { POST } = await import("@/app/api/files/route");
+    mocks.repo.getProjectById.mockReturnValue(null);
+    const file = uploadFile("hello");
+
+    const response = await POST(
+      formRequest({
+        file,
+        sourceDevice: "Mac",
+        projectId: "proj_missing",
+        projectSlug: "garage-build"
+      })
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "project not found" });
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
+    expect(mocks.storage.writeUpload).not.toHaveBeenCalled();
+    expect(mocks.repo.createFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects mismatched project upload slugs before writing storage", async () => {
+    const { POST } = await import("@/app/api/files/route");
+    mocks.repo.getProjectById.mockReturnValue({
+      id: "proj_1",
+      slug: "real-project",
+      name: "Real Project"
+    });
+    const file = uploadFile("hello");
+
+    const response = await POST(
+      formRequest({
+        file,
+        sourceDevice: "Mac",
+        projectId: "proj_1",
+        projectSlug: "wrong-project"
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "project slug mismatch" });
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
+    expect(mocks.storage.writeUpload).not.toHaveBeenCalled();
+    expect(mocks.repo.createFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects uploads for missing categories before writing storage", async () => {
+    const { POST } = await import("@/app/api/files/route");
+    mocks.repo.listCategories.mockReturnValue([{ id: "cat_cad", name: "CAD", slug: "cad" }]);
+    const file = uploadFile("hello");
+
+    const response = await POST(
+      formRequest({
+        file,
+        sourceDevice: "Mac",
+        categoryId: "cat_missing"
+      })
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "category not found" });
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
+    expect(mocks.storage.writeUpload).not.toHaveBeenCalled();
+    expect(mocks.repo.createFile).not.toHaveBeenCalled();
+  });
+
+  it("removes uploaded bytes when metadata creation fails", async () => {
+    const { POST } = await import("@/app/api/files/route");
+    mocks.repo.createFile.mockImplementation(() => {
+      throw new Error("database unavailable");
+    });
+
+    const response = await POST(
+      formRequest({
+        file: uploadFile("hello"),
+        sourceDevice: "Mac"
+      })
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "file metadata create failed" });
+    expect(mocks.storage.deleteFile).toHaveBeenCalledWith("Inbox/Mac/part.stl");
+  });
+
+  it("reports repair required when upload cleanup fails after metadata creation failure", async () => {
+    const { POST } = await import("@/app/api/files/route");
+    mocks.repo.createFile.mockImplementation(() => {
+      throw new Error("database unavailable");
+    });
+    mocks.storage.deleteFile.mockRejectedValue(new Error("cleanup failed"));
+
+    const response = await POST(
+      formRequest({
+        file: uploadFile("hello"),
+        sourceDevice: "Mac"
+      })
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "file operation requires manual repair" });
   });
 
   it.each([

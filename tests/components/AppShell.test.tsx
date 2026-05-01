@@ -108,6 +108,18 @@ describe("AppShell", () => {
     ]);
   });
 
+  it("opens the shared file chooser from the command bar upload button", async () => {
+    const user = userEvent.setup();
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+
+    render(<AppShell />);
+
+    await user.click(screen.getByRole("button", { name: "Upload" }));
+
+    expect(inputClick).toHaveBeenCalledTimes(1);
+    expect(inputClick.mock.instances[0]).toBe(screen.getByLabelText("Choose files"));
+  });
+
   it("posts a project JSON payload from the project dialog", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn<typeof fetch>(() =>

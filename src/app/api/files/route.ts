@@ -43,11 +43,6 @@ export async function POST(request: Request) {
 
   const filename = upload.name || "upload.bin";
   const mimeType = upload.type || "application/octet-stream";
-  const bytes = Buffer.from(await upload.arrayBuffer());
-
-  if (bytes.length > appConfig.maxUploadBytes) {
-    return NextResponse.json({ error: "file exceeds upload size limit" }, { status: 413 });
-  }
 
   const sourceDevice = stringValue(formData.get("sourceDevice")) || "Unknown Device";
   const projectId = nullableStringValue(formData.get("projectId"));
@@ -57,27 +52,68 @@ export async function POST(request: Request) {
   }
 
   const categoryId = nullableStringValue(formData.get("categoryId"));
+  const repo = createMetadataRepository(getDatabase());
+
+  let target: { kind: "inbox"; sourceDevice: string } | { kind: "project"; projectSlug: string } = {
+    kind: "inbox",
+    sourceDevice
+  };
+
+  if (categoryId) {
+    const categoryExists = repo.listCategories().some((category) => category.id === categoryId);
+    if (!categoryExists) {
+      return NextResponse.json({ error: "category not found" }, { status: 404 });
+    }
+  }
+
+  if (projectId) {
+    const project = repo.getProjectById(projectId);
+    if (!project) {
+      return NextResponse.json({ error: "project not found" }, { status: 404 });
+    }
+
+    if (project.slug !== projectSlug) {
+      return NextResponse.json({ error: "project slug mismatch" }, { status: 400 });
+    }
+
+    target = { kind: "project", projectSlug: project.slug };
+  }
+
+  const bytes = Buffer.from(await upload.arrayBuffer());
+  if (bytes.length > appConfig.maxUploadBytes) {
+    return NextResponse.json({ error: "file exceeds upload size limit" }, { status: 413 });
+  }
+
   const storage = createStorageService();
   const stored = await storage.writeUpload({
-    target: projectSlug ? { kind: "project", projectSlug } : { kind: "inbox", sourceDevice },
+    target,
     filename,
     mimeType,
     bytes
   });
   const classification = classifyFile(filename);
-  const repo = createMetadataRepository(getDatabase());
-  const file = repo.createFile({
-    name: filename,
-    extension: classification.extension,
-    family: classification.family,
-    mimeType: stored.mimeType,
-    sizeBytes: stored.sizeBytes,
-    checksum: stored.checksum,
-    storagePath: stored.relativePath,
-    projectId,
-    categoryId,
-    sourceDevice
-  });
+  let file;
+  try {
+    file = repo.createFile({
+      name: filename,
+      extension: classification.extension,
+      family: classification.family,
+      mimeType: stored.mimeType,
+      sizeBytes: stored.sizeBytes,
+      checksum: stored.checksum,
+      storagePath: stored.relativePath,
+      projectId,
+      categoryId,
+      sourceDevice
+    });
+  } catch {
+    try {
+      await storage.deleteFile(stored.relativePath);
+    } catch {
+      return NextResponse.json({ error: "file operation requires manual repair" }, { status: 500 });
+    }
+    return NextResponse.json({ error: "file metadata create failed" }, { status: 500 });
+  }
 
   return NextResponse.json({ file }, { status: 201 });
 }

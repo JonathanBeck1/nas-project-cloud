@@ -89,7 +89,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
         </div>
 
         <div className="flex min-w-0 flex-col">
-          <CommandBar query={query} onQueryChange={setQuery} />
+          <CommandBar query={query} onQueryChange={setQuery} uploadInputId="workspace-file-upload" />
 
           <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 lg:px-6">
             <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">

@@ -206,6 +206,25 @@ describe("storage service", () => {
     expect(fs.existsSync(path.join(dir, moved.relativePath))).toBe(false);
   });
 
+  it("deletes a stored relative file without escaping the storage root", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const stored = await storage.writeUpload({
+      target: { kind: "inbox", sourceDevice: "Browser" },
+      filename: "manual.pdf",
+      mimeType: "application/pdf",
+      bytes: Buffer.from("manual")
+    });
+
+    await storage.deleteFile(stored.relativePath);
+
+    expect(fs.existsSync(path.join(dir, stored.relativePath))).toBe(false);
+    await expect(storage.deleteFile(`../${path.basename(dir)}-evil/manual.pdf`)).rejects.toThrow(
+      "Storage path escapes configured root"
+    );
+  });
+
   it("rejects paths escaping to a sibling root with the same prefix", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
     createdDirs.push(root);

@@ -5,7 +5,7 @@ import path from "node:path";
 import type { AppDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { classifyFile } from "@/lib/shared/fileTypes";
-import type { FileFamily } from "@/lib/shared/types";
+import type { FileFamily, FileStatus } from "@/lib/shared/types";
 
 export type ScanStorageRootInput = {
   db: AppDatabase;
@@ -86,6 +86,7 @@ export async function scanStorageRoot(input: ScanStorageRootInput): Promise<Scan
 
     const stats = await fs.stat(filePath);
     const classification = classifyFile(path.basename(filePath));
+    const lifecycle = lifecycleForStoragePath(storagePath, stats.mtime);
     repo.createFile({
       name: path.basename(filePath),
       extension: classification.extension,
@@ -94,8 +95,10 @@ export async function scanStorageRoot(input: ScanStorageRootInput): Promise<Scan
       sizeBytes: stats.size,
       checksum: await sha256File(filePath),
       storagePath,
-      categoryId: CATEGORY_BY_FAMILY[classification.family] ?? null,
-      sourceDevice: sourceDeviceForStoragePath(storagePath)
+      categoryId: categoryForStoragePath(storagePath, classification.family),
+      sourceDevice: sourceDeviceForStoragePath(storagePath),
+      status: lifecycle.status,
+      archivedAt: lifecycle.archivedAt
     });
     indexed += 1;
   }
@@ -131,6 +134,16 @@ function toStoragePath(storageRoot: string, filePath: string): string {
 function sourceDeviceForStoragePath(storagePath: string): string {
   const [topLevel, device] = storagePath.split("/");
   return topLevel === "Inbox" && device ? device : "NAS";
+}
+
+function categoryForStoragePath(storagePath: string, family: FileFamily): string | null {
+  return storagePath.startsWith("Archive/") ? "cat_archive" : CATEGORY_BY_FAMILY[family] ?? null;
+}
+
+function lifecycleForStoragePath(storagePath: string, modifiedAt: Date): { status: FileStatus; archivedAt: string | null } {
+  return storagePath.startsWith("Archive/")
+    ? { status: "archived", archivedAt: modifiedAt.toISOString() }
+    : { status: "active", archivedAt: null };
 }
 
 async function sha256File(filePath: string): Promise<string> {

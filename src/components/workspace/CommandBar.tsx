@@ -4,6 +4,7 @@ import { Grid2X2, List, Search, Upload } from "lucide-react";
 type CommandBarProps = {
   query?: string;
   onQueryChange?: (query: string) => void;
+  uploadInputId?: string;
 };
 
 function IconButton({
@@ -32,7 +33,7 @@ function IconButton({
   );
 }
 
-export function CommandBar({ query = "", onQueryChange }: CommandBarProps) {
+export function CommandBar({ query = "", onQueryChange, uploadInputId }: CommandBarProps) {
   return (
     <header className="flex min-h-16 flex-col gap-3 border-b border-line bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
       <div className="relative min-w-0 flex-1 sm:max-w-xl">
@@ -61,6 +62,11 @@ export function CommandBar({ query = "", onQueryChange }: CommandBarProps) {
         </div>
         <button
           type="button"
+          onClick={() => {
+            if (uploadInputId) {
+              document.getElementById(uploadInputId)?.click();
+            }
+          }}
           className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-white shadow-panel transition hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent/25"
         >
           <Upload aria-hidden="true" className="h-4 w-4" />

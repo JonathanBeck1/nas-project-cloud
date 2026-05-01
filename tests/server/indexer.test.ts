@@ -60,4 +60,29 @@ describe("scanStorageRoot", () => {
       db.close();
     }
   });
+
+  it("indexes files under Archive as archived records", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-index-"));
+    createdDirs.push(dir);
+    const storageRoot = path.join(dir, "storage");
+    fs.mkdirSync(path.join(storageRoot, "Archive", "2026", "04"), { recursive: true });
+    fs.writeFileSync(path.join(storageRoot, "Archive", "2026", "04", "old-model.stl"), "model");
+
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      await scanStorageRoot({ db, storageRoot });
+      const files = createMetadataRepository(db).listFiles({ includeArchived: true });
+
+      expect(files).toHaveLength(1);
+      expect(files[0]).toMatchObject({
+        name: "old-model.stl",
+        status: "archived",
+        categoryId: "cat_archive",
+        storagePath: "Archive/2026/04/old-model.stl"
+      });
+      expect(createMetadataRepository(db).listFiles()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
 });
