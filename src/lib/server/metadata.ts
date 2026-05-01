@@ -1,6 +1,17 @@
 import { nanoid } from "nanoid";
 import type { AppDatabase } from "@/lib/server/db";
-import type { Category, CloudFile, FileFamily, FileStatus, Project, ProjectStatus, Tag } from "@/lib/shared/types";
+import type {
+  Category,
+  CloudFile,
+  FileFamily,
+  FileStatus,
+  Project,
+  ProjectStatus,
+  Tag,
+  UploadSession,
+  UploadSessionStatus,
+  UploadTargetKind
+} from "@/lib/shared/types";
 
 type CategoryRow = {
   id: string;
@@ -46,6 +57,27 @@ type TagRow = {
   slug: string;
 };
 
+type UploadSessionRow = {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  received_bytes: number;
+  checksum: string | null;
+  target_kind: UploadTargetKind;
+  source_device: string;
+  project_id: string | null;
+  project_slug: string | null;
+  category_id: string | null;
+  status: UploadSessionStatus;
+  temp_path: string;
+  storage_path: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+};
+
 type CreateProjectInput = {
   name: string;
   description?: string;
@@ -85,6 +117,28 @@ type UpdateFileInput = {
 type UpdateFileConditions = {
   storagePath?: string;
   status?: FileStatus;
+};
+
+type CreateUploadSessionInput = {
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  checksum?: string | null;
+  targetKind: UploadTargetKind;
+  sourceDevice: string;
+  projectId?: string | null;
+  projectSlug?: string | null;
+  categoryId?: string | null;
+  tempPath: string;
+};
+
+type AdvanceUploadSessionInput = {
+  expectedReceivedBytes: number;
+  receivedBytes: number;
+};
+
+type CompleteUploadSessionInput = {
+  storagePath: string;
 };
 
 export function slugify(value: string): string {
@@ -281,6 +335,105 @@ export function createMetadataRepository(db: AppDatabase) {
 
     listTags(): Tag[] {
       return db.prepare<[], TagRow>("select * from tags order by name").all().map(tagFromRow);
+    },
+
+    createUploadSession(input: CreateUploadSessionInput): UploadSession {
+      const now = new Date().toISOString();
+      const session: UploadSession = {
+        id: `upload_${nanoid(12)}`,
+        filename: input.filename,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+        receivedBytes: 0,
+        checksum: input.checksum ?? null,
+        targetKind: input.targetKind,
+        sourceDevice: input.sourceDevice,
+        projectId: input.projectId ?? null,
+        projectSlug: input.projectSlug ?? null,
+        categoryId: input.categoryId ?? null,
+        status: "open",
+        tempPath: input.tempPath,
+        storagePath: null,
+        error: null,
+        createdAt: now,
+        updatedAt: now,
+        completedAt: null
+      };
+
+      db.prepare(`
+        insert into upload_sessions (
+          id, filename, mime_type, size_bytes, received_bytes, checksum, target_kind,
+          source_device, project_id, project_slug, category_id, status, temp_path,
+          storage_path, error, created_at, updated_at, completed_at
+        )
+        values (
+          @id, @filename, @mimeType, @sizeBytes, @receivedBytes, @checksum, @targetKind,
+          @sourceDevice, @projectId, @projectSlug, @categoryId, @status, @tempPath,
+          @storagePath, @error, @createdAt, @updatedAt, @completedAt
+        )
+      `).run(session);
+
+      return session;
+    },
+
+    getUploadSession(id: string): UploadSession | null {
+      const row = db.prepare<[string], UploadSessionRow>("select * from upload_sessions where id = ? limit 1").get(id);
+      return row ? uploadSessionFromRow(row) : null;
+    },
+
+    advanceUploadSession(id: string, input: AdvanceUploadSessionInput): UploadSession | null {
+      const result = db.prepare(`
+        update upload_sessions
+        set received_bytes = @receivedBytes,
+            updated_at = @updatedAt
+        where id = @id
+          and status = 'open'
+          and received_bytes = @expectedReceivedBytes
+      `).run({
+        id,
+        receivedBytes: input.receivedBytes,
+        expectedReceivedBytes: input.expectedReceivedBytes,
+        updatedAt: new Date().toISOString()
+      });
+
+      return result.changes === 0 ? null : this.getUploadSession(id);
+    },
+
+    completeUploadSession(id: string, input: CompleteUploadSessionInput): UploadSession | null {
+      const now = new Date().toISOString();
+      const result = db.prepare(`
+        update upload_sessions
+        set status = 'completed',
+            storage_path = @storagePath,
+            updated_at = @now,
+            completed_at = @now
+        where id = @id
+      `).run({ id, storagePath: input.storagePath, now });
+
+      return result.changes === 0 ? null : this.getUploadSession(id);
+    },
+
+    failUploadSession(id: string, error: string): UploadSession | null {
+      const result = db.prepare(`
+        update upload_sessions
+        set status = 'failed',
+            error = @error,
+            updated_at = @updatedAt
+        where id = @id
+      `).run({ id, error, updatedAt: new Date().toISOString() });
+
+      return result.changes === 0 ? null : this.getUploadSession(id);
+    },
+
+    abortUploadSession(id: string): UploadSession | null {
+      const result = db.prepare(`
+        update upload_sessions
+        set status = 'aborted',
+            updated_at = @updatedAt
+        where id = @id and status = 'open'
+      `).run({ id, updatedAt: new Date().toISOString() });
+
+      return result.changes === 0 ? null : this.getUploadSession(id);
     }
   };
 }
@@ -353,5 +506,28 @@ function tagFromRow(row: TagRow): Tag {
     id: row.id,
     name: row.name,
     slug: row.slug
+  };
+}
+
+function uploadSessionFromRow(row: UploadSessionRow): UploadSession {
+  return {
+    id: row.id,
+    filename: row.filename,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+    receivedBytes: row.received_bytes,
+    checksum: row.checksum,
+    targetKind: row.target_kind,
+    sourceDevice: row.source_device,
+    projectId: row.project_id,
+    projectSlug: row.project_slug,
+    categoryId: row.category_id,
+    status: row.status,
+    tempPath: row.temp_path,
+    storagePath: row.storage_path,
+    error: row.error,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    completedAt: row.completed_at
   };
 }

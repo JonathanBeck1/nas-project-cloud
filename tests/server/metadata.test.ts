@@ -198,4 +198,72 @@ describe("metadata repository", () => {
       db.close();
     }
   });
+
+  it("creates, advances, completes, and fails upload sessions", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const project = repo.createProject({ name: "Garage Build" });
+      const session = repo.createUploadSession({
+        filename: "movie.webm",
+        mimeType: "video/webm",
+        sizeBytes: 12,
+        checksum: "sha256-movie",
+        targetKind: "project",
+        sourceDevice: "Mac Studio",
+        projectId: project.id,
+        projectSlug: project.slug,
+        categoryId: "cat_media",
+        tempPath: ".uploads/upload_123.part"
+      });
+
+      expect(session).toMatchObject({
+        filename: "movie.webm",
+        mimeType: "video/webm",
+        sizeBytes: 12,
+        receivedBytes: 0,
+        checksum: "sha256-movie",
+        targetKind: "project",
+        sourceDevice: "Mac Studio",
+        projectId: project.id,
+        projectSlug: project.slug,
+        categoryId: "cat_media",
+        status: "open",
+        tempPath: ".uploads/upload_123.part",
+        storagePath: null,
+        error: null,
+        completedAt: null
+      });
+
+      expect(repo.getUploadSession(session.id)?.id).toBe(session.id);
+
+      const advanced = repo.advanceUploadSession(session.id, {
+        expectedReceivedBytes: 0,
+        receivedBytes: 7
+      });
+      expect(advanced?.receivedBytes).toBe(7);
+
+      expect(
+        repo.advanceUploadSession(session.id, {
+          expectedReceivedBytes: 0,
+          receivedBytes: 9
+        })
+      ).toBeNull();
+
+      const completed = repo.completeUploadSession(session.id, {
+        storagePath: "Projects/garage-build/Inbox/movie.webm"
+      });
+      expect(completed?.status).toBe("completed");
+      expect(completed?.storagePath).toBe("Projects/garage-build/Inbox/movie.webm");
+      expect(completed?.completedAt).toEqual(expect.any(String));
+
+      const failed = repo.failUploadSession(session.id, "metadata create failed");
+      expect(failed?.status).toBe("failed");
+      expect(failed?.error).toBe("metadata create failed");
+    } finally {
+      db.close();
+    }
+  });
 });

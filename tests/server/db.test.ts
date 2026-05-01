@@ -27,6 +27,7 @@ describe("createDatabase", () => {
       expect(tables).toContain("categories");
       expect(tables).toContain("projects");
       expect(tables).toContain("files");
+      expect(tables).toContain("upload_sessions");
       expect(tables).toContain("tags");
       expect(tables).toContain("file_tags");
 
@@ -48,6 +49,40 @@ describe("createDatabase", () => {
       expect(columns.map((column) => column.name)).toContain("status");
       expect(columns.map((column) => column.name)).toContain("archived_at");
       expect(columns.find((column) => column.name === "status")?.dflt_value).toBe("'active'");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("creates upload session columns for resumable uploads", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-db-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const columns = db.prepare("pragma table_info(upload_sessions)").all() as Array<{ name: string }>;
+
+      expect(columns.map((column) => column.name)).toEqual(
+        expect.arrayContaining([
+          "id",
+          "filename",
+          "mime_type",
+          "size_bytes",
+          "received_bytes",
+          "checksum",
+          "target_kind",
+          "source_device",
+          "project_id",
+          "project_slug",
+          "category_id",
+          "status",
+          "temp_path",
+          "storage_path",
+          "error",
+          "created_at",
+          "updated_at",
+          "completed_at"
+        ])
+      );
     } finally {
       db.close();
     }

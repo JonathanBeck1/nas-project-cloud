@@ -225,6 +225,63 @@ describe("storage service", () => {
     );
   });
 
+  it("appends upload chunks at exact offsets and completes the session into inbox storage", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const temp = await storage.createUploadTempPath("upload_123");
+
+    await storage.appendUploadChunk({
+      tempRelativePath: temp.relativePath,
+      offset: 0,
+      bytes: Buffer.from("hello ")
+    });
+    const appended = await storage.appendUploadChunk({
+      tempRelativePath: temp.relativePath,
+      offset: 6,
+      bytes: Buffer.from("world")
+    });
+
+    expect(appended.receivedBytes).toBe(11);
+    await expect(
+      storage.appendUploadChunk({
+        tempRelativePath: temp.relativePath,
+        offset: 3,
+        bytes: Buffer.from("bad")
+      })
+    ).rejects.toThrow("Upload chunk offset mismatch");
+
+    const completed = await storage.completeUploadSession({
+      tempRelativePath: temp.relativePath,
+      target: { kind: "inbox", sourceDevice: "Browser" },
+      filename: "movie.webm",
+      mimeType: "video/webm"
+    });
+
+    expect(completed.relativePath).toBe("Inbox/Browser/movie.webm");
+    expect(completed.sizeBytes).toBe(11);
+    expect(completed.mimeType).toBe("video/webm");
+    expect(fs.readFileSync(path.join(dir, completed.relativePath), "utf8")).toBe("hello world");
+    expect(fs.existsSync(path.join(dir, temp.relativePath))).toBe(false);
+  });
+
+  it("aborts temp upload files without allowing path escape", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const temp = await storage.createUploadTempPath("upload_456");
+    await storage.appendUploadChunk({
+      tempRelativePath: temp.relativePath,
+      offset: 0,
+      bytes: Buffer.from("partial")
+    });
+
+    await storage.abortUploadSession(temp.relativePath);
+
+    expect(fs.existsSync(path.join(dir, temp.relativePath))).toBe(false);
+    await expect(storage.abortUploadSession("../escape.part")).rejects.toThrow("Storage path escapes configured root");
+  });
+
   it("rejects paths escaping to a sibling root with the same prefix", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
     createdDirs.push(root);

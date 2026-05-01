@@ -76,10 +76,32 @@ function migrate(db: AppDatabase) {
       primary key (file_id, tag_id)
     );
 
+    create table if not exists upload_sessions (
+      id text primary key,
+      filename text not null,
+      mime_type text not null,
+      size_bytes integer not null,
+      received_bytes integer not null default 0,
+      checksum text,
+      target_kind text not null,
+      source_device text not null,
+      project_id text references projects(id) on delete set null,
+      project_slug text,
+      category_id text references categories(id) on delete set null,
+      status text not null default 'open',
+      temp_path text not null unique,
+      storage_path text,
+      error text,
+      created_at text not null,
+      updated_at text not null,
+      completed_at text
+    );
+
     create index if not exists files_project_id_idx on files(project_id);
     create index if not exists files_category_id_idx on files(category_id);
     create index if not exists files_family_idx on files(family);
     create index if not exists files_uploaded_at_idx on files(uploaded_at);
+    create index if not exists upload_sessions_status_idx on upload_sessions(status);
   `);
 
   addColumnIfMissing(db, "files", "status", "text not null default 'active'");

@@ -4,6 +4,10 @@ export type FileStatus = "active" | "archived";
 
 export type ProjectStatus = "active" | "paused" | "complete" | "archived";
 
+export type UploadTargetKind = "inbox" | "project";
+
+export type UploadSessionStatus = "open" | "completed" | "failed" | "aborted";
+
 export type Category = {
   id: string;
   name: string;
@@ -47,6 +51,27 @@ export type CloudFile = {
   uploadedAt: string;
   updatedAt: string;
   tags: Tag[];
+};
+
+export type UploadSession = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  receivedBytes: number;
+  checksum: string | null;
+  targetKind: UploadTargetKind;
+  sourceDevice: string;
+  projectId: string | null;
+  projectSlug: string | null;
+  categoryId: string | null;
+  status: UploadSessionStatus;
+  tempPath: string;
+  storagePath: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
 };
 
 export type SmartViewKey =

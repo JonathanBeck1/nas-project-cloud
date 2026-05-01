@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { appConfig } from "./config";
@@ -39,6 +40,19 @@ export type StoredFile = {
   mimeType: string;
 };
 
+export type AppendUploadChunkInput = {
+  tempRelativePath: string;
+  offset: number;
+  bytes: Buffer;
+};
+
+export type CompleteUploadSessionInput = {
+  tempRelativePath: string;
+  target: UploadTarget;
+  filename: string;
+  mimeType: string;
+};
+
 export function createStorageService(root = appConfig.storageRoot) {
   const storageRoot = path.resolve(root);
   const absolutePathFor = (relativePath: string) => {
@@ -71,6 +85,52 @@ export function createStorageService(root = appConfig.storageRoot) {
     },
 
     absolutePathFor,
+
+    async createUploadTempPath(sessionId: string): Promise<{ absolutePath: string; relativePath: string }> {
+      const relativePath = path.join(".uploads", `${sanitizePathSegment(sessionId)}.part`);
+      const absolutePath = absolutePathFor(relativePath);
+      await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+      await fs.writeFile(absolutePath, Buffer.alloc(0), { flag: "wx" });
+      return {
+        absolutePath,
+        relativePath: relativePath.split(path.sep).join("/")
+      };
+    },
+
+    async appendUploadChunk(input: AppendUploadChunkInput): Promise<{ receivedBytes: number }> {
+      const absolutePath = absolutePathFor(input.tempRelativePath);
+      const stats = await fs.stat(absolutePath);
+      if (!stats.isFile()) {
+        throw new Error("Upload temp path is not a file");
+      }
+
+      if (stats.size !== input.offset) {
+        throw new Error("Upload chunk offset mismatch");
+      }
+
+      await fs.writeFile(absolutePath, input.bytes, { flag: "a" });
+      return { receivedBytes: stats.size + input.bytes.length };
+    },
+
+    async completeUploadSession(input: CompleteUploadSessionInput): Promise<StoredFile> {
+      const from = absolutePathFor(input.tempRelativePath);
+      const relativeDirectory = targetDirectory(input.target);
+      const directory = path.join(storageRoot, relativeDirectory);
+      const absolutePath = await moveIntoDirectory({
+        storageRoot,
+        from,
+        directory,
+        filename: input.filename
+      });
+      const stats = await fs.stat(absolutePath.absolutePath);
+
+      return {
+        ...absolutePath,
+        sizeBytes: stats.size,
+        checksum: await sha256File(absolutePath.absolutePath),
+        mimeType: input.mimeType || "application/octet-stream"
+      };
+    },
 
     async fileDetails(relativePath: string) {
       const absolutePath = absolutePathFor(relativePath);
@@ -134,6 +194,10 @@ export function createStorageService(root = appConfig.storageRoot) {
 
     async deleteFile(relativePath: string): Promise<void> {
       await fs.unlink(absolutePathFor(relativePath));
+    },
+
+    async abortUploadSession(tempRelativePath: string): Promise<void> {
+      await fs.unlink(absolutePathFor(tempRelativePath));
     }
   };
 }
@@ -236,4 +300,12 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 
 function sha256(bytes: Buffer): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+async function sha256File(filePath: string): Promise<string> {
+  const hash = crypto.createHash("sha256");
+  for await (const chunk of createReadStream(filePath)) {
+    hash.update(chunk);
+  }
+  return hash.digest("hex");
 }

@@ -79,4 +79,88 @@ describe("DropZone", () => {
     await waitFor(() => expect(onUploaded).toHaveBeenCalledWith([uploadedFile]));
     expect(await screen.findByRole("status")).toHaveTextContent("Uploaded manual.pdf");
   });
+
+  it("uploads large files through chunked upload sessions", async () => {
+    const onUploaded = vi.fn();
+    const fetchMock = vi.fn<typeof fetch>((url) => {
+      if (url === "/api/upload-sessions") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              session: {
+                id: "upload_1",
+                receivedBytes: 0
+              }
+            }),
+            { status: 201 }
+          )
+        );
+      }
+
+      if (url === "/api/upload-sessions/upload_1/chunk") {
+        return Promise.resolve(new Response(JSON.stringify({ session: { id: "upload_1" } }), { status: 200 }));
+      }
+
+      if (url === "/api/upload-sessions/upload_1/complete") {
+        return Promise.resolve(new Response(JSON.stringify({ file: uploadedFile }), { status: 201 }));
+      }
+
+      return Promise.resolve(new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <DropZone chunkedUploadThresholdBytes={4} chunkSizeBytes={3} onUploaded={onUploaded}>
+        <div data-testid="drop-target">Drop target</div>
+      </DropZone>
+    );
+
+    const file = new File(["hello"], "manual.pdf", { type: "application/pdf" });
+    fireEvent.drop(screen.getByTestId("drop-target"), {
+      dataTransfer: {
+        files: [file]
+      }
+    });
+
+    await waitFor(() => expect(onUploaded).toHaveBeenCalledWith([uploadedFile]));
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/upload-sessions",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: "manual.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 5,
+          sourceDevice: "Browser"
+        })
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/upload-sessions/upload_1/chunk",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "upload-offset": "0" },
+        body: file.slice(0, 3)
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/upload-sessions/upload_1/chunk",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "upload-offset": "3" },
+        body: file.slice(3, 5)
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/upload-sessions/upload_1/complete",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Uploaded manual.pdf");
+  });
 });
