@@ -8,3 +8,26 @@ test("workspace renders the local library shell", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
   await expect(page.getByRole("button", { name: "New Project" })).toBeVisible();
 });
+
+test("uploads selects and downloads a file", async ({ page }) => {
+  await page.goto("/");
+
+  const filename = `phase-two-smoke-${Date.now()}.txt`;
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.getByText("Drop files", { exact: true }).click();
+  const chooser = await fileChooserPromise;
+  await chooser.setFiles({
+    name: filename,
+    mimeType: "text/plain",
+    buffer: Buffer.from("phase two")
+  });
+
+  await expect(page.getByRole("button", { name: filename })).toBeVisible();
+  await page.getByRole("button", { name: filename }).click();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download" }).click();
+  const download = await downloadPromise;
+
+  expect(download.suggestedFilename()).toBe(filename);
+});
