@@ -38,3 +38,24 @@ test("uploads selects and downloads a file", async ({ page }, testInfo) => {
   await download.saveAs(downloadPath);
   await expect(fs.readFile(downloadPath, "utf8")).resolves.toBe(contents);
 });
+
+test("uploads selects and archives a file", async ({ page }) => {
+  await page.goto("/");
+
+  const filename = `archive-smoke-${Date.now()}.txt`;
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.getByText("Drop files", { exact: true }).click();
+  const chooser = await fileChooserPromise;
+  await chooser.setFiles({
+    name: filename,
+    mimeType: "text/plain",
+    buffer: Buffer.from("archive me")
+  });
+
+  await expect(page.getByRole("button", { name: filename })).toBeVisible();
+  await page.getByRole("button", { name: filename }).click();
+  await page.getByRole("button", { name: "Archive", exact: true }).click();
+
+  await expect(page.getByRole("button", { name: filename })).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: `Archived ${filename}` })).toBeVisible();
+});
