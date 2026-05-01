@@ -25,3 +25,7 @@
 ## Following Plan
 
 Run the storage engine spike and choose OpenCloud, Nextcloud, or direct filesystem integration for the next phase.
+
+## Phase 2 Add-On
+
+See [Phase 2 File Operations](./phase-2-file-operations.md) for download, archive, project assignment, and file action details.
