@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 test("workspace renders the local library shell", async ({ page }) => {
@@ -9,9 +10,10 @@ test("workspace renders the local library shell", async ({ page }) => {
   await expect(page.getByRole("button", { name: "New Project" })).toBeVisible();
 });
 
-test("uploads selects and downloads a file", async ({ page }) => {
+test("uploads selects and downloads a file", async ({ page }, testInfo) => {
   await page.goto("/");
 
+  const contents = "phase two";
   const filename = `phase-two-smoke-${Date.now()}.txt`;
   const fileChooserPromise = page.waitForEvent("filechooser");
   await page.getByText("Drop files", { exact: true }).click();
@@ -19,7 +21,7 @@ test("uploads selects and downloads a file", async ({ page }) => {
   await chooser.setFiles({
     name: filename,
     mimeType: "text/plain",
-    buffer: Buffer.from("phase two")
+    buffer: Buffer.from(contents)
   });
 
   await expect(page.getByRole("button", { name: filename })).toBeVisible();
@@ -30,4 +32,9 @@ test("uploads selects and downloads a file", async ({ page }) => {
   const download = await downloadPromise;
 
   expect(download.suggestedFilename()).toBe(filename);
+  await expect(download.failure()).resolves.toBeNull();
+
+  const downloadPath = testInfo.outputPath(filename);
+  await download.saveAs(downloadPath);
+  await expect(fs.readFile(downloadPath, "utf8")).resolves.toBe(contents);
 });
