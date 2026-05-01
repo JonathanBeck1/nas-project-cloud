@@ -12,9 +12,10 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
 
+  const storage = createStorageService();
   let moved;
   try {
-    moved = await createStorageService().archiveFile({
+    moved = await storage.archiveFile({
       currentRelativePath: file.storagePath,
       filename: file.name
     });
@@ -23,13 +24,35 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
   }
 
   const archivedAt = new Date().toISOString();
-  const updated = repo.updateFile(id, {
-    storagePath: moved.relativePath,
-    status: "archived",
-    archivedAt
-  });
+  let updated;
+  try {
+    updated = repo.updateFile(
+      id,
+      {
+        storagePath: moved.relativePath,
+        status: "archived",
+        archivedAt
+      },
+      { storagePath: file.storagePath, status: "active" }
+    );
+  } catch {
+    await rollbackMovedFile(storage, moved.relativePath, file.storagePath);
+    return NextResponse.json({ error: "file metadata update failed" }, { status: 500 });
+  }
+
+  if (!updated) {
+    await rollbackMovedFile(storage, moved.relativePath, file.storagePath);
+  }
 
   return updated
     ? NextResponse.json({ file: updated })
     : NextResponse.json({ error: "file not found" }, { status: 404 });
+}
+
+async function rollbackMovedFile(
+  storage: ReturnType<typeof createStorageService>,
+  currentRelativePath: string,
+  targetRelativePath: string
+) {
+  await storage.restoreFile({ currentRelativePath, targetRelativePath }).catch(() => undefined);
 }

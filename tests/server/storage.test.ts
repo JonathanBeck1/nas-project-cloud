@@ -180,6 +180,32 @@ describe("storage service", () => {
     expect(fs.existsSync(originalSourcePath)).toBe(false);
   });
 
+  it("restores a moved file to its original relative path", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const stored = await storage.writeUpload({
+      target: { kind: "inbox", sourceDevice: "Browser" },
+      filename: "bracket.stl",
+      mimeType: "model/stl",
+      bytes: Buffer.from("model")
+    });
+    const moved = await storage.moveToProject({
+      currentRelativePath: stored.relativePath,
+      projectSlug: "print-parts",
+      filename: "bracket.stl"
+    });
+
+    const restored = await storage.restoreFile({
+      currentRelativePath: moved.relativePath,
+      targetRelativePath: stored.relativePath
+    });
+
+    expect(restored.relativePath).toBe(stored.relativePath);
+    expect(fs.readFileSync(path.join(dir, stored.relativePath), "utf8")).toBe("model");
+    expect(fs.existsSync(path.join(dir, moved.relativePath))).toBe(false);
+  });
+
   it("rejects paths escaping to a sibling root with the same prefix", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
     createdDirs.push(root);

@@ -26,6 +26,11 @@ export type ArchiveFileInput = {
   now?: Date;
 };
 
+export type RestoreFileInput = {
+  currentRelativePath: string;
+  targetRelativePath: string;
+};
+
 export type StoredFile = {
   absolutePath: string;
   relativePath: string;
@@ -112,6 +117,19 @@ export function createStorageService(root = appConfig.storageRoot) {
         directory,
         filename: input.filename
       });
+    },
+
+    async restoreFile(
+      input: RestoreFileInput
+    ): Promise<{ absolutePath: string; relativePath: string }> {
+      const from = absolutePathFor(input.currentRelativePath);
+      const to = absolutePathFor(input.targetRelativePath);
+      await fs.mkdir(path.dirname(to), { recursive: true });
+      await linkFile(from, to);
+      return {
+        absolutePath: to,
+        relativePath: path.relative(storageRoot, to).split(path.sep).join("/")
+      };
     }
   };
 }
@@ -196,6 +214,16 @@ async function linkIntoAvailablePath(
   }
 
   throw new Error(`Could not allocate filename for ${filename}`);
+}
+
+async function linkFile(from: string, to: string): Promise<void> {
+  await fs.link(from, to);
+  try {
+    await fs.unlink(from);
+  } catch (error) {
+    await fs.unlink(to).catch(() => undefined);
+    throw error;
+  }
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

@@ -129,4 +129,43 @@ describe("listSmartViewFiles", () => {
       }
     ]);
   });
+
+  it("excludes archived files from smart views", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-views-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    createdDbs.push(db);
+    const repo = createMetadataRepository(db);
+
+    const activeFile = repo.createFile({
+      name: "active-model.stl",
+      extension: "stl",
+      family: "cad",
+      mimeType: "model/stl",
+      sizeBytes: 100,
+      checksum: "active",
+      storagePath: "Inbox/Browser/active-model.stl",
+      projectId: null,
+      categoryId: "cat_cad",
+      sourceDevice: "Browser"
+    });
+
+    repo.createFile({
+      name: "archived-model.stl",
+      extension: "stl",
+      family: "cad",
+      mimeType: "model/stl",
+      sizeBytes: 100,
+      checksum: "archived",
+      storagePath: "Archive/2026/04/archived-model.stl",
+      projectId: null,
+      categoryId: "cat_cad",
+      sourceDevice: "Browser",
+      status: "archived",
+      archivedAt: "2026-04-30T00:00:00.000Z"
+    });
+
+    expect(listSmartViewFiles(db, "cad")).toEqual([activeFile]);
+    expect(listSmartViewFiles(db, "recent")).toEqual([activeFile]);
+  });
 });

@@ -160,4 +160,42 @@ describe("metadata repository", () => {
       db.close();
     }
   });
+
+  it("skips file updates when expected storage path or status no longer matches", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const file = repo.createFile({
+        name: "bracket.stl",
+        extension: "stl",
+        family: "cad",
+        mimeType: "model/stl",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/bracket.stl",
+        sourceDevice: "Browser"
+      });
+
+      expect(
+        repo.updateFile(
+          file.id,
+          { storagePath: "Projects/print-parts/Inbox/bracket.stl" },
+          { storagePath: "Inbox/Other/bracket.stl", status: "active" }
+        )
+      ).toBeNull();
+      expect(repo.getFileById(file.id)?.storagePath).toBe("Inbox/Browser/bracket.stl");
+
+      const updated = repo.updateFile(
+        file.id,
+        { storagePath: "Projects/print-parts/Inbox/bracket.stl" },
+        { storagePath: "Inbox/Browser/bracket.stl", status: "active" }
+      );
+
+      expect(updated?.storagePath).toBe("Projects/print-parts/Inbox/bracket.stl");
+    } finally {
+      db.close();
+    }
+  });
 });

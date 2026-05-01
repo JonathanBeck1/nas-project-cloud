@@ -16,7 +16,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const { id } = await params;
   const file = createMetadataRepository(getDatabase()).getFileById(id);
 
-  if (!file) {
+  if (!file || file.status !== "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
 
@@ -44,7 +44,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
 
+  const storage = createStorageService();
   const update: { projectId?: string | null; categoryId?: string | null; storagePath?: string } = {};
+  let moved: { relativePath: string } | null = null;
 
   if (parsed.data.categoryId !== undefined) {
     update.categoryId = parsed.data.categoryId;
@@ -63,7 +65,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (!project) {
         return NextResponse.json({ error: "project not found" }, { status: 404 });
       }
-      const moved = await createStorageService().moveToProject({
+      moved = await storage.moveToProject({
         currentRelativePath: file.storagePath,
         projectSlug: project.slug,
         filename: file.name
@@ -72,8 +74,31 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  const updated = repo.updateFile(id, update);
+  let updated;
+  try {
+    updated = repo.updateFile(id, update, { storagePath: file.storagePath, status: "active" });
+  } catch {
+    await rollbackMovedFile(storage, moved?.relativePath, file.storagePath);
+    return NextResponse.json({ error: "file metadata update failed" }, { status: 500 });
+  }
+
+  if (!updated) {
+    await rollbackMovedFile(storage, moved?.relativePath, file.storagePath);
+  }
+
   return updated
     ? NextResponse.json({ file: updated })
     : NextResponse.json({ error: "file not found" }, { status: 404 });
+}
+
+async function rollbackMovedFile(
+  storage: ReturnType<typeof createStorageService>,
+  currentRelativePath: string | undefined,
+  targetRelativePath: string
+) {
+  if (!currentRelativePath) {
+    return;
+  }
+
+  await storage.restoreFile({ currentRelativePath, targetRelativePath }).catch(() => undefined);
 }

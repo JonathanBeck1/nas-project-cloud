@@ -25,7 +25,7 @@ export function listSmartViewFiles(db: AppDatabase, view: SmartViewKey): CloudFi
 
   const rows = db
     .prepare<Record<string, string | number>, FileRow>(
-      `select * from files where ${clauses[view]} order by uploaded_at desc, name`
+      `select * from files where status = 'active' and (${clauses[view]}) order by uploaded_at desc, name`
     )
     .all(params);
 

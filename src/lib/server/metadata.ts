@@ -82,6 +82,11 @@ type UpdateFileInput = {
   archivedAt?: string | null;
 };
 
+type UpdateFileConditions = {
+  storagePath?: string;
+  status?: FileStatus;
+};
+
 export function slugify(value: string): string {
   return (
     value
@@ -194,9 +199,17 @@ export function createMetadataRepository(db: AppDatabase) {
       return row ? projectFromRow(row) : null;
     },
 
-    updateFile(id: string, input: UpdateFileInput): CloudFile | null {
+    updateFile(id: string, input: UpdateFileInput, conditions: UpdateFileConditions = {}): CloudFile | null {
       const existing = this.getFileById(id);
       if (!existing) {
+        return null;
+      }
+
+      if (conditions.storagePath !== undefined && existing.storagePath !== conditions.storagePath) {
+        return null;
+      }
+
+      if (conditions.status !== undefined && existing.status !== conditions.status) {
         return null;
       }
 
@@ -207,10 +220,20 @@ export function createMetadataRepository(db: AppDatabase) {
         storagePath: input.storagePath ?? existing.storagePath,
         status: input.status ?? existing.status,
         archivedAt: input.archivedAt !== undefined ? input.archivedAt : existing.archivedAt,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        expectedStoragePath: conditions.storagePath,
+        expectedStatus: conditions.status
       };
 
-      db.prepare(`
+      const where = [
+        "id = @id",
+        conditions.storagePath !== undefined ? "storage_path = @expectedStoragePath" : "",
+        conditions.status !== undefined ? "status = @expectedStatus" : ""
+      ]
+        .filter(Boolean)
+        .join(" and ");
+
+      const result = db.prepare(`
         update files
         set project_id = @projectId,
             category_id = @categoryId,
@@ -218,8 +241,12 @@ export function createMetadataRepository(db: AppDatabase) {
             status = @status,
             archived_at = @archivedAt,
             updated_at = @updatedAt
-        where id = @id
+        where ${where}
       `).run(next);
+
+      if (result.changes === 0) {
+        return null;
+      }
 
       return this.getFileById(id);
     },
