@@ -65,6 +65,7 @@ describe("AppShell", () => {
       screen.getByText("Drop files here to move them onto the NAS now and organize them into projects when ready.")
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "New Project" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Log out" })).toBeVisible();
   });
 
   it("shows a successfully dropped upload in the workspace grid", async () => {

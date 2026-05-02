@@ -16,6 +16,7 @@ import {
   Video
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 import { SMART_VIEWS } from "@/lib/shared/defaults";
 import type { SmartViewKey } from "@/lib/shared/types";
 
@@ -105,6 +106,9 @@ export function Sidebar() {
         <NavigationGroup title="Smart Views" items={smartViewItems} />
         <NavigationGroup title="System" items={systemItems} />
       </nav>
+      <div className="border-t border-line px-3 py-3">
+        <LogoutButton />
+      </div>
     </aside>
   );
 }
