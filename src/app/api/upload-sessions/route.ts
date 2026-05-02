@@ -1,11 +1,17 @@
 import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/server/auth/guards";
 import { appConfig } from "@/lib/server/config";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
 
 export async function POST(request: Request) {
+  const auth = await requireApiSession(request);
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

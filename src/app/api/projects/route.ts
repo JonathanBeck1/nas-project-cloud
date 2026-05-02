@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 
@@ -9,12 +10,22 @@ const createProjectSchema = z.object({
   categoryId: z.string().nullable().default(null)
 });
 
-export async function GET() {
+export async function GET(request: Request = new Request("http://localhost/api/projects")) {
+  const auth = await requireApiSession(request);
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const repo = createMetadataRepository(getDatabase());
   return NextResponse.json({ projects: repo.listProjects() });
 }
 
 export async function POST(request: Request) {
+  const auth = await requireApiSession(request);
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   let payload: unknown;
 
   try {

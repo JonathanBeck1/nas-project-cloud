@@ -15,6 +15,10 @@ vi.mock("@/lib/server/db", () => ({
   getDatabase: vi.fn(() => mocks.db)
 }));
 
+vi.mock("@/lib/server/auth/guards", () => ({
+  requireApiSession: vi.fn(async () => ({ ok: true, userId: "user_1", sessionId: "session_1", deviceId: "device_1" }))
+}));
+
 vi.mock("@/lib/server/metadata", () => ({
   createMetadataRepository: vi.fn(() => mocks.repo)
 }));

@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
@@ -7,6 +8,11 @@ import { appConfig } from "@/lib/server/config";
 import { classifyFile } from "@/lib/shared/fileTypes";
 
 export async function GET(request: Request) {
+  const auth = await requireApiSession(request);
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const repo = createMetadataRepository(getDatabase());
   const { searchParams } = new URL(request.url);
   const files = repo.listFiles({
@@ -19,6 +25,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireApiSession(request);
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const contentLength = Number.parseInt(request.headers.get("content-length") ?? "", 10);
   if (Number.isFinite(contentLength) && contentLength > appConfig.maxUploadBytes) {
     return NextResponse.json({ error: "file exceeds upload size limit" }, { status: 413 });

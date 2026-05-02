@@ -3,11 +3,17 @@ import { stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireApiSession(request);
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const { id } = await params;
   const repo = createMetadataRepository(getDatabase());
   const file = repo.getFileById(id);
