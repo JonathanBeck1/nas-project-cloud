@@ -37,8 +37,19 @@ export async function POST(request: Request) {
     expiresAt: sessionExpiresAt()
   });
 
-  const { passwordHash: _passwordHash, ...safeUser } = user;
-  return withSessionCookie(NextResponse.json({ user: safeUser }), token);
+  return withSessionCookie(
+    NextResponse.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }
+    }),
+    token
+  );
 }
 
 async function jsonBody(request: Request): Promise<Record<string, unknown> | null> {
