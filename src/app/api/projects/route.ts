@@ -10,7 +10,7 @@ const createProjectSchema = z.object({
   categoryId: z.string().nullable().default(null)
 });
 
-export async function GET(request: Request = new Request("http://localhost/api/projects")) {
+export async function GET(request: Request) {
   const auth = await requireApiSession(request);
   if (!auth.ok) {
     return auth.response;

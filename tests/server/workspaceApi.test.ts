@@ -56,7 +56,7 @@ describe("workspace API modules", () => {
     const projects = [{ id: "proj_123", name: "NAS Project" }];
     mocks.repo.listProjects.mockReturnValue(projects);
 
-    const response = await route.GET();
+    const response = await route.GET(new Request("http://localhost/api/projects"));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ projects });
@@ -75,7 +75,7 @@ describe("workspace API modules", () => {
     const categories = [{ id: "cat_1", name: "CAD" }];
     mocks.repo.listCategories.mockReturnValue(categories);
 
-    const response = await route.GET();
+    const response = await route.GET(new Request("http://localhost/api/categories"));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ categories });
@@ -87,7 +87,7 @@ describe("workspace API modules", () => {
     const tags = [{ id: "tag_1", name: "fixture" }];
     mocks.repo.listTags.mockReturnValue(tags);
 
-    const response = await route.GET();
+    const response = await route.GET(new Request("http://localhost/api/tags"));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ tags });

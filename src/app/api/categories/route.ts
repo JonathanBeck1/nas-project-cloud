@@ -3,7 +3,7 @@ import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 
-export async function GET(request: Request = new Request("http://localhost/api/categories")) {
+export async function GET(request: Request) {
   const auth = await requireApiSession(request);
   if (!auth.ok) {
     return auth.response;
