@@ -4,14 +4,16 @@ import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
+import type { CloudFile } from "@/lib/shared/types";
 
 const updateFileSchema = z
   .object({
     projectId: z.string().min(1).nullable().optional(),
-    categoryId: z.string().min(1).nullable().optional()
+    categoryId: z.string().min(1).nullable().optional(),
+    tagIds: z.array(z.string().min(1)).optional()
   })
   .strict()
-  .refine((data) => data.projectId !== undefined || data.categoryId !== undefined);
+  .refine((data) => data.projectId !== undefined || data.categoryId !== undefined || data.tagIds !== undefined);
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireApiSession(request);
@@ -85,9 +87,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  let updated;
+  let updated: CloudFile | null = file;
   try {
-    updated = repo.updateFile(id, update, { storagePath: file.storagePath, status: "active" });
+    if (Object.keys(update).length > 0) {
+      updated = repo.updateFile(id, update, { storagePath: file.storagePath, status: "active" });
+    }
   } catch {
     try {
       await rollbackMovedFile(storage, moved?.relativePath, file.storagePath);
@@ -103,6 +107,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     } catch {
       return NextResponse.json({ error: "file operation requires manual repair" }, { status: 500 });
     }
+  }
+
+  if (updated && parsed.data.tagIds !== undefined) {
+    updated = repo.setFileTags(id, parsed.data.tagIds);
   }
 
   return updated

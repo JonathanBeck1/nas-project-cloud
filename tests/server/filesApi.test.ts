@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
     getFileById: vi.fn(),
     getProjectById: vi.fn(),
     listCategories: vi.fn(),
+    setFileTags: vi.fn(),
     updateFile: vi.fn()
   };
   const storage = {
@@ -69,6 +70,7 @@ describe("files API module", () => {
     mocks.repo.getFileById.mockReturnValue(null);
     mocks.repo.getProjectById.mockReturnValue(null);
     mocks.repo.listCategories.mockReturnValue([{ id: "cat_cad", name: "CAD", slug: "cad" }]);
+    mocks.repo.setFileTags.mockReturnValue(null);
     mocks.repo.createFile.mockImplementation((input) => ({
       id: "file_1",
       uploadedAt: "2026-04-30T00:00:00.000Z",
@@ -252,6 +254,36 @@ describe("files API module", () => {
       currentRelativePath: "Projects/print-parts/Inbox/bracket.stl",
       targetRelativePath: "Inbox/Browser/bracket.stl"
     });
+  });
+
+  it("updates file category and tags", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    const updated = {
+      id: "file_123",
+      categoryId: "cat_cad",
+      tags: [{ id: "tag_1", name: "Printer", slug: "printer" }]
+    };
+    mocks.repo.getFileById.mockReturnValue({ id: "file_123", status: "active", storagePath: "Inbox/Browser/bracket.stl" });
+    mocks.repo.listCategories.mockReturnValue([{ id: "cat_cad", name: "CAD", slug: "cad" }]);
+    mocks.repo.updateFile.mockReturnValue({ id: "file_123", categoryId: "cat_cad" });
+    mocks.repo.setFileTags.mockReturnValue(updated);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ categoryId: "cat_cad", tagIds: ["tag_1"] })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ file: updated });
+    expect(mocks.repo.updateFile).toHaveBeenCalledWith(
+      "file_123",
+      { categoryId: "cat_cad" },
+      { storagePath: "Inbox/Browser/bracket.stl", status: "active" }
+    );
+    expect(mocks.repo.setFileTags).toHaveBeenCalledWith("file_123", ["tag_1"]);
   });
 
   it("reports repair required when project move rollback fails", async () => {
