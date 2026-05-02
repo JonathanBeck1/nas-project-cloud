@@ -4,6 +4,10 @@ export type FileStatus = "active" | "archived";
 
 export type ProjectStatus = "active" | "paused" | "complete" | "archived";
 
+export type UserRole = "owner";
+
+export type TrustedDeviceKind = "browser" | "desktop" | "mobile" | "cli";
+
 export type UploadTargetKind = "inbox" | "project";
 
 export type UploadSessionStatus = "open" | "completed" | "failed" | "aborted";
@@ -32,6 +36,24 @@ export type Project = {
   status: ProjectStatus;
   createdAt: string;
   updatedAt: string;
+};
+
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TrustedDevice = {
+  id: string;
+  userId: string;
+  name: string;
+  kind: TrustedDeviceKind;
+  createdAt: string;
+  lastSeenAt: string | null;
 };
 
 export type CloudFile = {

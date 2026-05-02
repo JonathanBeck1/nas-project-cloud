@@ -87,4 +87,33 @@ describe("createDatabase", () => {
       db.close();
     }
   });
+
+  it("creates auth and device trust tables", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-db-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const tables = db
+        .prepare<[], { name: string }>("select name from sqlite_master where type = 'table' order by name")
+        .all()
+        .map((row) => row.name);
+
+      expect(tables).toContain("users");
+      expect(tables).toContain("sessions");
+      expect(tables).toContain("devices");
+      expect(tables).toContain("device_pairing_codes");
+
+      const userColumns = db.prepare("pragma table_info(users)").all() as Array<{ name: string }>;
+      expect(userColumns.map((column) => column.name)).toEqual(
+        expect.arrayContaining(["id", "email", "name", "password_hash", "role", "created_at", "updated_at"])
+      );
+
+      const sessionColumns = db.prepare("pragma table_info(sessions)").all() as Array<{ name: string }>;
+      expect(sessionColumns.map((column) => column.name)).toEqual(
+        expect.arrayContaining(["id", "user_id", "device_id", "token_hash", "expires_at", "created_at", "last_seen_at"])
+      );
+    } finally {
+      db.close();
+    }
+  });
 });

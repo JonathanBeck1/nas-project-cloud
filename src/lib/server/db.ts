@@ -76,6 +76,46 @@ function migrate(db: AppDatabase) {
       primary key (file_id, tag_id)
     );
 
+    create table if not exists users (
+      id text primary key,
+      email text not null unique,
+      name text not null,
+      password_hash text not null,
+      role text not null,
+      created_at text not null,
+      updated_at text not null
+    );
+
+    create table if not exists devices (
+      id text primary key,
+      user_id text not null references users(id) on delete cascade,
+      name text not null,
+      kind text not null,
+      created_at text not null,
+      last_seen_at text
+    );
+
+    create table if not exists sessions (
+      id text primary key,
+      user_id text not null references users(id) on delete cascade,
+      device_id text references devices(id) on delete set null,
+      token_hash text not null unique,
+      expires_at text not null,
+      created_at text not null,
+      last_seen_at text not null
+    );
+
+    create table if not exists device_pairing_codes (
+      id text primary key,
+      user_id text not null references users(id) on delete cascade,
+      code_hash text not null unique,
+      device_name text not null,
+      device_kind text not null,
+      expires_at text not null,
+      consumed_at text,
+      created_at text not null
+    );
+
     create table if not exists upload_sessions (
       id text primary key,
       filename text not null,
@@ -101,6 +141,10 @@ function migrate(db: AppDatabase) {
     create index if not exists files_category_id_idx on files(category_id);
     create index if not exists files_family_idx on files(family);
     create index if not exists files_uploaded_at_idx on files(uploaded_at);
+    create index if not exists sessions_token_hash_idx on sessions(token_hash);
+    create index if not exists sessions_user_id_idx on sessions(user_id);
+    create index if not exists devices_user_id_idx on devices(user_id);
+    create index if not exists device_pairing_codes_code_hash_idx on device_pairing_codes(code_hash);
     create index if not exists upload_sessions_status_idx on upload_sessions(status);
   `);
 
