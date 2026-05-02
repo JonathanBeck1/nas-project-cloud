@@ -266,4 +266,54 @@ describe("metadata repository", () => {
       db.close();
     }
   });
+
+  it("creates users, devices, sessions, and pairing codes", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const user = repo.createUser({
+        email: "owner@example.local",
+        name: "Owner",
+        passwordHash: "scrypt:salt:hash",
+        role: "owner"
+      });
+
+      const device = repo.createDevice({
+        userId: user.id,
+        name: "Mac Studio",
+        kind: "browser"
+      });
+
+      const session = repo.createSession({
+        userId: user.id,
+        deviceId: device.id,
+        tokenHash: "token-hash",
+        expiresAt: "2026-06-01T00:00:00.000Z"
+      });
+
+      const pairing = repo.createDevicePairingCode({
+        userId: user.id,
+        codeHash: "pairing-hash",
+        deviceName: "Windows PC",
+        deviceKind: "browser",
+        expiresAt: "2026-05-02T12:00:00.000Z"
+      });
+
+      expect(repo.countUsers()).toBe(1);
+      expect(repo.getUserByEmail("owner@example.local")?.id).toBe(user.id);
+      expect(repo.getSessionByTokenHash("token-hash")?.id).toBe(session.id);
+      expect(repo.listDevices(user.id).map((entry) => entry.id)).toEqual([device.id]);
+      expect(repo.getDevicePairingCodeByHash("pairing-hash")?.id).toBe(pairing.id);
+
+      const consumed = repo.consumeDevicePairingCode(pairing.id);
+      expect(consumed?.consumedAt).toEqual(expect.any(String));
+
+      repo.deleteSession(session.id);
+      expect(repo.getSessionByTokenHash("token-hash")).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
 });

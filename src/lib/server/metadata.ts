@@ -2,15 +2,22 @@ import { nanoid } from "nanoid";
 import type { AppDatabase } from "@/lib/server/db";
 import type {
   Category,
+  AuthSession,
   CloudFile,
+  DevicePairingCode,
   FileFamily,
   FileStatus,
   Project,
   ProjectStatus,
   Tag,
+  TrustedDevice,
+  TrustedDeviceKind,
   UploadSession,
   UploadSessionStatus,
-  UploadTargetKind
+  UploadTargetKind,
+  User,
+  UserRole,
+  UserWithPasswordHash
 } from "@/lib/shared/types";
 
 type CategoryRow = {
@@ -78,6 +85,46 @@ type UploadSessionRow = {
   completed_at: string | null;
 };
 
+type UserRow = {
+  id: string;
+  email: string;
+  name: string;
+  password_hash: string;
+  role: UserRole;
+  created_at: string;
+  updated_at: string;
+};
+
+type DeviceRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  kind: TrustedDeviceKind;
+  created_at: string;
+  last_seen_at: string | null;
+};
+
+type SessionRow = {
+  id: string;
+  user_id: string;
+  device_id: string | null;
+  token_hash: string;
+  expires_at: string;
+  created_at: string;
+  last_seen_at: string;
+};
+
+type DevicePairingCodeRow = {
+  id: string;
+  user_id: string;
+  code_hash: string;
+  device_name: string;
+  device_kind: TrustedDeviceKind;
+  expires_at: string;
+  consumed_at: string | null;
+  created_at: string;
+};
+
 type CreateProjectInput = {
   name: string;
   description?: string;
@@ -139,6 +186,34 @@ type AdvanceUploadSessionInput = {
 
 type CompleteUploadSessionInput = {
   storagePath: string;
+};
+
+type CreateUserInput = {
+  email: string;
+  name: string;
+  passwordHash: string;
+  role: UserRole;
+};
+
+type CreateDeviceInput = {
+  userId: string;
+  name: string;
+  kind: TrustedDeviceKind;
+};
+
+type CreateSessionInput = {
+  userId: string;
+  deviceId?: string | null;
+  tokenHash: string;
+  expiresAt: string;
+};
+
+type CreateDevicePairingCodeInput = {
+  userId: string;
+  codeHash: string;
+  deviceName: string;
+  deviceKind: TrustedDeviceKind;
+  expiresAt: string;
 };
 
 export function slugify(value: string): string {
@@ -337,6 +412,138 @@ export function createMetadataRepository(db: AppDatabase) {
       return db.prepare<[], TagRow>("select * from tags order by name").all().map(tagFromRow);
     },
 
+    countUsers(): number {
+      const row = db.prepare<[], { count: number }>("select count(*) as count from users").get();
+      return row?.count ?? 0;
+    },
+
+    createUser(input: CreateUserInput): User {
+      const now = new Date().toISOString();
+      const user = {
+        id: `user_${nanoid(12)}`,
+        email: input.email,
+        name: input.name,
+        passwordHash: input.passwordHash,
+        role: input.role,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      db.prepare(`
+        insert into users (id, email, name, password_hash, role, created_at, updated_at)
+        values (@id, @email, @name, @passwordHash, @role, @createdAt, @updatedAt)
+      `).run(user);
+
+      return userWithoutPasswordHash(user);
+    },
+
+    getUserByEmail(email: string): UserWithPasswordHash | null {
+      const row = db.prepare<[string], UserRow>("select * from users where email = ? limit 1").get(email);
+      return row ? userWithPasswordHashFromRow(row) : null;
+    },
+
+    createDevice(input: CreateDeviceInput): TrustedDevice {
+      const now = new Date().toISOString();
+      const device: TrustedDevice = {
+        id: `device_${nanoid(12)}`,
+        userId: input.userId,
+        name: input.name,
+        kind: input.kind,
+        createdAt: now,
+        lastSeenAt: null
+      };
+
+      db.prepare(`
+        insert into devices (id, user_id, name, kind, created_at, last_seen_at)
+        values (@id, @userId, @name, @kind, @createdAt, @lastSeenAt)
+      `).run(device);
+
+      return device;
+    },
+
+    listDevices(userId: string): TrustedDevice[] {
+      return db
+        .prepare<[string], DeviceRow>("select * from devices where user_id = ? order by created_at desc")
+        .all(userId)
+        .map(deviceFromRow);
+    },
+
+    createSession(input: CreateSessionInput): AuthSession {
+      const now = new Date().toISOString();
+      const session: AuthSession = {
+        id: `session_${nanoid(12)}`,
+        userId: input.userId,
+        deviceId: input.deviceId ?? null,
+        tokenHash: input.tokenHash,
+        expiresAt: input.expiresAt,
+        createdAt: now,
+        lastSeenAt: now
+      };
+
+      db.prepare(`
+        insert into sessions (id, user_id, device_id, token_hash, expires_at, created_at, last_seen_at)
+        values (@id, @userId, @deviceId, @tokenHash, @expiresAt, @createdAt, @lastSeenAt)
+      `).run(session);
+
+      return session;
+    },
+
+    getSessionByTokenHash(tokenHash: string): AuthSession | null {
+      const row = db.prepare<[string], SessionRow>("select * from sessions where token_hash = ? limit 1").get(tokenHash);
+      return row ? sessionFromRow(row) : null;
+    },
+
+    deleteSession(id: string): void {
+      db.prepare<[string]>("delete from sessions where id = ?").run(id);
+    },
+
+    createDevicePairingCode(input: CreateDevicePairingCodeInput): DevicePairingCode {
+      const code: DevicePairingCode = {
+        id: `pair_${nanoid(12)}`,
+        userId: input.userId,
+        codeHash: input.codeHash,
+        deviceName: input.deviceName,
+        deviceKind: input.deviceKind,
+        expiresAt: input.expiresAt,
+        consumedAt: null,
+        createdAt: new Date().toISOString()
+      };
+
+      db.prepare(`
+        insert into device_pairing_codes (
+          id, user_id, code_hash, device_name, device_kind, expires_at, consumed_at, created_at
+        )
+        values (
+          @id, @userId, @codeHash, @deviceName, @deviceKind, @expiresAt, @consumedAt, @createdAt
+        )
+      `).run(code);
+
+      return code;
+    },
+
+    getDevicePairingCodeByHash(codeHash: string): DevicePairingCode | null {
+      const row = db
+        .prepare<[string], DevicePairingCodeRow>("select * from device_pairing_codes where code_hash = ? limit 1")
+        .get(codeHash);
+      return row ? devicePairingCodeFromRow(row) : null;
+    },
+
+    consumeDevicePairingCode(id: string): DevicePairingCode | null {
+      const consumedAt = new Date().toISOString();
+      const result = db.prepare(`
+        update device_pairing_codes
+        set consumed_at = @consumedAt
+        where id = @id and consumed_at is null
+      `).run({ id, consumedAt });
+
+      if (result.changes === 0) {
+        return null;
+      }
+
+      const row = db.prepare<[string], DevicePairingCodeRow>("select * from device_pairing_codes where id = ? limit 1").get(id);
+      return row ? devicePairingCodeFromRow(row) : null;
+    },
+
     createUploadSession(input: CreateUploadSessionInput): UploadSession {
       const now = new Date().toISOString();
       const session: UploadSession = {
@@ -506,6 +713,59 @@ function tagFromRow(row: TagRow): Tag {
     id: row.id,
     name: row.name,
     slug: row.slug
+  };
+}
+
+function userWithoutPasswordHash(user: UserWithPasswordHash): User {
+  const { passwordHash: _passwordHash, ...safeUser } = user;
+  return safeUser;
+}
+
+function userWithPasswordHashFromRow(row: UserRow): UserWithPasswordHash {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    passwordHash: row.password_hash,
+    role: row.role,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function deviceFromRow(row: DeviceRow): TrustedDevice {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    kind: row.kind,
+    createdAt: row.created_at,
+    lastSeenAt: row.last_seen_at
+  };
+}
+
+function sessionFromRow(row: SessionRow): AuthSession {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    deviceId: row.device_id,
+    tokenHash: row.token_hash,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+    lastSeenAt: row.last_seen_at
+  };
+}
+
+function devicePairingCodeFromRow(row: DevicePairingCodeRow): DevicePairingCode {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    codeHash: row.code_hash,
+    deviceName: row.device_name,
+    deviceKind: row.device_kind,
+    expiresAt: row.expires_at,
+    consumedAt: row.consumed_at,
+    createdAt: row.created_at
   };
 }
 

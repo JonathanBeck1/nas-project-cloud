@@ -47,6 +47,10 @@ export type User = {
   updatedAt: string;
 };
 
+export type UserWithPasswordHash = User & {
+  passwordHash: string;
+};
+
 export type TrustedDevice = {
   id: string;
   userId: string;
@@ -54,6 +58,27 @@ export type TrustedDevice = {
   kind: TrustedDeviceKind;
   createdAt: string;
   lastSeenAt: string | null;
+};
+
+export type AuthSession = {
+  id: string;
+  userId: string;
+  deviceId: string | null;
+  tokenHash: string;
+  expiresAt: string;
+  createdAt: string;
+  lastSeenAt: string;
+};
+
+export type DevicePairingCode = {
+  id: string;
+  userId: string;
+  codeHash: string;
+  deviceName: string;
+  deviceKind: TrustedDeviceKind;
+  expiresAt: string;
+  consumedAt: string | null;
+  createdAt: string;
 };
 
 export type CloudFile = {
