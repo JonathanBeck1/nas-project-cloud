@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { UploadCloud } from "lucide-react";
+import { uploadFileInChunks } from "@/lib/client/uploadSessions";
 import type { CloudFile } from "@/lib/shared/types";
 
 type DropZoneProps = {
@@ -41,7 +42,16 @@ export function DropZone({
 
       for (const file of files) {
         setStatus({ tone: "loading", message: `Uploading ${file.name}` });
-        const uploaded = file.size > chunkedUploadThresholdBytes ? await uploadChunked(file) : await uploadSingle(file);
+        const uploaded =
+          file.size > chunkedUploadThresholdBytes
+            ? await uploadFileInChunks({
+                file,
+                sourceDevice: "Browser",
+                chunkSizeBytes,
+                onProgress: ({ loadedBytes, totalBytes }) =>
+                  setStatus({ tone: "loading", message: `Uploading ${file.name} ${loadedBytes}/${totalBytes}` })
+              })
+            : await uploadSingle(file);
         uploadedFiles.push(uploaded);
       }
 
@@ -80,57 +90,6 @@ export function DropZone({
       throw new Error("Upload failed");
     }
     return body.file;
-  }
-
-  async function uploadChunked(file: File): Promise<CloudFile> {
-    const sessionResponse = await fetch("/api/upload-sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: file.name || "upload.bin",
-        mimeType: file.type || "application/octet-stream",
-        sizeBytes: file.size,
-        sourceDevice: "Browser"
-      })
-    });
-
-    if (!sessionResponse.ok) {
-      throw new Error(await uploadErrorMessage(sessionResponse));
-    }
-
-    const sessionBody = (await sessionResponse.json()) as { session?: { id?: string } };
-    const sessionId = sessionBody.session?.id;
-    if (!sessionId) {
-      throw new Error("Upload failed");
-    }
-
-    for (let offset = 0; offset < file.size; offset += chunkSizeBytes) {
-      const end = Math.min(offset + chunkSizeBytes, file.size);
-      setStatus({ tone: "loading", message: `Uploading ${file.name} ${end}/${file.size}` });
-      const chunkResponse = await fetch(`/api/upload-sessions/${sessionId}/chunk`, {
-        method: "POST",
-        headers: { "upload-offset": String(offset) },
-        body: file.slice(offset, end)
-      });
-
-      if (!chunkResponse.ok) {
-        throw new Error(await uploadErrorMessage(chunkResponse));
-      }
-    }
-
-    const completeResponse = await fetch(`/api/upload-sessions/${sessionId}/complete`, {
-      method: "POST"
-    });
-
-    if (!completeResponse.ok) {
-      throw new Error(await uploadErrorMessage(completeResponse));
-    }
-
-    const completeBody = (await completeResponse.json()) as { file?: CloudFile };
-    if (!completeBody.file) {
-      throw new Error("Upload failed");
-    }
-    return completeBody.file;
   }
 
   return (
