@@ -685,6 +685,17 @@ export function createMetadataRepository(db: AppDatabase) {
         .map(uploadSessionFromRow);
     },
 
+    listStaleUploadSessions(olderThanIso: string): UploadSession[] {
+      return db
+        .prepare<[string], UploadSessionRow>(`
+          select * from upload_sessions
+          where status = 'open' and updated_at < ?
+          order by updated_at asc
+        `)
+        .all(olderThanIso)
+        .map(uploadSessionFromRow);
+    },
+
     advanceUploadSession(id: string, input: AdvanceUploadSessionInput): UploadSession | null {
       const result = db.prepare(`
         update upload_sessions
