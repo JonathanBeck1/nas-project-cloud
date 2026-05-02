@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Inbox, UploadCloud } from "lucide-react";
 import { CommandBar } from "./CommandBar";
+import { BulkActionBar } from "./BulkActionBar";
 import { DetailDrawer } from "./DetailDrawer";
 import { DropZone } from "./DropZone";
 import { FileGrid } from "./FileGrid";
@@ -22,11 +23,13 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
   const [query, setQuery] = useState("");
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [fileActionMessage, setFileActionMessage] = useState("");
   const [fileActionError, setFileActionError] = useState("");
   const [isFileActionBusy, setIsFileActionBusy] = useState(false);
   const visibleFiles = files.filter((file) => matchesQuery(file, query));
   const selectedFile = visibleFiles.find((file) => file.id === selectedFileId) ?? null;
+  const selectedBulkFiles = files.filter((file) => selectedFileIds.includes(file.id));
 
   const handleCreateProject = async (project: ProjectDialogInput) => {
     const response = await fetch("/api/projects", {
@@ -57,9 +60,41 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
       await archiveFile(file.id);
       setFiles((currentFiles) => currentFiles.filter((candidate) => candidate.id !== file.id));
       setSelectedFileId((currentSelectedId) => (currentSelectedId === file.id ? null : currentSelectedId));
+      setSelectedFileIds((currentSelectedIds) => currentSelectedIds.filter((candidate) => candidate !== file.id));
       setFileActionMessage(`Archived ${file.name}`);
     } catch (error) {
       setFileActionError(error instanceof Error ? error.message : "Could not archive file");
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
+  const handleToggleSelectedFile = (fileId: string) => {
+    setSelectedFileIds((currentSelectedIds) =>
+      currentSelectedIds.includes(fileId)
+        ? currentSelectedIds.filter((candidate) => candidate !== fileId)
+        : [...currentSelectedIds, fileId]
+    );
+  };
+
+  const handleArchiveSelectedFiles = async () => {
+    if (selectedBulkFiles.length === 0) {
+      return;
+    }
+
+    setIsFileActionBusy(true);
+    setFileActionMessage("");
+    setFileActionError("");
+
+    try {
+      await Promise.all(selectedBulkFiles.map((file) => archiveFile(file.id)));
+      const archivedIds = new Set(selectedBulkFiles.map((file) => file.id));
+      setFiles((currentFiles) => currentFiles.filter((file) => !archivedIds.has(file.id)));
+      setSelectedFileId((currentSelectedId) => (currentSelectedId && archivedIds.has(currentSelectedId) ? null : currentSelectedId));
+      setSelectedFileIds([]);
+      setFileActionMessage(`Archived ${selectedBulkFiles.length} ${selectedBulkFiles.length === 1 ? "file" : "files"}`);
+    } catch (error) {
+      setFileActionError(error instanceof Error ? error.message : "Could not archive selected files");
     } finally {
       setIsFileActionBusy(false);
     }
@@ -152,10 +187,18 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                   ) : null}
 
                   <div aria-label="Inbox files">
+                    <BulkActionBar
+                      selectedCount={selectedFileIds.length}
+                      onArchive={handleArchiveSelectedFiles}
+                      onClearSelection={() => setSelectedFileIds([])}
+                    />
                     <FileGrid
                       files={visibleFiles}
                       selectedFileId={selectedFileId}
+                      selectedFileIds={selectedFileIds}
+                      selectionMode="multiple"
                       onSelectFile={(file) => setSelectedFileId(file.id)}
+                      onToggleSelected={handleToggleSelectedFile}
                     />
                   </div>
                 </div>

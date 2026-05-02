@@ -24,6 +24,18 @@ const fixture: CloudFile = {
   tags: [],
 };
 
+const notesFixture: CloudFile = {
+  ...fixture,
+  id: "file_notes",
+  name: "notes.txt",
+  extension: "txt",
+  family: "document",
+  mimeType: "text/plain",
+  sizeBytes: 512,
+  checksum: "sha256-notes",
+  storagePath: "/nas/inbox/notes.txt"
+};
+
 describe("FileGrid", () => {
   it("renders file name, formatted size, and source device", () => {
     render(<FileGrid files={[fixture]} />);
@@ -45,5 +57,27 @@ describe("FileGrid", () => {
     await user.click(card);
 
     expect(onSelect).toHaveBeenCalledWith(fixture);
+  });
+
+  it("supports selecting multiple files", async () => {
+    const user = userEvent.setup();
+    const onToggleSelected = vi.fn();
+
+    render(
+      <FileGrid
+        files={[fixture, notesFixture]}
+        selectedFileId={null}
+        selectedFileIds={[fixture.id]}
+        onSelectFile={vi.fn()}
+        onToggleSelected={onToggleSelected}
+        selectionMode="multiple"
+      />
+    );
+
+    expect(screen.getByRole("checkbox", { name: "Select bracket.stl" })).toBeChecked();
+
+    await user.click(screen.getByRole("checkbox", { name: "Select notes.txt" }));
+
+    expect(onToggleSelected).toHaveBeenCalledWith("file_notes");
   });
 });

@@ -6,7 +6,10 @@ import type { CloudFile, FileFamily } from "@/lib/shared/types";
 type FileGridProps = {
   files: CloudFile[];
   selectedFileId?: string | null;
+  selectedFileIds?: string[];
+  selectionMode?: "single" | "multiple";
   onSelectFile?: (file: CloudFile) => void;
+  onToggleSelected?: (fileId: string) => void;
 };
 
 const familyIcons: Partial<Record<FileFamily, LucideIcon>> = {
@@ -37,7 +40,14 @@ function formatNumber(value: number): string {
   return Number.isInteger(value) ? value.toString() : value.toFixed(1);
 }
 
-export function FileGrid({ files, selectedFileId = null, onSelectFile }: FileGridProps) {
+export function FileGrid({
+  files,
+  selectedFileId = null,
+  selectedFileIds = [],
+  selectionMode = "single",
+  onSelectFile,
+  onToggleSelected
+}: FileGridProps) {
   if (files.length === 0) {
     return (
       <div className="flex min-h-[220px] flex-col items-center justify-center rounded-md border border-dashed border-line bg-surface/70 px-4 py-8 text-center">
@@ -54,32 +64,47 @@ export function FileGrid({ files, selectedFileId = null, onSelectFile }: FileGri
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Files">
       {files.map((file) => {
         const Icon = familyIcons[file.family] ?? File;
+        const isSelected = selectedFileIds.includes(file.id);
+        const isActive = selectedFileId === file.id || isSelected;
 
         return (
-          <button
+          <div
             key={file.id}
-            type="button"
-            aria-label={file.name}
-            aria-pressed={selectedFileId === file.id}
-            onClick={() => onSelectFile?.(file)}
             className={[
-              "min-w-0 rounded-md border bg-panel p-3 text-left shadow-panel transition hover:border-muted",
-              selectedFileId === file.id ? "border-accent ring-2 ring-accent/20" : "border-line"
+              "relative min-w-0 rounded-md border bg-panel shadow-panel transition hover:border-muted",
+              isActive ? "border-accent ring-2 ring-accent/20" : "border-line"
             ].join(" ")}
           >
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line bg-surface text-accent">
-                <Icon aria-hidden="true" className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate text-sm font-semibold text-ink">{file.name}</h3>
-                <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                  <span>{formatBytes(file.sizeBytes)}</span>
-                  <span className="truncate">{file.sourceDevice}</span>
+            {selectionMode === "multiple" ? (
+              <input
+                type="checkbox"
+                aria-label={`Select ${file.name}`}
+                checked={isSelected}
+                onChange={() => onToggleSelected?.(file.id)}
+                className="absolute right-3 top-3 h-4 w-4 rounded border-line text-accent focus:ring-accent"
+              />
+            ) : null}
+            <button
+              type="button"
+              aria-label={file.name}
+              aria-pressed={selectedFileId === file.id}
+              onClick={() => onSelectFile?.(file)}
+              className="block min-w-0 rounded-md p-3 text-left"
+            >
+              <div className="flex min-w-0 items-start gap-3 pr-7">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line bg-surface text-accent">
+                  <Icon aria-hidden="true" className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-semibold text-ink">{file.name}</h3>
+                  <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                    <span>{formatBytes(file.sizeBytes)}</span>
+                    <span className="truncate">{file.sourceDevice}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </button>
+            </button>
+          </div>
         );
       })}
     </div>

@@ -241,6 +241,30 @@ describe("AppShell", () => {
     expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
   });
 
+  it("bulk archives selected files from the grid", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ file: { status: "archived" } }), { status: 200 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell initialData={{ files: [uploadedFile, notesFile], projects: [], categories: [], tags: [] }} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select manual.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select notes.txt" }));
+
+    expect(screen.getByText("2 selected")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Archive" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenCalledWith("/api/files/file_manual/archive", { method: "POST" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/files/file_notes/archive", { method: "POST" });
+    expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "notes.txt" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent("Archived 2 files");
+  });
+
   it("updates project assignment and keeps the selected file open", async () => {
     const user = userEvent.setup();
     const updatedFile = {
