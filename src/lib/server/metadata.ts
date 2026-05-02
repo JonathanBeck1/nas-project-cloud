@@ -198,6 +198,11 @@ type CompleteUploadSessionInput = {
   storagePath: string;
 };
 
+type ListOpenUploadSessionsFilters = {
+  userId?: string;
+  deviceId?: string | null;
+};
+
 type CreateUserInput = {
   email: string;
   name: string;
@@ -671,6 +676,13 @@ export function createMetadataRepository(db: AppDatabase) {
     getUploadSession(id: string): UploadSession | null {
       const row = db.prepare<[string], UploadSessionRow>("select * from upload_sessions where id = ? limit 1").get(id);
       return row ? uploadSessionFromRow(row) : null;
+    },
+
+    listOpenUploadSessions(_filters: ListOpenUploadSessionsFilters = {}): UploadSession[] {
+      return db
+        .prepare<[], UploadSessionRow>("select * from upload_sessions where status = 'open' order by updated_at desc")
+        .all()
+        .map(uploadSessionFromRow);
     },
 
     advanceUploadSession(id: string, input: AdvanceUploadSessionInput): UploadSession | null {

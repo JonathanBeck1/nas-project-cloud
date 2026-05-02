@@ -4,6 +4,7 @@ import type { FileFamily, UploadSession } from "@/lib/shared/types";
 const mocks = vi.hoisted(() => {
   const repo = {
     createUploadSession: vi.fn(),
+    listOpenUploadSessions: vi.fn(),
     getUploadSession: vi.fn(),
     advanceUploadSession: vi.fn(),
     completeUploadSession: vi.fn(),
@@ -82,6 +83,7 @@ describe("upload sessions API module", () => {
     vi.clearAllMocks();
     mocks.appConfig.maxUploadBytes = 20;
     mocks.repo.listCategories.mockReturnValue([{ id: "cat_media", name: "Media", slug: "media" }]);
+    mocks.repo.listOpenUploadSessions.mockReturnValue([]);
     mocks.repo.getProjectById.mockReturnValue(null);
     mocks.repo.createUploadSession.mockReturnValue(openSession);
     mocks.repo.getUploadSession.mockReturnValue(openSession);
@@ -153,6 +155,20 @@ describe("upload sessions API module", () => {
         tempPath: ".uploads/upload_1.part"
       })
     );
+  });
+
+  it("lists open upload sessions for resume", async () => {
+    const { GET } = await import("@/app/api/upload-sessions/open/route");
+    mocks.repo.listOpenUploadSessions.mockReturnValue([
+      { id: "upload_1", filename: "movie.webm", receivedBytes: 8388608, sizeBytes: 100000000 }
+    ]);
+
+    const response = await GET(new Request("http://localhost/api/upload-sessions/open"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      sessions: [{ id: "upload_1", filename: "movie.webm", receivedBytes: 8388608, sizeBytes: 100000000 }]
+    });
   });
 
   it("rejects missing projects before creating a temp file", async () => {
