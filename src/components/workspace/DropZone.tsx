@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { UploadCloud } from "lucide-react";
-import { uploadFileInChunks } from "@/lib/client/uploadSessions";
+import { abortUploadSession, uploadFileInChunks } from "@/lib/client/uploadSessions";
 import type { CloudFile } from "@/lib/shared/types";
 
 type DropZoneProps = {
@@ -18,6 +18,11 @@ type UploadStatus = {
   message: string;
 };
 
+type ActiveUpload = {
+  controller: AbortController;
+  sessionId?: string;
+};
+
 const DEFAULT_CHUNKED_UPLOAD_THRESHOLD_BYTES = 64 * 1024 * 1024;
 const DEFAULT_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
 
@@ -30,6 +35,8 @@ export function DropZone({
 }: DropZoneProps) {
   const [dragDepth, setDragDepth] = useState(0);
   const [status, setStatus] = useState<UploadStatus | null>(null);
+  const [activeUpload, setActiveUpload] = useState<ActiveUpload | null>(null);
+  const cancelRequestedRef = useRef(false);
   const isDragging = dragDepth > 0;
 
   async function uploadFiles(files: File[]) {
@@ -39,19 +46,11 @@ export function DropZone({
 
     try {
       const uploadedFiles: CloudFile[] = [];
+      cancelRequestedRef.current = false;
 
       for (const file of files) {
         setStatus({ tone: "loading", message: `Uploading ${file.name}` });
-        const uploaded =
-          file.size > chunkedUploadThresholdBytes
-            ? await uploadFileInChunks({
-                file,
-                sourceDevice: "Browser",
-                chunkSizeBytes,
-                onProgress: ({ loadedBytes, totalBytes }) =>
-                  setStatus({ tone: "loading", message: `Uploading ${file.name} ${loadedBytes}/${totalBytes}` })
-              })
-            : await uploadSingle(file);
+        const uploaded = file.size > chunkedUploadThresholdBytes ? await uploadChunked(file) : await uploadSingle(file);
         uploadedFiles.push(uploaded);
       }
 
@@ -65,9 +64,11 @@ export function DropZone({
       });
     } catch (error) {
       setStatus({
-        tone: "error",
-        message: error instanceof Error ? error.message : "Upload failed"
+        tone: cancelRequestedRef.current ? "success" : "error",
+        message: cancelRequestedRef.current ? "Upload canceled" : error instanceof Error ? error.message : "Upload failed"
       });
+    } finally {
+      setActiveUpload(null);
     }
   }
 
@@ -90,6 +91,38 @@ export function DropZone({
       throw new Error("Upload failed");
     }
     return body.file;
+  }
+
+  async function uploadChunked(file: File): Promise<CloudFile> {
+    const controller = new AbortController();
+    setActiveUpload({ controller });
+
+    return uploadFileInChunks({
+      file,
+      sourceDevice: "Browser",
+      chunkSizeBytes,
+      signal: controller.signal,
+      onSessionCreated: (sessionId) => setActiveUpload({ controller, sessionId }),
+      onProgress: ({ loadedBytes, totalBytes }) =>
+        setStatus({ tone: "loading", message: `Uploading ${file.name} ${loadedBytes}/${totalBytes}` })
+    });
+  }
+
+  async function cancelUpload() {
+    const upload = activeUpload;
+    if (!upload) {
+      return;
+    }
+
+    cancelRequestedRef.current = true;
+    upload.controller.abort();
+
+    if (upload.sessionId) {
+      await abortUploadSession(upload.sessionId).catch(() => undefined);
+    }
+
+    setActiveUpload(null);
+    setStatus({ tone: "success", message: "Upload canceled" });
   }
 
   return (
@@ -128,10 +161,10 @@ export function DropZone({
       />
 
       {status ? (
-        <p
+        <div
           role="status"
           aria-live="polite"
-          className={`mt-3 rounded-md border px-3 py-2 text-sm font-medium ${
+          className={`mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm font-medium ${
             status.tone === "error"
               ? "border-red-200 bg-red-50 text-red-700"
               : status.tone === "success"
@@ -139,8 +172,17 @@ export function DropZone({
                 : "border-line bg-surface text-ink"
           }`}
         >
-          {status.message}
-        </p>
+          <span>{status.message}</span>
+          {activeUpload ? (
+            <button
+              type="button"
+              onClick={() => void cancelUpload()}
+              className="inline-flex h-8 items-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink transition hover:border-muted"
+            >
+              Cancel upload
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {isDragging ? (

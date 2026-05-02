@@ -679,6 +679,7 @@ export function createMetadataRepository(db: AppDatabase) {
     },
 
     listOpenUploadSessions(_filters: ListOpenUploadSessionsFilters = {}): UploadSession[] {
+      void _filters;
       return db
         .prepare<[], UploadSessionRow>("select * from upload_sessions where status = 'open' order by updated_at desc")
         .all()

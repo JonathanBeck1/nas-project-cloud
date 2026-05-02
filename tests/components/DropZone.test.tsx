@@ -163,4 +163,41 @@ describe("DropZone", () => {
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Uploaded manual.pdf");
   });
+
+  it("shows progress and lets the user cancel a chunked upload", async () => {
+    const user = userEvent.setup();
+    let chunkStarted = false;
+    const fetchMock = vi.fn<typeof fetch>((url) => {
+      if (url === "/api/upload-sessions") {
+        return Promise.resolve(new Response(JSON.stringify({ session: { id: "upload_1" } }), { status: 201 }));
+      }
+      if (url === "/api/upload-sessions/upload_1/chunk") {
+        chunkStarted = true;
+        return new Promise<Response>(() => undefined);
+      }
+      if (url === "/api/upload-sessions/upload_1/abort") {
+        return Promise.resolve(new Response(JSON.stringify({ session: { status: "aborted" } }), { status: 200 }));
+      }
+      return Promise.resolve(new Response("bad", { status: 500 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <DropZone chunkedUploadThresholdBytes={4} chunkSizeBytes={3}>
+        <div data-testid="drop-target">Drop target</div>
+      </DropZone>
+    );
+
+    fireEvent.drop(screen.getByTestId("drop-target"), {
+      dataTransfer: { files: [new File(["hello"], "manual.pdf", { type: "application/pdf" })] }
+    });
+
+    await waitFor(() => expect(chunkStarted).toBe(true));
+    await user.click(screen.getByRole("button", { name: "Cancel upload" }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/upload-sessions/upload_1/abort",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
 });

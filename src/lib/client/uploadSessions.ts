@@ -11,6 +11,7 @@ type UploadFileInChunksInput = {
   chunkSizeBytes: number;
   fetchImpl?: typeof fetch;
   signal?: AbortSignal;
+  onSessionCreated?: (sessionId: string) => void;
   onProgress?: (progress: UploadProgress) => void;
 };
 
@@ -27,6 +28,7 @@ export async function uploadFileInChunks({
   chunkSizeBytes,
   fetchImpl = fetch,
   signal,
+  onSessionCreated,
   onProgress
 }: UploadFileInChunksInput): Promise<CloudFile> {
   const sessionResponse = await fetchImpl("/api/upload-sessions", {
@@ -50,6 +52,7 @@ export async function uploadFileInChunks({
   if (!sessionId) {
     throw new Error("Upload failed");
   }
+  onSessionCreated?.(sessionId);
 
   for (let offset = 0; offset < file.size; offset += chunkSizeBytes) {
     const end = Math.min(offset + chunkSizeBytes, file.size);
@@ -85,6 +88,16 @@ export async function uploadFileInChunks({
     throw new Error("Upload failed");
   }
   return completeBody.file;
+}
+
+export async function abortUploadSession(sessionId: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+  const response = await fetchImpl(`/api/upload-sessions/${encodeURIComponent(sessionId)}/abort`, {
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error(await uploadErrorMessage(response));
+  }
 }
 
 async function uploadErrorMessage(response: Response) {
