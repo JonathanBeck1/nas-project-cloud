@@ -188,6 +188,48 @@ describe("metadata repository", () => {
     }
   });
 
+  it("bulk updates file project and category metadata", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const project = repo.createProject({ name: "Garage Build" });
+      const first = repo.createFile({
+        name: "bracket.stl",
+        extension: "stl",
+        family: "cad",
+        mimeType: "model/stl",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/bracket.stl",
+        sourceDevice: "Browser"
+      });
+      const second = repo.createFile({
+        name: "fixture.3mf",
+        extension: "3mf",
+        family: "cad",
+        mimeType: "model/3mf",
+        sizeBytes: 10,
+        checksum: "def",
+        storagePath: "Inbox/Browser/fixture.3mf",
+        sourceDevice: "Browser"
+      });
+
+      const updated = repo.bulkUpdateFiles({
+        fileIds: [first.id, second.id],
+        projectId: project.id,
+        categoryId: "cat_cad"
+      });
+
+      expect(updated.map((file) => file.id).sort()).toEqual([first.id, second.id].sort());
+      expect(updated.every((file) => file.projectId === project.id)).toBe(true);
+      expect(updated.every((file) => file.categoryId === "cat_cad")).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
   it("skips file updates when expected storage path or status no longer matches", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
     createdDirs.push(dir);

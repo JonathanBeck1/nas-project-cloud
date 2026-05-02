@@ -6,6 +6,7 @@ import type { FileFamily } from "@/lib/shared/types";
 
 const mocks = vi.hoisted(() => {
   const repo = {
+    bulkUpdateFiles: vi.fn(),
     listFiles: vi.fn(),
     createFile: vi.fn(),
     getFileById: vi.fn(),
@@ -66,6 +67,7 @@ describe("files API module", () => {
     vi.clearAllMocks();
     mocks.appConfig.maxUploadBytes = 10;
     mocks.appConfig.storageRoot = os.tmpdir();
+    mocks.repo.bulkUpdateFiles.mockReturnValue([]);
     mocks.repo.listFiles.mockReturnValue([]);
     mocks.repo.getFileById.mockReturnValue(null);
     mocks.repo.getProjectById.mockReturnValue(null);
@@ -284,6 +286,35 @@ describe("files API module", () => {
       { storagePath: "Inbox/Browser/bracket.stl", status: "active" }
     );
     expect(mocks.repo.setFileTags).toHaveBeenCalledWith("file_123", ["tag_1"]);
+  });
+
+  it("bulk assigns files to a project and category", async () => {
+    const { POST } = await import("@/app/api/files/bulk/route");
+    mocks.repo.getProjectById.mockReturnValue({ id: "proj_1", slug: "garage-build", name: "Garage Build" });
+    mocks.repo.listCategories.mockReturnValue([{ id: "cat_cad", name: "CAD", slug: "cad" }]);
+    mocks.repo.bulkUpdateFiles.mockReturnValue([
+      { id: "file_1", projectId: "proj_1", categoryId: "cat_cad" },
+      { id: "file_2", projectId: "proj_1", categoryId: "cat_cad" }
+    ]);
+
+    const response = await POST(
+      new Request("http://localhost/api/files/bulk", {
+        method: "POST",
+        body: JSON.stringify({
+          fileIds: ["file_1", "file_2"],
+          projectId: "proj_1",
+          categoryId: "cat_cad"
+        })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      files: [
+        { id: "file_1", projectId: "proj_1", categoryId: "cat_cad" },
+        { id: "file_2", projectId: "proj_1", categoryId: "cat_cad" }
+      ]
+    });
   });
 
   it("reports repair required when project move rollback fails", async () => {

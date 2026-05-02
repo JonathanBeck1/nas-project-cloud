@@ -170,6 +170,12 @@ type UpdateFileConditions = {
   status?: FileStatus;
 };
 
+type BulkUpdateFilesInput = {
+  fileIds: string[];
+  projectId?: string | null;
+  categoryId?: string | null;
+};
+
 type CreateUploadSessionInput = {
   filename: string;
   mimeType: string;
@@ -382,6 +388,43 @@ export function createMetadataRepository(db: AppDatabase) {
       }
 
       return this.getFileById(id);
+    },
+
+    bulkUpdateFiles(input: BulkUpdateFilesInput): CloudFile[] {
+      const uniqueFileIds = Array.from(new Set(input.fileIds));
+      if (uniqueFileIds.length === 0) {
+        return [];
+      }
+
+      const fields = [
+        input.projectId !== undefined ? "project_id = @projectId" : "",
+        input.categoryId !== undefined ? "category_id = @categoryId" : "",
+        "updated_at = @updatedAt"
+      ].filter(Boolean);
+
+      const updateFiles = db.transaction(() => {
+        const statement = db.prepare(`
+          update files
+          set ${fields.join(", ")}
+          where id = @id
+        `);
+
+        for (const id of uniqueFileIds) {
+          statement.run({
+            id,
+            projectId: input.projectId,
+            categoryId: input.categoryId,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      });
+
+      updateFiles();
+
+      return uniqueFileIds.flatMap((id) => {
+        const file = this.getFileById(id);
+        return file ? [file] : [];
+      });
     },
 
     listFiles(filters: ListFilesFilters = {}): CloudFile[] {
