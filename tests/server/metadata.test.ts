@@ -161,6 +161,33 @@ describe("metadata repository", () => {
     }
   });
 
+  it("creates tags and assigns them to files", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const file = repo.createFile({
+        name: "bracket.stl",
+        extension: "stl",
+        family: "cad",
+        mimeType: "model/stl",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/bracket.stl",
+        sourceDevice: "Browser"
+      });
+
+      const tag = repo.createTag({ name: "Printer" });
+      const updated = repo.setFileTags(file.id, [tag.id]);
+
+      expect(updated?.tags).toEqual([tag]);
+      expect(repo.listTags()).toEqual([tag]);
+    } finally {
+      db.close();
+    }
+  });
+
   it("skips file updates when expected storage path or status no longer matches", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
     createdDirs.push(dir);

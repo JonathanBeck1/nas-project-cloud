@@ -146,6 +146,10 @@ type CreateFileInput = {
   archivedAt?: string | null;
 };
 
+type CreateTagInput = {
+  name: string;
+};
+
 type ListFilesFilters = {
   query?: string;
   projectId?: string | null;
@@ -410,6 +414,44 @@ export function createMetadataRepository(db: AppDatabase) {
 
     listTags(): Tag[] {
       return db.prepare<[], TagRow>("select * from tags order by name").all().map(tagFromRow);
+    },
+
+    createTag(input: CreateTagInput): Tag {
+      const tag: Tag = {
+        id: `tag_${nanoid(12)}`,
+        name: input.name,
+        slug: uniqueSlug(db, "tags", slugify(input.name))
+      };
+
+      db.prepare(`
+        insert into tags (id, name, slug)
+        values (@id, @name, @slug)
+      `).run(tag);
+
+      return tag;
+    },
+
+    setFileTags(fileId: string, tagIds: string[]): CloudFile | null {
+      const existing = this.getFileById(fileId);
+      if (!existing) {
+        return null;
+      }
+
+      const setTags = db.transaction(() => {
+        db.prepare<[string]>("delete from file_tags where file_id = ?").run(fileId);
+
+        const insert = db.prepare(`
+          insert or ignore into file_tags (file_id, tag_id)
+          values (@fileId, @tagId)
+        `);
+
+        for (const tagId of tagIds) {
+          insert.run({ fileId, tagId });
+        }
+      });
+
+      setTags();
+      return this.getFileById(fileId);
     },
 
     countUsers(): number {
