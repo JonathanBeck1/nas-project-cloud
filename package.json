@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "index:storage": "tsx scripts/index-storage.ts"
+    "index:storage": "tsx scripts/index-storage.ts",
+    "previews:generate": "tsx scripts/generate-previews.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.6",
