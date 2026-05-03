@@ -28,6 +28,7 @@ describe("createDatabase", () => {
       expect(tables).toContain("projects");
       expect(tables).toContain("files");
       expect(tables).toContain("upload_sessions");
+      expect(tables).toContain("file_previews");
       expect(tables).toContain("tags");
       expect(tables).toContain("file_tags");
 
@@ -81,6 +82,32 @@ describe("createDatabase", () => {
           "created_at",
           "updated_at",
           "completed_at"
+        ])
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it("creates preview metadata columns", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-db-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const columns = db.prepare("pragma table_info(file_previews)").all() as Array<{ name: string }>;
+
+      expect(columns.map((column) => column.name)).toEqual(
+        expect.arrayContaining([
+          "file_id",
+          "kind",
+          "status",
+          "preview_path",
+          "width",
+          "height",
+          "duration_seconds",
+          "error",
+          "created_at",
+          "updated_at"
         ])
       );
     } finally {

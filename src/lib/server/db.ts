@@ -76,6 +76,20 @@ function migrate(db: AppDatabase) {
       primary key (file_id, tag_id)
     );
 
+    create table if not exists file_previews (
+      file_id text not null references files(id) on delete cascade,
+      kind text not null,
+      status text not null,
+      preview_path text,
+      width integer,
+      height integer,
+      duration_seconds real,
+      error text,
+      created_at text not null,
+      updated_at text not null,
+      primary key (file_id, kind)
+    );
+
     create table if not exists users (
       id text primary key,
       email text not null unique,
@@ -141,6 +155,7 @@ function migrate(db: AppDatabase) {
     create index if not exists files_category_id_idx on files(category_id);
     create index if not exists files_family_idx on files(family);
     create index if not exists files_uploaded_at_idx on files(uploaded_at);
+    create index if not exists file_previews_status_idx on file_previews(status, updated_at);
     create index if not exists sessions_token_hash_idx on sessions(token_hash);
     create index if not exists sessions_user_id_idx on sessions(user_id);
     create index if not exists devices_user_id_idx on devices(user_id);

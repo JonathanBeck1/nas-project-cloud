@@ -230,6 +230,56 @@ describe("metadata repository", () => {
     }
   });
 
+  it("upserts file previews and lists pending preview jobs", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const file = repo.createFile({
+        name: "render.png",
+        extension: "png",
+        family: "image",
+        mimeType: "image/png",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/render.png",
+        sourceDevice: "Browser"
+      });
+
+      const pending = repo.upsertFilePreview({
+        fileId: file.id,
+        kind: "image",
+        status: "pending"
+      });
+
+      expect(repo.getFilePreview(file.id, "image")).toEqual(pending);
+      expect(repo.listPendingPreviewJobs()).toEqual([{ file, preview: pending }]);
+
+      const ready = repo.upsertFilePreview({
+        fileId: file.id,
+        kind: "image",
+        status: "ready",
+        previewPath: ".previews/images/render.webp",
+        width: 320,
+        height: 180
+      });
+
+      expect(ready).toMatchObject({
+        fileId: file.id,
+        kind: "image",
+        status: "ready",
+        previewPath: ".previews/images/render.webp",
+        width: 320,
+        height: 180,
+        error: null
+      });
+      expect(repo.listPendingPreviewJobs()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   it("skips file updates when expected storage path or status no longer matches", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
     createdDirs.push(dir);

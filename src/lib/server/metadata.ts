@@ -5,8 +5,12 @@ import type {
   AuthSession,
   CloudFile,
   DevicePairingCode,
+  FilePreview,
+  FilePreviewKind,
+  FilePreviewStatus,
   FileFamily,
   FileStatus,
+  PreviewJob,
   Project,
   ProjectStatus,
   Tag,
@@ -63,6 +67,25 @@ type TagRow = {
   name: string;
   slug: string;
 };
+
+type FilePreviewRow = {
+  file_id: string;
+  kind: FilePreviewKind;
+  status: FilePreviewStatus;
+  preview_path: string | null;
+  width: number | null;
+  height: number | null;
+  duration_seconds: number | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type PendingPreviewJobRow = FilePreviewRow &
+  Omit<FileRow, "status" | "updated_at"> & {
+    file_status: FileStatus;
+    file_updated_at: string;
+  };
 
 type UploadSessionRow = {
   id: string;
@@ -174,6 +197,17 @@ type BulkUpdateFilesInput = {
   fileIds: string[];
   projectId?: string | null;
   categoryId?: string | null;
+};
+
+type UpsertFilePreviewInput = {
+  fileId: string;
+  kind: FilePreviewKind;
+  status: FilePreviewStatus;
+  previewPath?: string | null;
+  width?: number | null;
+  height?: number | null;
+  durationSeconds?: number | null;
+  error?: string | null;
 };
 
 type CreateUploadSessionInput = {
@@ -458,6 +492,116 @@ export function createMetadataRepository(db: AppDatabase) {
       const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name`;
       const files = db.prepare<Record<string, string | null>, FileRow>(sql).all(params);
       return filesFromRowsWithTags(db, files);
+    },
+
+    upsertFilePreview(input: UpsertFilePreviewInput): FilePreview {
+      const existing = this.getFilePreview(input.fileId, input.kind);
+      const now = new Date().toISOString();
+      const preview: FilePreview = {
+        fileId: input.fileId,
+        kind: input.kind,
+        status: input.status,
+        previewPath: input.previewPath !== undefined ? input.previewPath : existing?.previewPath ?? null,
+        width: input.width !== undefined ? input.width : existing?.width ?? null,
+        height: input.height !== undefined ? input.height : existing?.height ?? null,
+        durationSeconds: input.durationSeconds !== undefined ? input.durationSeconds : existing?.durationSeconds ?? null,
+        error: input.error !== undefined ? input.error : existing?.error ?? null,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now
+      };
+
+      db.prepare(`
+        insert into file_previews (
+          file_id, kind, status, preview_path, width, height, duration_seconds, error, created_at, updated_at
+        )
+        values (
+          @fileId, @kind, @status, @previewPath, @width, @height, @durationSeconds, @error, @createdAt, @updatedAt
+        )
+        on conflict(file_id, kind) do update set
+          status = excluded.status,
+          preview_path = excluded.preview_path,
+          width = excluded.width,
+          height = excluded.height,
+          duration_seconds = excluded.duration_seconds,
+          error = excluded.error,
+          updated_at = excluded.updated_at
+      `).run(preview);
+
+      const saved = this.getFilePreview(input.fileId, input.kind);
+      if (!saved) {
+        throw new Error("preview metadata write failed");
+      }
+      return saved;
+    },
+
+    getFilePreview(fileId: string, kind: FilePreviewKind): FilePreview | null {
+      const row = db
+        .prepare<[string, FilePreviewKind], FilePreviewRow>("select * from file_previews where file_id = ? and kind = ? limit 1")
+        .get(fileId, kind);
+      return row ? filePreviewFromRow(row) : null;
+    },
+
+    listPendingPreviewJobs(limit = 100): PreviewJob[] {
+      const rows = db
+        .prepare<[number], PendingPreviewJobRow>(`
+          select
+            file_previews.file_id,
+            file_previews.kind,
+            file_previews.status as status,
+            file_previews.preview_path,
+            file_previews.width,
+            file_previews.height,
+            file_previews.duration_seconds,
+            file_previews.error,
+            file_previews.created_at,
+            file_previews.updated_at,
+            files.id,
+            files.name,
+            files.extension,
+            files.family,
+            files.mime_type,
+            files.size_bytes,
+            files.checksum,
+            files.storage_path,
+            files.project_id,
+            files.category_id,
+            files.source_device,
+            files.status as file_status,
+            files.archived_at,
+            files.uploaded_at,
+            files.updated_at as file_updated_at
+          from file_previews
+          inner join files on files.id = file_previews.file_id
+          where file_previews.status = 'pending' and files.status = 'active'
+          order by file_previews.updated_at asc
+          limit ?
+        `)
+        .all(limit);
+
+      return rows.map((row) => {
+        const fileRow: FileRow = {
+          id: row.id,
+          name: row.name,
+          extension: row.extension,
+          family: row.family,
+          mime_type: row.mime_type,
+          size_bytes: row.size_bytes,
+          checksum: row.checksum,
+          storage_path: row.storage_path,
+          project_id: row.project_id,
+          category_id: row.category_id,
+          source_device: row.source_device,
+          status: row.file_status,
+          archived_at: row.archived_at,
+          uploaded_at: row.uploaded_at,
+          updated_at: row.file_updated_at
+        };
+
+        return {
+          file: filesFromRowsWithTags(db, [fileRow])[0],
+          preview: filePreviewFromRow(row)
+        };
+      });
     },
 
     listTags(): Tag[] {
@@ -822,6 +966,21 @@ function tagFromRow(row: TagRow): Tag {
     id: row.id,
     name: row.name,
     slug: row.slug
+  };
+}
+
+function filePreviewFromRow(row: FilePreviewRow): FilePreview {
+  return {
+    fileId: row.file_id,
+    kind: row.kind,
+    status: row.status,
+    previewPath: row.preview_path,
+    width: row.width,
+    height: row.height,
+    durationSeconds: row.duration_seconds,
+    error: row.error,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   };
 }
 

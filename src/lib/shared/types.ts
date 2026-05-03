@@ -12,6 +12,10 @@ export type UploadTargetKind = "inbox" | "project";
 
 export type UploadSessionStatus = "open" | "completed" | "failed" | "aborted";
 
+export type FilePreviewKind = "image" | "video" | "document" | "other";
+
+export type FilePreviewStatus = "pending" | "ready" | "failed" | "skipped";
+
 export type Category = {
   id: string;
   name: string;
@@ -119,6 +123,24 @@ export type UploadSession = {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+};
+
+export type FilePreview = {
+  fileId: string;
+  kind: FilePreviewKind;
+  status: FilePreviewStatus;
+  previewPath: string | null;
+  width: number | null;
+  height: number | null;
+  durationSeconds: number | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PreviewJob = {
+  file: CloudFile;
+  preview: FilePreview;
 };
 
 export type SmartViewKey =
