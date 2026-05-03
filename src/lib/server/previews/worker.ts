@@ -1,4 +1,6 @@
 import fs from "node:fs/promises";
+import path from "node:path";
+import sharp from "sharp";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
@@ -67,12 +69,43 @@ export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJo
     return;
   }
 
-  repo.upsertFilePreview({
-    fileId: job.file.id,
-    kind: job.preview.kind,
-    status: "skipped",
-    error: "image thumbnail generation is not configured"
-  });
+  await generateImageThumbnail({ job, repo, storage, absolutePath });
+}
+
+async function generateImageThumbnail({
+  job,
+  repo,
+  storage,
+  absolutePath
+}: ProcessPreviewJobInput & { absolutePath: string }) {
+  const previewPath = path.posix.join(".previews", "images", `${job.file.id}.webp`);
+  const absolutePreviewPath = storage.absolutePathFor(previewPath);
+  await fs.mkdir(path.dirname(absolutePreviewPath), { recursive: true });
+
+  try {
+    const info = await sharp(absolutePath)
+      .rotate()
+      .resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toFile(absolutePreviewPath);
+
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "ready",
+      previewPath,
+      width: info.width,
+      height: info.height,
+      error: null
+    });
+  } catch (error) {
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "failed",
+      error: error instanceof Error ? error.message : "image thumbnail generation failed"
+    });
+  }
 }
 
 export async function runPreviewWorker({

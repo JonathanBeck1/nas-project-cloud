@@ -1,5 +1,11 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { createDatabase } from "@/lib/server/db";
+import { createMetadataRepository } from "@/lib/server/metadata";
 import { processPreviewJob } from "@/lib/server/previews/worker";
+import { createStorageService } from "@/lib/server/storage";
 import type { PreviewJob } from "@/lib/shared/types";
 
 const imageJob: PreviewJob = {
@@ -71,5 +77,51 @@ describe("preview worker", () => {
         error: "preview generation is not supported for cad files"
       })
     );
+  });
+
+  it("generates an image thumbnail and stores ready preview metadata", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-previews-"));
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const storage = createStorageService(dir);
+      fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "Inbox", "Browser", "render.png"),
+        Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=", "base64")
+      );
+      const file = repo.createFile({
+        name: "render.png",
+        extension: "png",
+        family: "image",
+        mimeType: "image/png",
+        sizeBytes: 68,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/render.png",
+        sourceDevice: "Browser"
+      });
+      const preview = repo.upsertFilePreview({
+        fileId: file.id,
+        kind: "image",
+        status: "pending"
+      });
+
+      await processPreviewJob({ job: { file, preview }, repo, storage });
+
+      const ready = repo.getFilePreview(file.id, "image");
+      expect(ready).toMatchObject({
+        fileId: file.id,
+        kind: "image",
+        status: "ready",
+        width: 1,
+        height: 1,
+        error: null
+      });
+      expect(ready?.previewPath).toMatch(/^\.previews\/images\/file_.+\.webp$/);
+      expect(fs.existsSync(path.join(dir, ready?.previewPath ?? ""))).toBe(true);
+    } finally {
+      db.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
