@@ -771,6 +771,54 @@ describe("files API module", () => {
     await expect(response.text()).resolves.toBe("manual");
   });
 
+  it("streams a ready file preview", async () => {
+    const { GET } = await import("@/app/api/files/[id]/preview/route");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-api-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, ".previews", "images"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".previews", "images", "file_123.webp"), "preview");
+    mocks.appConfig.storageRoot = dir;
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "render.png",
+      mimeType: "image/png",
+      status: "active",
+      storagePath: "Inbox/Browser/render.png",
+      preview: {
+        fileId: "file_123",
+        kind: "image",
+        status: "ready",
+        previewPath: ".previews/images/file_123.webp"
+      }
+    });
+
+    const response = await GET(new Request("http://localhost/api/files/file_123/preview"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/webp");
+    await expect(response.text()).resolves.toBe("preview");
+  });
+
+  it("returns 404 for missing file previews", async () => {
+    const { GET } = await import("@/app/api/files/[id]/preview/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "render.png",
+      status: "active",
+      storagePath: "Inbox/Browser/render.png",
+      preview: null
+    });
+
+    const response = await GET(new Request("http://localhost/api/files/file_123/preview"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "preview not found" });
+  });
+
   it("sanitizes unsafe download filenames without throwing", async () => {
     const { GET } = await import("@/app/api/files/[id]/download/route");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-api-"));

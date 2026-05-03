@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import { Info } from "lucide-react";
 import type { CloudFile, Project } from "@/lib/shared/types";
 import { formatBytes } from "./FileGrid";
@@ -26,12 +27,25 @@ export function DetailDrawer({ file, projects = [], isBusy = false, onArchive, o
     );
   }
 
+  const previewUrl = readyPreviewUrl(file);
+
   return (
     <aside className="h-full rounded-md border border-line bg-panel p-4 shadow-panel" aria-label="File details">
       <div className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">Selected File</p>
         <h2 className="mt-2 truncate text-base font-semibold text-ink">{file.name}</h2>
       </div>
+
+      {previewUrl ? (
+        <Image
+          unoptimized
+          src={previewUrl}
+          alt={`Preview of ${file.name}`}
+          width={640}
+          height={360}
+          className="mt-4 aspect-video w-full rounded-md border border-line bg-surface object-contain"
+        />
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <a
@@ -86,6 +100,10 @@ export function DetailDrawer({ file, projects = [], isBusy = false, onArchive, o
       </dl>
     </aside>
   );
+}
+
+function readyPreviewUrl(file: CloudFile): string | null {
+  return file.preview?.status === "ready" && file.preview.previewPath ? `/api/files/${encodeURIComponent(file.id)}/preview` : null;
 }
 
 function copyPath(path: string) {

@@ -102,6 +102,7 @@ export type CloudFile = {
   uploadedAt: string;
   updatedAt: string;
   tags: Tag[];
+  preview?: FilePreview | null;
 };
 
 export type UploadSession = {

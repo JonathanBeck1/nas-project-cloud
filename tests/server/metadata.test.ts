@@ -280,6 +280,38 @@ describe("metadata repository", () => {
     }
   });
 
+  it("hydrates ready preview metadata on files", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const file = repo.createFile({
+        name: "render.png",
+        extension: "png",
+        family: "image",
+        mimeType: "image/png",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/render.png",
+        sourceDevice: "Browser"
+      });
+      const preview = repo.upsertFilePreview({
+        fileId: file.id,
+        kind: "image",
+        status: "ready",
+        previewPath: ".previews/images/render.webp",
+        width: 320,
+        height: 180
+      });
+
+      expect(repo.getFileById(file.id)?.preview).toEqual(preview);
+      expect(repo.listFiles()[0].preview).toEqual(preview);
+    } finally {
+      db.close();
+    }
+  });
+
   it("skips file updates when expected storage path or status no longer matches", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
     createdDirs.push(dir);

@@ -275,8 +275,8 @@ export function slugify(value: string): string {
   );
 }
 
-export function fileFromRow(row: FileRow, tags: Tag[] = []): CloudFile {
-  return {
+export function fileFromRow(row: FileRow, tags: Tag[] = [], preview: FilePreview | null = null): CloudFile {
+  const file: CloudFile = {
     id: row.id,
     name: row.name,
     extension: row.extension,
@@ -294,6 +294,12 @@ export function fileFromRow(row: FileRow, tags: Tag[] = []): CloudFile {
     updatedAt: row.updated_at,
     tags
   };
+
+  if (preview) {
+    file.preview = preview;
+  }
+
+  return file;
 }
 
 export function createMetadataRepository(db: AppDatabase) {
@@ -917,6 +923,7 @@ export function filesFromRowsWithTags(db: AppDatabase, rows: FileRow[]): CloudFi
   }
 
   const tagsByFileId = new Map<string, Tag[]>();
+  const previewsByFileId = new Map<string, FilePreview>();
   const placeholders = rows.map(() => "?").join(", ");
   const tagRows = db
     .prepare<string[], TagRow & { file_id: string }>(`
@@ -934,7 +941,21 @@ export function filesFromRowsWithTags(db: AppDatabase, rows: FileRow[]): CloudFi
     tagsByFileId.set(row.file_id, tags);
   }
 
-  return rows.map((row) => fileFromRow(row, tagsByFileId.get(row.id) ?? []));
+  const previewRows = db
+    .prepare<string[], FilePreviewRow>(`
+      select * from file_previews
+      where status = 'ready' and kind = 'image' and file_id in (${placeholders})
+      order by updated_at desc
+    `)
+    .all(...rows.map((row) => row.id));
+
+  for (const row of previewRows) {
+    if (!previewsByFileId.has(row.file_id)) {
+      previewsByFileId.set(row.file_id, filePreviewFromRow(row));
+    }
+  }
+
+  return rows.map((row) => fileFromRow(row, tagsByFileId.get(row.id) ?? [], previewsByFileId.get(row.id) ?? null));
 }
 
 function categoryFromRow(row: CategoryRow): Category {

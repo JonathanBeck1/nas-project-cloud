@@ -36,6 +36,28 @@ const notesFixture: CloudFile = {
   storagePath: "/nas/inbox/notes.txt"
 };
 
+const previewFixture: CloudFile = {
+  ...fixture,
+  id: "file_render",
+  name: "render.png",
+  extension: "png",
+  family: "image",
+  mimeType: "image/png",
+  storagePath: "/nas/inbox/render.png",
+  preview: {
+    fileId: "file_render",
+    kind: "image",
+    status: "ready",
+    previewPath: ".previews/images/file_render.webp",
+    width: 320,
+    height: 180,
+    durationSeconds: null,
+    error: null,
+    createdAt: "2026-05-02T00:00:00.000Z",
+    updatedAt: "2026-05-02T00:00:00.000Z"
+  }
+};
+
 describe("FileGrid", () => {
   it("renders file name, formatted size, and source device", () => {
     render(<FileGrid files={[fixture]} />);
@@ -79,5 +101,20 @@ describe("FileGrid", () => {
     await user.click(screen.getByRole("checkbox", { name: "Select notes.txt" }));
 
     expect(onToggleSelected).toHaveBeenCalledWith("file_notes");
+  });
+
+  it("renders a thumbnail when a ready preview exists", () => {
+    render(<FileGrid files={[previewFixture]} />);
+
+    const image = screen.getByRole("img", { name: "Preview of render.png" });
+    expect(image).toBeVisible();
+    expect(image).toHaveAttribute("src", "/api/files/file_render/preview");
+  });
+
+  it("falls back to a file icon when no preview exists", () => {
+    render(<FileGrid files={[fixture]} />);
+
+    expect(screen.queryByRole("img", { name: "Preview of bracket.stl" })).not.toBeInTheDocument();
+    expect(screen.getByText("bracket.stl")).toBeVisible();
   });
 });

@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import { Box, File, FileImage, FileVideo } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CloudFile, FileFamily } from "@/lib/shared/types";
@@ -66,6 +67,7 @@ export function FileGrid({
         const Icon = familyIcons[file.family] ?? File;
         const isSelected = selectedFileIds.includes(file.id);
         const isActive = selectedFileId === file.id || isSelected;
+        const previewUrl = readyPreviewUrl(file);
 
         return (
           <div
@@ -92,9 +94,20 @@ export function FileGrid({
               className="block min-w-0 rounded-md p-3 text-left"
             >
               <div className="flex min-w-0 items-start gap-3 pr-7">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line bg-surface text-accent">
-                  <Icon aria-hidden="true" className="h-5 w-5" />
-                </div>
+                {previewUrl ? (
+                  <Image
+                    unoptimized
+                    src={previewUrl}
+                    alt={`Preview of ${file.name}`}
+                    width={48}
+                    height={48}
+                    className="h-12 w-12 shrink-0 rounded-md border border-line bg-surface object-cover"
+                  />
+                ) : (
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line bg-surface text-accent">
+                    <Icon aria-hidden="true" className="h-5 w-5" />
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate text-sm font-semibold text-ink">{file.name}</h3>
                   <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
@@ -109,4 +122,8 @@ export function FileGrid({
       })}
     </div>
   );
+}
+
+function readyPreviewUrl(file: CloudFile): string | null {
+  return file.preview?.status === "ready" && file.preview.previewPath ? `/api/files/${encodeURIComponent(file.id)}/preview` : null;
 }

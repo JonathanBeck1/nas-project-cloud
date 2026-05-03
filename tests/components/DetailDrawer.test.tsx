@@ -35,6 +35,27 @@ const project: Project = {
   updatedAt: "2026-04-30T00:00:00.000Z"
 };
 
+const previewFixture: CloudFile = {
+  ...fixture,
+  id: "file_render",
+  name: "render.png",
+  extension: "png",
+  family: "image",
+  mimeType: "image/png",
+  preview: {
+    fileId: "file_render",
+    kind: "image",
+    status: "ready",
+    previewPath: ".previews/images/file_render.webp",
+    width: 320,
+    height: 180,
+    durationSeconds: null,
+    error: null,
+    createdAt: "2026-05-02T00:00:00.000Z",
+    updatedAt: "2026-05-02T00:00:00.000Z"
+  }
+};
+
 describe("DetailDrawer", () => {
   it("shows selected file storage path metadata", () => {
     render(<DetailDrawer file={fixture} />);
@@ -93,5 +114,14 @@ describe("DetailDrawer", () => {
     expect(screen.getByRole("button", { name: "Archive" })).toBeDisabled();
     expect(screen.getByLabelText("Project")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Copy path" })).toBeEnabled();
+  });
+
+  it("renders a large preview when a ready preview exists", () => {
+    render(<DetailDrawer file={previewFixture} />);
+
+    expect(screen.getByRole("img", { name: "Preview of render.png" })).toHaveAttribute(
+      "src",
+      "/api/files/file_render/preview"
+    );
   });
 });
