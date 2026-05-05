@@ -5,6 +5,7 @@ import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
 import { appConfig } from "@/lib/server/config";
+import { enqueuePreviewForFile } from "@/lib/server/previews/enqueue";
 import { classifyFile } from "@/lib/shared/fileTypes";
 
 export async function GET(request: Request) {
@@ -126,6 +127,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "file metadata create failed" }, { status: 500 });
   }
 
+  enqueuePreviewForFile(repo, file);
   return NextResponse.json({ file }, { status: 201 });
 }
 

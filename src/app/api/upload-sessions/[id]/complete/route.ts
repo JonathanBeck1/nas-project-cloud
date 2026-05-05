@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
+import { enqueuePreviewForFile } from "@/lib/server/previews/enqueue";
 import { createStorageService, type UploadTarget } from "@/lib/server/storage";
 import { classifyFile } from "@/lib/shared/fileTypes";
 
@@ -67,6 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "file metadata create failed" }, { status: 500 });
   }
 
+  enqueuePreviewForFile(repo, file);
   const completed = repo.completeUploadSession(id, { storagePath: stored.relativePath });
   return NextResponse.json({ file, session: completed }, { status: 201 });
 }

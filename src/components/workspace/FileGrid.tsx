@@ -2,7 +2,7 @@ import React from "react";
 import Image from "next/image";
 import { Box, File, FileImage, FileVideo } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { CloudFile, FileFamily } from "@/lib/shared/types";
+import type { CloudFile, FileFamily, FilePreviewStatus } from "@/lib/shared/types";
 
 type FileGridProps = {
   files: CloudFile[];
@@ -113,6 +113,9 @@ export function FileGrid({
                   <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                     <span>{formatBytes(file.sizeBytes)}</span>
                     <span className="truncate">{file.sourceDevice}</span>
+                    {previewStatusLabel(file) ? (
+                      <span className={previewStatusClass(file.preview?.status)}>{previewStatusLabel(file)}</span>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -126,4 +129,22 @@ export function FileGrid({
 
 function readyPreviewUrl(file: CloudFile): string | null {
   return file.preview?.status === "ready" && file.preview.previewPath ? `/api/files/${encodeURIComponent(file.id)}/preview` : null;
+}
+
+function previewStatusLabel(file: CloudFile): string | null {
+  if (!file.preview || file.preview.status === "ready") {
+    return null;
+  }
+
+  return `Preview ${file.preview.status}`;
+}
+
+function previewStatusClass(status: FilePreviewStatus | undefined): string {
+  if (status === "failed") {
+    return "rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 font-medium text-red-700";
+  }
+  if (status === "skipped") {
+    return "rounded-md border border-line bg-surface px-1.5 py-0.5 font-medium text-muted";
+  }
+  return "rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700";
 }

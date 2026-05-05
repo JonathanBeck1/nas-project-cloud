@@ -111,6 +111,19 @@ describe("FileGrid", () => {
     expect(image).toHaveAttribute("src", "/api/files/file_render/preview");
   });
 
+  it("shows pending preview status without rendering a broken thumbnail", () => {
+    render(<FileGrid files={[{ ...previewFixture, preview: { ...previewFixture.preview!, status: "pending", previewPath: null } }]} />);
+
+    expect(screen.queryByRole("img", { name: "Preview of render.png" })).not.toBeInTheDocument();
+    expect(screen.getByText("Preview pending")).toBeVisible();
+  });
+
+  it("shows failed preview status", () => {
+    render(<FileGrid files={[{ ...previewFixture, preview: { ...previewFixture.preview!, status: "failed", previewPath: null } }]} />);
+
+    expect(screen.getByText("Preview failed")).toBeVisible();
+  });
+
   it("falls back to a file icon when no preview exists", () => {
     render(<FileGrid files={[fixture]} />);
 

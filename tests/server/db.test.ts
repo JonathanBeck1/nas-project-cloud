@@ -70,6 +70,8 @@ describe("createDatabase", () => {
           "size_bytes",
           "received_bytes",
           "checksum",
+          "user_id",
+          "device_id",
           "target_kind",
           "source_device",
           "project_id",

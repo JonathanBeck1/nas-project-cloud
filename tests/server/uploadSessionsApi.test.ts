@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => {
     abortUploadSession: vi.fn(),
     createFile: vi.fn(),
     getProjectById: vi.fn(),
-    listCategories: vi.fn()
+    listCategories: vi.fn(),
+    upsertFilePreview: vi.fn()
   };
   const storage = {
     createUploadTempPath: vi.fn(),
@@ -65,7 +66,9 @@ const openSession: UploadSession = {
   receivedBytes: 0,
   checksum: null,
   targetKind: "inbox",
-  sourceDevice: "Browser",
+    sourceDevice: "Browser",
+    userId: "user_1",
+    deviceId: "device_1",
   projectId: null,
   projectSlug: null,
   categoryId: null,
@@ -101,6 +104,18 @@ describe("upload sessions API module", () => {
     }));
     mocks.repo.failUploadSession.mockReturnValue({ ...openSession, status: "failed" });
     mocks.repo.abortUploadSession.mockReturnValue({ ...openSession, status: "aborted" });
+    mocks.repo.upsertFilePreview.mockReturnValue({
+      fileId: "file_1",
+      kind: "image",
+      status: "pending",
+      previewPath: null,
+      width: null,
+      height: null,
+      durationSeconds: null,
+      error: null,
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z"
+    });
     mocks.repo.createFile.mockImplementation((input) => ({
       id: "file_1",
       uploadedAt: "2026-05-01T00:00:00.000Z",
@@ -151,6 +166,8 @@ describe("upload sessions API module", () => {
         sizeBytes: 11,
         targetKind: "inbox",
         sourceDevice: "Browser",
+        userId: "user_1",
+        deviceId: "device_1",
         categoryId: "cat_media",
         tempPath: ".uploads/upload_1.part"
       })
@@ -256,6 +273,38 @@ describe("upload sessions API module", () => {
         storagePath: "Inbox/Browser/movie.webm"
       })
     );
+  });
+
+  it("enqueues image previews when a completed upload creates image metadata", async () => {
+    const { POST } = await import("@/app/api/upload-sessions/[id]/complete/route");
+    mocks.repo.getUploadSession.mockReturnValue({
+      ...openSession,
+      filename: "render.png",
+      mimeType: "image/png",
+      receivedBytes: 11
+    });
+    mocks.classifyFile.mockReturnValue({
+      extension: "png",
+      family: "image" as FileFamily
+    });
+    mocks.storage.completeUploadSession.mockResolvedValue({
+      absolutePath: "/storage/Inbox/Browser/render.png",
+      relativePath: "Inbox/Browser/render.png",
+      sizeBytes: 11,
+      checksum: "sha256-render",
+      mimeType: "image/png"
+    });
+
+    const response = await POST(new Request("http://localhost/api/upload-sessions/upload_1/complete"), {
+      params: Promise.resolve({ id: "upload_1" })
+    });
+
+    expect(response.status).toBe(201);
+    expect(mocks.repo.upsertFilePreview).toHaveBeenCalledWith({
+      fileId: "file_1",
+      kind: "image",
+      status: "pending"
+    });
   });
 
   it("cleans up completed bytes when metadata creation fails", async () => {

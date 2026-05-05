@@ -1,55 +1,117 @@
 # TrueNAS SCALE Deployment
 
-This guide runs NAS Project Cloud as a custom Docker Compose app on TrueNAS SCALE. It assumes a NAS-hosted dataset, LAN-first access over a 2.5Gb network, and SQLite metadata stored separately from user files.
-
-## Dataset Layout
-
-Create a dataset for the app data, for example:
+This guide runs NAS Project Cloud as a custom Docker Compose app on TrueNAS SCALE. It is written for the current NAS layout:
 
 ```text
-/mnt/tank/nas-project-cloud
+OfficeNAS
+  nas-project-cloud
+    appdata
+    files
+  SharedMEDIA
 ```
 
-Recommended layout:
+Inside TrueNAS, those datasets resolve to:
 
 ```text
-/mnt/tank/nas-project-cloud/
+/mnt/OfficeNAS/nas-project-cloud/files
+/mnt/OfficeNAS/nas-project-cloud/appdata
+```
+
+## Dataset Roles
+
+Use `files` for the actual user file library:
+
+```text
+/mnt/OfficeNAS/nas-project-cloud/files
   Inbox/
   Projects/
   Library/
   Archive/
+  .previews/
 ```
 
-The compose file mounts this dataset at `/mnt/nas-cloud` inside the container. The app resolves `NAS_CLOUD_STORAGE_ROOT=/mnt/nas-cloud`, so stored files stay directly visible on the NAS filesystem for backup, snapshots, and future migration.
+Use `appdata` for SQLite metadata and sidecar files:
 
-Current uploads are written to normal folders under that dataset. Device imports use `Inbox/<source-device>/`, and project-scoped imports use `Projects/<project-slug>/Inbox/`.
+```text
+/mnt/OfficeNAS/nas-project-cloud/appdata
+  nas-cloud.sqlite
+  nas-cloud.sqlite-wal
+  nas-cloud.sqlite-shm
+```
 
-Keep the SQLite database on the named Docker volume mounted at `/data`. That separates metadata writes from the large storage dataset while keeping both on the NAS host.
+The compose file mounts these datasets into the container:
+
+```text
+/mnt/OfficeNAS/nas-project-cloud/files   -> /mnt/nas-cloud
+/mnt/OfficeNAS/nas-project-cloud/appdata -> /data
+```
+
+The app then uses:
+
+```text
+NAS_CLOUD_STORAGE_ROOT=/mnt/nas-cloud
+NAS_CLOUD_DB_PATH=/data/nas-cloud.sqlite
+NAS_CLOUD_PUBLIC_BASE_PATH=/files
+NAS_CLOUD_MAX_UPLOAD_BYTES=2147483648
+```
 
 ## Permissions
 
-The container runs as an unprivileged user with UID/GID `1001`. Before starting the app, make sure the dataset is writable by that user or by a group the container can use. On a private LAN deployment, the simplest path is usually:
+The current Docker image runs as an unprivileged user with UID/GID `1001`. The two TrueNAS datasets must be writable by that user, or by a group that the container can use.
 
-1. Create the dataset in TrueNAS SCALE.
-2. Set the dataset owner/group to the account or group used for container workloads.
-3. Grant read/write/execute permissions on the dataset.
-4. Avoid SMB and app writes racing against each other in the same subdirectories unless you have a clear ownership model.
+If TrueNAS asks whether to set an ACL after creating a child dataset, either path is workable:
 
-## Deployment Modes
+- `Return to pool list`: fine for now if the app healthcheck later reports storage and database as healthy.
+- `Go to ACL Manager`: use this if the app cannot write to `files` or `appdata`, then grant read/write/execute to the container workload user or a shared apps group.
 
-TrueNAS SCALE's **Install via YAML** flow expects Docker Compose YAML entered into the UI, either pasted directly or included from an external Compose file. Repo-relative paths like `build.context: ..` only exist if you separately manage that repository checkout and run Compose from the matching path.
+Avoid mixing SMB edits and app writes in the same active upload folders until the ownership model is clear. SMB is fine for snapshots, inspection, and future import workflows.
 
-Recommended TrueNAS Install via YAML mode:
+## Compose App
 
-1. Build and publish an image first, for example to GitHub Container Registry.
-2. Replace `ghcr.io/YOUR_GITHUB_ORG/nas-project-cloud:latest` in `docker/docker-compose.truenas.yml` with your published image.
-3. Paste the compose YAML into the TrueNAS UI or include that compose file through the YAML workflow.
+Use [docker/docker-compose.truenas.yml](../../docker/docker-compose.truenas.yml) as the starting point for a TrueNAS SCALE custom app.
 
-Local or external Compose mode from a repo checkout on the NAS:
+Key settings:
 
-1. Check out this repository on the NAS or another host that runs Compose.
-2. Run Compose from a path where the repository-relative build context exists.
-3. Replace the `image:` line with a local build stanza:
+- Service name: `nas-project-cloud`
+- Container port: `3000`
+- Host port: `3000`
+- File dataset mount: `/mnt/OfficeNAS/nas-project-cloud/files:/mnt/nas-cloud`
+- App metadata mount: `/mnt/OfficeNAS/nas-project-cloud/appdata:/data`
+- Healthcheck: `GET /api/health`
+- Image: `ghcr.io/jonathanbeck1/nas-project-cloud:latest`
+
+Recommended TrueNAS Install via YAML flow:
+
+1. Build and publish the image first, for example to GitHub Container Registry.
+2. Confirm the compose file points at `ghcr.io/jonathanbeck1/nas-project-cloud:latest`.
+3. Paste the compose YAML into TrueNAS SCALE's custom app YAML flow.
+4. Start the app and wait for the healthcheck to turn healthy.
+5. Browse to `http://<truenas-hostname-or-ip>:3000`.
+
+## Publishing The Image
+
+This repository includes a GitHub Actions workflow at `.github/workflows/docker-publish.yml`.
+
+The workflow runs:
+
+```text
+npm test
+npm run typecheck
+npm run lint
+npm run build
+docker build and push
+```
+
+When the workflow runs on `main` or through a manual `workflow_dispatch`, it publishes:
+
+```text
+ghcr.io/jonathanbeck1/nas-project-cloud:latest
+ghcr.io/jonathanbeck1/nas-project-cloud:<commit-sha>
+```
+
+TrueNAS pulls the `latest` tag from the compose file. If the package is private in GitHub Container Registry, configure image pull credentials in TrueNAS or make the package public. For the first LAN-only install, a public package is the simplest path.
+
+Local or external Compose mode from a repo checkout:
 
 ```yaml
 build:
@@ -57,31 +119,77 @@ build:
   dockerfile: docker/Dockerfile
 ```
 
-The build stanza is only for local or externally managed Compose deployments from a repo checkout. It is not required for the recommended pasted TrueNAS YAML path.
+Only use that build stanza when Compose is run from a checkout where `..` points at the repository root. The pasted TrueNAS YAML flow should use a published image instead.
 
-## Custom App
+## Healthcheck
 
-Use `docker/docker-compose.truenas.yml` as the starting point for a TrueNAS SCALE custom app. In the recommended TrueNAS YAML workflow, this file runs a previously published image instead of building from a repo-relative path.
-
-Key settings:
-
-- Service name: `nas-project-cloud`
-- Container port: `3000`
-- Host port: `3000`
-- Storage dataset mount: `/mnt/tank/nas-project-cloud:/mnt/nas-cloud`
-- Metadata volume: `nas-project-cloud-data:/data`
-- Image: replace `ghcr.io/YOUR_GITHUB_ORG/nas-project-cloud:latest` with your published image
-
-Environment:
+The app exposes an unauthenticated readiness endpoint:
 
 ```text
-NAS_CLOUD_STORAGE_ROOT=/mnt/nas-cloud
-NAS_CLOUD_DB_PATH=/data/nas-cloud.sqlite
-NAS_CLOUD_PUBLIC_BASE_PATH=/files
-NAS_CLOUD_MAX_UPLOAD_BYTES="2147483648"
+GET /api/health
 ```
 
-When using local or external Compose from a repo checkout, build the image from the repository root with `docker/Dockerfile`. The Dockerfile uses Node 22 on Alpine and includes native build tooling for `better-sqlite3` during dependency installation.
+It checks:
+
+- the storage mount can be written to and cleaned up
+- SQLite can answer a basic query
+
+The public response intentionally does not reveal host paths. A healthy response looks like:
+
+```json
+{
+  "ok": true,
+  "checks": {
+    "storage": { "ok": true },
+    "database": { "ok": true }
+  }
+}
+```
+
+If this fails after deploying to TrueNAS, check dataset permissions first. The two most likely causes are:
+
+- `/mnt/OfficeNAS/nas-project-cloud/files` is not writable by the container user
+- `/mnt/OfficeNAS/nas-project-cloud/appdata` is not writable by the container user
+
+## Preview Processing
+
+Uploads enqueue preview work for images, videos, and documents. The current worker can generate image thumbnails and marks unsupported preview families as skipped.
+
+Current production behavior:
+
+- The app can enqueue preview rows during direct and chunked uploads.
+- `POST /api/maintenance/previews` processes pending rows for an authenticated owner session.
+- The Docker Compose file does not yet run a separate always-on preview scheduler.
+
+Until a tokenized cron endpoint or worker service is added, run preview processing manually from an authenticated admin session after large upload batches. The next production hardening pass should add one of these:
+
+- a dedicated worker container with the preview runner included in the production image
+- a token-protected internal maintenance endpoint suitable for TrueNAS cron
+- an in-app background job loop with rate limits and visibility in Settings
+
+## Backups And Snapshots
+
+Snapshot both datasets:
+
+```text
+/mnt/OfficeNAS/nas-project-cloud/files
+/mnt/OfficeNAS/nas-project-cloud/appdata
+```
+
+The app enables SQLite WAL mode. Do not back up only `nas-cloud.sqlite` while the container is running. For the cleanest backup:
+
+1. Stop the app.
+2. Snapshot or copy `files`.
+3. Snapshot or copy the full `appdata` dataset.
+4. Start the app again.
+
+If doing file-level backups, include the full SQLite file set:
+
+```text
+/mnt/OfficeNAS/nas-project-cloud/appdata/nas-cloud.sqlite
+/mnt/OfficeNAS/nas-project-cloud/appdata/nas-cloud.sqlite-wal
+/mnt/OfficeNAS/nas-project-cloud/appdata/nas-cloud.sqlite-shm
+```
 
 ## LAN Access
 
@@ -91,7 +199,7 @@ For a LAN-only setup, publish port `3000:3000` and browse to:
 http://<truenas-hostname-or-ip>:3000
 ```
 
-On a 2.5Gb LAN, large uploads should be limited more by disk behavior, browser behavior, and reverse proxy buffering than by the app container. Keep the app and storage dataset on the NAS to avoid hairpin transfers through another host.
+On the 2.5Gb wired path, large uploads should be limited more by disks, browser behavior, and reverse proxy buffering than by the app container. Keeping the app and storage on the NAS avoids routing large files through another machine first.
 
 ## Reverse Proxy
 
@@ -104,32 +212,12 @@ https://cloud.home.example
 Proxy to the app at:
 
 ```text
-http://nas-project-cloud:3000
-```
-
-or to the NAS host IP and published port if the proxy runs elsewhere:
-
-```text
 http://<truenas-ip>:3000
 ```
 
-Set proxy upload limits and buffering with the 2 GiB application limit in mind. For Nginx, that usually means raising `client_max_body_size` and reviewing request buffering. For Caddy or Traefik, check the equivalent body-size and timeout controls.
+Set proxy upload limits and buffering with the 2 GiB application limit in mind. For Nginx, raise `client_max_body_size` and review request buffering. For Caddy or Traefik, check the equivalent body-size and timeout settings.
 
 Do not put the app behind a path prefix unless the Next.js app has been tested with that prefix. `NAS_CLOUD_PUBLIC_BASE_PATH=/files` is for the app's file-serving API path, not a reverse-proxy base path.
-
-## Backups And Snapshots
-
-Snapshot the storage dataset regularly. Also back up the Docker named volume mounted at `/data`, because the SQLite database is the metadata source for projects, tags, categories, and indexed file records.
-
-The app enables SQLite WAL mode. Do not assume copying only `/data/nas-cloud.sqlite` is enough while the app is running. For backup or upgrade, prefer stopping the container and backing up the entire `/data` volume. If you need file-level backup instead, stop the container or checkpoint SQLite first, then include all database sidecar files:
-
-```text
-/data/nas-cloud.sqlite
-/data/nas-cloud.sqlite-wal
-/data/nas-cloud.sqlite-shm
-```
-
-Before a major upgrade, stop the container, back up the `/data` volume or the complete SQLite file set above, and snapshot the storage dataset. Restart after both are captured.
 
 ## Storage Engine Follow-Up
 

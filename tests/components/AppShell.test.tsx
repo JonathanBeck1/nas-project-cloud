@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/workspace/AppShell";
-import type { CloudFile, Project } from "@/lib/shared/types";
+import type { Category, CloudFile, Project } from "@/lib/shared/types";
 
 const uploadedFile: CloudFile = {
   id: "file_manual",
@@ -46,26 +46,37 @@ const project: Project = {
   updatedAt: "2026-04-30T12:00:00.000Z"
 };
 
+const cadCategory: Category = {
+  id: "cat_cad",
+  name: "3D / CAD",
+  slug: "3d-cad",
+  color: "#3b5f73",
+  isSystem: true,
+  sortOrder: 10
+};
+
 describe("AppShell", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("renders the primary workspace landmarks and navigation entries", () => {
-    render(<AppShell />);
+  it("renders the primary workspace landmarks and real navigation entries", () => {
+    const { container } = render(<AppShell initialData={{ files: [], projects: [project], categories: [], tags: [] }} />);
 
     expect(screen.getByRole("navigation", { name: "Workspace" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Search files" })).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Inbox" })).toBeVisible();
     expect(screen.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
-    expect(screen.getByText("Projects")).toBeVisible();
+    expect(screen.getAllByText("Projects")[0]).toBeVisible();
+    expect(screen.getByRole("link", { name: "Printer Upgrade" })).toHaveAttribute("href", "/projects/proj_123");
     expect(screen.getByText("Local Library")).toBeVisible();
     expect(
       screen.getByText("Drop files here to move them onto the NAS now and organize them into projects when ready.")
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "New Project" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Log out" })).toBeVisible();
+    expect([...container.querySelectorAll("a")].map((link) => link.getAttribute("href"))).not.toContain("#");
   });
 
   it("shows a successfully dropped upload in the workspace grid", async () => {
@@ -121,10 +132,17 @@ describe("AppShell", () => {
     expect(inputClick.mock.instances[0]).toBe(screen.getByLabelText("Choose files"));
   });
 
-  it("posts a project JSON payload from the project dialog", async () => {
+  it("posts a project JSON payload and shows the new project in navigation", async () => {
     const user = userEvent.setup();
+    const createdProject = {
+      ...project,
+      id: "project_print_parts",
+      name: "Print Parts",
+      slug: "print-parts",
+      description: "Printer upgrades"
+    };
     const fetchMock = vi.fn<typeof fetch>(() =>
-      Promise.resolve(new Response(JSON.stringify({ project: { id: "project_print_parts" } }), { status: 201 }))
+      Promise.resolve(new Response(JSON.stringify({ project: createdProject }), { status: 201 }))
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -145,6 +163,8 @@ describe("AppShell", () => {
         })
       )
     );
+    expect(await screen.findByRole("status")).toHaveTextContent("Created project Print Parts");
+    expect(screen.getByRole("link", { name: "Print Parts" })).toHaveAttribute("href", "/projects/project_print_parts");
   });
 
   it("selects a file and shows its actions in the detail drawer", async () => {
@@ -263,6 +283,58 @@ describe("AppShell", () => {
     expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "notes.txt" })).not.toBeInTheDocument();
     expect(await screen.findByRole("status")).toHaveTextContent("Archived 2 files");
+  });
+
+  it("bulk assigns selected files to a project and category", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<typeof fetch>((input, init) => {
+      const body = JSON.parse(String(init?.body));
+      const fileId = String(input).endsWith("/file_manual") ? "file_manual" : "file_notes";
+      const sourceFile = fileId === "file_manual" ? uploadedFile : notesFile;
+
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            file: {
+              ...sourceFile,
+              projectId: body.projectId,
+              categoryId: body.categoryId,
+              storagePath: `/nas/projects/printer-upgrade/${sourceFile.name}`
+            }
+          }),
+          { status: 200 }
+        )
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell initialData={{ files: [uploadedFile, notesFile], projects: [project], categories: [cadCategory], tags: [] }} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select manual.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select notes.txt" }));
+    await user.selectOptions(screen.getByLabelText("Project for selected files"), "proj_123");
+    await user.selectOptions(screen.getByLabelText("Category for selected files"), "cat_cad");
+    await user.click(screen.getByRole("button", { name: "Apply organization" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_manual",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: "proj_123", categoryId: "cat_cad" })
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_notes",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: "proj_123", categoryId: "cat_cad" })
+      })
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Updated 2 files");
+    expect(screen.queryByText("2 selected")).not.toBeInTheDocument();
   });
 
   it("updates project assignment and keeps the selected file open", async () => {

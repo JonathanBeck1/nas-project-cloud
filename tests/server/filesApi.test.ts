@@ -11,9 +11,11 @@ const mocks = vi.hoisted(() => {
     createFile: vi.fn(),
     getFileById: vi.fn(),
     getProjectById: vi.fn(),
+    deleteFile: vi.fn(),
     listCategories: vi.fn(),
     setFileTags: vi.fn(),
-    updateFile: vi.fn()
+    updateFile: vi.fn(),
+    upsertFilePreview: vi.fn()
   };
   const storage = {
     writeUpload: vi.fn(),
@@ -71,8 +73,21 @@ describe("files API module", () => {
     mocks.repo.listFiles.mockReturnValue([]);
     mocks.repo.getFileById.mockReturnValue(null);
     mocks.repo.getProjectById.mockReturnValue(null);
+    mocks.repo.deleteFile.mockReturnValue(false);
     mocks.repo.listCategories.mockReturnValue([{ id: "cat_cad", name: "CAD", slug: "cad" }]);
     mocks.repo.setFileTags.mockReturnValue(null);
+    mocks.repo.upsertFilePreview.mockReturnValue({
+      fileId: "file_1",
+      kind: "image",
+      status: "pending",
+      previewPath: null,
+      width: null,
+      height: null,
+      durationSeconds: null,
+      error: null,
+      createdAt: "2026-04-30T00:00:00.000Z",
+      updatedAt: "2026-04-30T00:00:00.000Z"
+    });
     mocks.repo.createFile.mockImplementation((input) => ({
       id: "file_1",
       uploadedAt: "2026-04-30T00:00:00.000Z",
@@ -131,6 +146,37 @@ describe("files API module", () => {
       query: "bracket",
       projectId: "proj_1",
       categoryId: "cat_1"
+    });
+  });
+
+  it("enqueues image previews when a direct upload creates image metadata", async () => {
+    const { POST } = await import("@/app/api/files/route");
+    mocks.appConfig.maxUploadBytes = 1024;
+    mocks.classifyFile.mockReturnValue({
+      extension: "png",
+      family: "image" as FileFamily
+    });
+    mocks.storage.writeUpload.mockResolvedValue({
+      absolutePath: "/storage/Inbox/Mac/render.png",
+      relativePath: "Inbox/Mac/render.png",
+      sizeBytes: 5,
+      checksum: "checksum",
+      mimeType: "image/png"
+    });
+
+    const bytes = Buffer.from("image");
+    const file = new File(["image"], "render.png", { type: "image/png" });
+    Object.defineProperty(file, "arrayBuffer", {
+      value: vi.fn(async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+    });
+
+    const response = await POST(formRequest({ file, sourceDevice: "Mac" }));
+
+    expect(response.status).toBe(201);
+    expect(mocks.repo.upsertFilePreview).toHaveBeenCalledWith({
+      fileId: "file_1",
+      kind: "image",
+      status: "pending"
     });
   });
 
@@ -743,6 +789,99 @@ describe("files API module", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({ error: "file not found" });
     expect(mocks.repo.updateFile).not.toHaveBeenCalled();
+  });
+
+  it("restores an archived file into the restored inbox", async () => {
+    const { POST } = await import("@/app/api/files/[id]/restore/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      status: "archived",
+      archivedAt: "2026-04-30T00:00:00.000Z",
+      storagePath: "Archive/2026/04/manual.pdf"
+    });
+    mocks.storage.restoreFile.mockResolvedValue({
+      absolutePath: "/tmp/Inbox/Restored/file_123-manual.pdf",
+      relativePath: "Inbox/Restored/file_123-manual.pdf"
+    });
+    mocks.repo.updateFile.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      status: "active",
+      archivedAt: null,
+      projectId: null,
+      storagePath: "Inbox/Restored/file_123-manual.pdf"
+    });
+
+    const response = await POST(new Request("http://localhost/api/files/file_123/restore", { method: "POST" }), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      file: {
+        id: "file_123",
+        status: "active",
+        archivedAt: null,
+        storagePath: "Inbox/Restored/file_123-manual.pdf"
+      }
+    });
+    expect(mocks.storage.restoreFile).toHaveBeenCalledWith({
+      currentRelativePath: "Archive/2026/04/manual.pdf",
+      targetRelativePath: "Inbox/Restored/file_123-manual.pdf"
+    });
+    expect(mocks.repo.updateFile).toHaveBeenCalledWith(
+      "file_123",
+      {
+        storagePath: "Inbox/Restored/file_123-manual.pdf",
+        status: "active",
+        archivedAt: null,
+        projectId: null
+      },
+      {
+        storagePath: "Archive/2026/04/manual.pdf",
+        status: "archived"
+      }
+    );
+  });
+
+  it("permanently deletes archived file storage and metadata", async () => {
+    const { DELETE } = await import("@/app/api/files/[id]/delete/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      status: "archived",
+      storagePath: "Archive/2026/04/manual.pdf"
+    });
+    mocks.repo.deleteFile.mockReturnValue(true);
+
+    const response = await DELETE(new Request("http://localhost/api/files/file_123/delete", { method: "DELETE" }), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
+    expect(mocks.storage.deleteFile).toHaveBeenCalledWith("Archive/2026/04/manual.pdf");
+    expect(mocks.repo.deleteFile).toHaveBeenCalledWith("file_123");
+  });
+
+  it("refuses to permanently delete active files", async () => {
+    const { DELETE } = await import("@/app/api/files/[id]/delete/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      status: "active",
+      storagePath: "Inbox/Browser/manual.pdf"
+    });
+
+    const response = await DELETE(new Request("http://localhost/api/files/file_123/delete", { method: "DELETE" }), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "file not found" });
+    expect(mocks.storage.deleteFile).not.toHaveBeenCalled();
+    expect(mocks.repo.deleteFile).not.toHaveBeenCalled();
   });
 
   it("streams a file download with safe headers", async () => {

@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 const owner = {
   email: "owner@example.local",
   name: "Owner",
-  password: "long-enough-password",
+  password: process.env.E2E_OWNER_PASSWORD ?? "local-e2e-password-0000",
   deviceName: "Playwright"
 };
 

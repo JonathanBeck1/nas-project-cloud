@@ -96,6 +96,7 @@ export function DetailDrawer({ file, projects = [], isBusy = false, onArchive, o
         <DetailRow label="Extension" value={file.extension || "None"} />
         <DetailRow label="Category" value={file.categoryId ?? "Unsorted"} />
         <DetailRow label="Project" value={file.projectId ?? "Inbox"} />
+        {file.preview ? <DetailRow label="Preview" value={previewDetailValue(file)} wrap /> : null}
         <DetailRow label="Updated" value={new Date(file.updatedAt).toLocaleDateString()} />
       </dl>
     </aside>
@@ -104,6 +105,16 @@ export function DetailDrawer({ file, projects = [], isBusy = false, onArchive, o
 
 function readyPreviewUrl(file: CloudFile): string | null {
   return file.preview?.status === "ready" && file.preview.previewPath ? `/api/files/${encodeURIComponent(file.id)}/preview` : null;
+}
+
+function previewDetailValue(file: CloudFile): string {
+  if (!file.preview) {
+    return "Not queued";
+  }
+  if (file.preview.status === "failed" && file.preview.error) {
+    return `Failed: ${file.preview.error}`;
+  }
+  return file.preview.status.charAt(0).toUpperCase() + file.preview.status.slice(1);
 }
 
 function copyPath(path: string) {

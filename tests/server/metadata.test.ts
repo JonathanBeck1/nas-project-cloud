@@ -362,6 +362,8 @@ describe("metadata repository", () => {
         mimeType: "video/webm",
         sizeBytes: 12,
         checksum: "sha256-movie",
+        userId: "user_1",
+        deviceId: "device_1",
         targetKind: "project",
         sourceDevice: "Mac Studio",
         projectId: project.id,
@@ -376,6 +378,8 @@ describe("metadata repository", () => {
         sizeBytes: 12,
         receivedBytes: 0,
         checksum: "sha256-movie",
+        userId: "user_1",
+        deviceId: "device_1",
         targetKind: "project",
         sourceDevice: "Mac Studio",
         projectId: project.id,
@@ -413,6 +417,53 @@ describe("metadata repository", () => {
       const failed = repo.failUploadSession(session.id, "metadata create failed");
       expect(failed?.status).toBe("failed");
       expect(failed?.error).toBe("metadata create failed");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("filters open upload sessions by user and device", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const matching = repo.createUploadSession({
+        filename: "render.png",
+        mimeType: "image/png",
+        sizeBytes: 12,
+        userId: "user_1",
+        deviceId: "device_1",
+        targetKind: "inbox",
+        sourceDevice: "Mac Studio",
+        tempPath: ".uploads/upload_match.part"
+      });
+      repo.createUploadSession({
+        filename: "notes.txt",
+        mimeType: "text/plain",
+        sizeBytes: 5,
+        userId: "user_1",
+        deviceId: "device_2",
+        targetKind: "inbox",
+        sourceDevice: "Windows PC",
+        tempPath: ".uploads/upload_other_device.part"
+      });
+      repo.createUploadSession({
+        filename: "other.mov",
+        mimeType: "video/quicktime",
+        sizeBytes: 8,
+        userId: "user_2",
+        deviceId: null,
+        targetKind: "inbox",
+        sourceDevice: "Guest",
+        tempPath: ".uploads/upload_other_user.part"
+      });
+
+      expect(repo.listOpenUploadSessions({ userId: "user_1", deviceId: "device_1" })).toEqual([matching]);
+      expect(repo.listOpenUploadSessions({ userId: "user_1" }).map((session) => session.id)).toEqual(
+        expect.arrayContaining([matching.id])
+      );
+      expect(repo.listOpenUploadSessions({ userId: "user_1" })).toHaveLength(2);
     } finally {
       db.close();
     }
@@ -463,6 +514,39 @@ describe("metadata repository", () => {
 
       repo.deleteSession(session.id);
       expect(repo.getSessionByTokenHash("token-hash")).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("revokes a device and removes its sessions", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const user = repo.createUser({
+        email: "owner@example.local",
+        name: "Owner",
+        passwordHash: "scrypt:salt:hash",
+        role: "owner"
+      });
+      const device = repo.createDevice({
+        userId: user.id,
+        name: "Windows PC",
+        kind: "desktop"
+      });
+      const session = repo.createSession({
+        userId: user.id,
+        deviceId: device.id,
+        tokenHash: "session-hash",
+        expiresAt: "2026-06-01T00:00:00.000Z"
+      });
+
+      expect(repo.revokeDevice(user.id, device.id)).toBe(true);
+      expect(repo.listDevices(user.id)).toEqual([]);
+      expect(repo.getSessionByTokenHash(session.tokenHash)).toBeNull();
+      expect(repo.revokeDevice(user.id, device.id)).toBe(false);
     } finally {
       db.close();
     }

@@ -94,6 +94,8 @@ type UploadSessionRow = {
   size_bytes: number;
   received_bytes: number;
   checksum: string | null;
+  user_id: string;
+  device_id: string | null;
   target_kind: UploadTargetKind;
   source_device: string;
   project_id: string | null;
@@ -215,6 +217,8 @@ type CreateUploadSessionInput = {
   mimeType: string;
   sizeBytes: number;
   checksum?: string | null;
+  userId: string;
+  deviceId?: string | null;
   targetKind: UploadTargetKind;
   sourceDevice: string;
   projectId?: string | null;
@@ -381,6 +385,11 @@ export function createMetadataRepository(db: AppDatabase) {
     getProjectById(id: string): Project | null {
       const row = db.prepare<[string], ProjectRow>("select * from projects where id = ? limit 1").get(id);
       return row ? projectFromRow(row) : null;
+    },
+
+    deleteFile(id: string): boolean {
+      const result = db.prepare<[string]>("delete from files where id = ?").run(id);
+      return result.changes > 0;
     },
 
     updateFile(id: string, input: UpdateFileInput, conditions: UpdateFileConditions = {}): CloudFile | null {
@@ -708,6 +717,23 @@ export function createMetadataRepository(db: AppDatabase) {
         .map(deviceFromRow);
     },
 
+    revokeDevice(userId: string, deviceId: string): boolean {
+      const revoke = db.transaction(() => {
+        const device = db
+          .prepare<[string, string], DeviceRow>("select * from devices where id = ? and user_id = ? limit 1")
+          .get(deviceId, userId);
+        if (!device) {
+          return false;
+        }
+
+        db.prepare<[string, string]>("delete from sessions where device_id = ? and user_id = ?").run(deviceId, userId);
+        const result = db.prepare<[string, string]>("delete from devices where id = ? and user_id = ?").run(deviceId, userId);
+        return result.changes > 0;
+      });
+
+      return revoke();
+    },
+
     createSession(input: CreateSessionInput): AuthSession {
       const now = new Date().toISOString();
       const session: AuthSession = {
@@ -793,6 +819,8 @@ export function createMetadataRepository(db: AppDatabase) {
         sizeBytes: input.sizeBytes,
         receivedBytes: 0,
         checksum: input.checksum ?? null,
+        userId: input.userId,
+        deviceId: input.deviceId ?? null,
         targetKind: input.targetKind,
         sourceDevice: input.sourceDevice,
         projectId: input.projectId ?? null,
@@ -809,12 +837,12 @@ export function createMetadataRepository(db: AppDatabase) {
 
       db.prepare(`
         insert into upload_sessions (
-          id, filename, mime_type, size_bytes, received_bytes, checksum, target_kind,
+          id, filename, mime_type, size_bytes, received_bytes, checksum, user_id, device_id, target_kind,
           source_device, project_id, project_slug, category_id, status, temp_path,
           storage_path, error, created_at, updated_at, completed_at
         )
         values (
-          @id, @filename, @mimeType, @sizeBytes, @receivedBytes, @checksum, @targetKind,
+          @id, @filename, @mimeType, @sizeBytes, @receivedBytes, @checksum, @userId, @deviceId, @targetKind,
           @sourceDevice, @projectId, @projectSlug, @categoryId, @status, @tempPath,
           @storagePath, @error, @createdAt, @updatedAt, @completedAt
         )
@@ -828,11 +856,26 @@ export function createMetadataRepository(db: AppDatabase) {
       return row ? uploadSessionFromRow(row) : null;
     },
 
-    listOpenUploadSessions(_filters: ListOpenUploadSessionsFilters = {}): UploadSession[] {
-      void _filters;
+    listOpenUploadSessions(filters: ListOpenUploadSessionsFilters = {}): UploadSession[] {
+      const clauses = ["status = 'open'"];
+      const params: Record<string, string> = {};
+
+      if (filters.userId) {
+        clauses.push("user_id = @userId");
+        params.userId = filters.userId;
+      }
+      if (filters.deviceId) {
+        clauses.push("device_id = @deviceId");
+        params.deviceId = filters.deviceId;
+      }
+
       return db
-        .prepare<[], UploadSessionRow>("select * from upload_sessions where status = 'open' order by updated_at desc")
-        .all()
+        .prepare<Record<string, string>, UploadSessionRow>(`
+          select * from upload_sessions
+          where ${clauses.join(" and ")}
+          order by updated_at desc
+        `)
+        .all(params)
         .map(uploadSessionFromRow);
     },
 
@@ -1072,6 +1115,8 @@ function uploadSessionFromRow(row: UploadSessionRow): UploadSession {
     sizeBytes: row.size_bytes,
     receivedBytes: row.received_bytes,
     checksum: row.checksum,
+    userId: row.user_id,
+    deviceId: row.device_id,
     targetKind: row.target_kind,
     sourceDevice: row.source_device,
     projectId: row.project_id,

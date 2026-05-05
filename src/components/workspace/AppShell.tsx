@@ -9,8 +9,9 @@ import { DropZone } from "./DropZone";
 import { FileGrid } from "./FileGrid";
 import { ProjectDialog } from "./ProjectDialog";
 import { Sidebar } from "./Sidebar";
+import { UploadCenter } from "./UploadCenter";
 import { archiveFile, updateFileAssignment } from "@/lib/client/fileActions";
-import type { CloudFile } from "@/lib/shared/types";
+import type { Category, CloudFile, Project } from "@/lib/shared/types";
 import type { WorkspaceData } from "@/lib/server/workspaceData";
 import type { ProjectDialogInput } from "./ProjectDialog";
 
@@ -21,6 +22,8 @@ type AppShellProps = {
 
 export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
+  const [projects, setProjects] = useState<Project[]>(initialData?.projects ?? []);
+  const [categories] = useState<Category[]>(initialData?.categories ?? []);
   const [query, setQuery] = useState("");
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
@@ -38,18 +41,23 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
       body: JSON.stringify(project)
     });
 
-    if (!response.ok) {
-      let message = "Could not create project";
+    let payload: { project?: Project; error?: string; message?: string } = {};
+    try {
+      payload = (await response.json()) as { project?: Project; error?: string; message?: string };
+    } catch {
+      payload = {};
+    }
 
-      try {
-        const payload = (await response.json()) as { error?: string; message?: string };
-        message = payload.error ?? payload.message ?? message;
-      } catch {
-        message = response.statusText ? `Could not create project: ${response.statusText}` : message;
-      }
+    if (!response.ok || !payload.project) {
+      let message = "Could not create project";
+      message = payload.error ?? payload.message ?? (response.statusText ? `Could not create project: ${response.statusText}` : message);
 
       throw new Error(message);
     }
+
+    setProjects((currentProjects) => [payload.project!, ...currentProjects]);
+    setFileActionError("");
+    setFileActionMessage(`Created project ${payload.project.name}`);
   };
 
   const handleArchiveFile = async (file: CloudFile) => {
@@ -100,6 +108,33 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     }
   };
 
+  const handleAssignSelectedFiles = async (input: { projectId: string | null; categoryId: string | null }) => {
+    if (selectedBulkFiles.length === 0) {
+      return;
+    }
+
+    setIsFileActionBusy(true);
+    setFileActionMessage("");
+    setFileActionError("");
+
+    try {
+      const updatedFiles = await Promise.all(
+        selectedBulkFiles.map((file) =>
+          updateFileAssignment(file.id, { projectId: input.projectId, categoryId: input.categoryId })
+        )
+      );
+      const updatedFilesById = new Map(updatedFiles.map((file) => [file.id, file]));
+
+      setFiles((currentFiles) => currentFiles.map((file) => updatedFilesById.get(file.id) ?? file));
+      setSelectedFileIds([]);
+      setFileActionMessage(`Updated ${updatedFiles.length} ${updatedFiles.length === 1 ? "file" : "files"}`);
+    } catch (error) {
+      setFileActionError(error instanceof Error ? error.message : "Could not update selected files");
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
   const handleAssignProject = async (file: CloudFile, projectId: string) => {
     setIsFileActionBusy(true);
     setFileActionMessage("");
@@ -120,7 +155,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     <div className="min-h-screen bg-surface text-ink">
       <div className="grid min-h-screen grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
         <div className="min-h-0">
-          <Sidebar />
+          <Sidebar projects={projects} activeHref="/" />
         </div>
 
         <div className="flex min-w-0 flex-col">
@@ -169,6 +204,8 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                     </div>
                   </DropZone>
 
+                  <UploadCenter initialSessions={initialData?.openUploadSessions ?? []} />
+
                   {fileActionMessage ? (
                     <p
                       role="status"
@@ -189,7 +226,11 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                   <div aria-label="Inbox files">
                     <BulkActionBar
                       selectedCount={selectedFileIds.length}
+                      projects={projects}
+                      categories={categories}
+                      isBusy={isFileActionBusy}
                       onArchive={handleArchiveSelectedFiles}
+                      onApplyOrganization={handleAssignSelectedFiles}
                       onClearSelection={() => setSelectedFileIds([])}
                     />
                     <FileGrid
@@ -207,7 +248,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
               <div className="min-w-0 xl:sticky xl:top-5 xl:h-[calc(100vh-6.5rem)]">
                 <DetailDrawer
                   file={selectedFile}
-                  projects={initialData?.projects ?? []}
+                  projects={projects}
                   isBusy={isFileActionBusy}
                   onArchive={handleArchiveFile}
                   onAssignProject={handleAssignProject}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { uploadFileInChunks } from "@/lib/client/uploadSessions";
+import { listOpenUploadSessions, uploadFileInChunks } from "@/lib/client/uploadSessions";
 
 describe("uploadFileInChunks", () => {
   it("reports progress while uploading chunks", async () => {
@@ -28,5 +28,15 @@ describe("uploadFileInChunks", () => {
 
     expect(fileRecord).toEqual({ id: "file_1", name: "manual.pdf" });
     expect(progress).toHaveBeenCalledWith({ loadedBytes: 5, totalBytes: 5 });
+  });
+
+  it("lists open upload sessions", async () => {
+    const sessions = [{ id: "upload_1", filename: "movie.webm", receivedBytes: 1024, sizeBytes: 2048 }];
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ sessions }), { status: 200 }))
+    );
+
+    await expect(listOpenUploadSessions(fetchMock)).resolves.toEqual(sessions);
+    expect(fetchMock).toHaveBeenCalledWith("/api/upload-sessions/open", { method: "GET" });
   });
 });

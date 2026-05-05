@@ -124,4 +124,26 @@ describe("DetailDrawer", () => {
       "/api/files/file_render/preview"
     );
   });
+
+  it("shows preview processing status for pending previews", () => {
+    render(<DetailDrawer file={{ ...previewFixture, preview: { ...previewFixture.preview!, status: "pending", previewPath: null } }} />);
+
+    expect(screen.getByText("Preview")).toBeVisible();
+    expect(screen.getByText("Pending")).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Preview of render.png" })).not.toBeInTheDocument();
+  });
+
+  it("shows preview failure details", () => {
+    render(
+      <DetailDrawer
+        file={{
+          ...previewFixture,
+          preview: { ...previewFixture.preview!, status: "failed", previewPath: null, error: "unsupported image" }
+        }}
+      />
+    );
+
+    expect(screen.getByText("Preview")).toBeVisible();
+    expect(screen.getByText("Failed: unsupported image")).toBeVisible();
+  });
 });

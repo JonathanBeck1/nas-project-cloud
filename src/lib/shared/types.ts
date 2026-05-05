@@ -112,6 +112,8 @@ export type UploadSession = {
   sizeBytes: number;
   receivedBytes: number;
   checksum: string | null;
+  userId: string;
+  deviceId: string | null;
   targetKind: UploadTargetKind;
   sourceDevice: string;
   projectId: string | null;

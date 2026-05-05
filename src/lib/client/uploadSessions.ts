@@ -1,4 +1,4 @@
-import type { CloudFile } from "@/lib/shared/types";
+import type { CloudFile, UploadSession } from "@/lib/shared/types";
 
 export type UploadProgress = {
   loadedBytes: number;
@@ -98,6 +98,19 @@ export async function abortUploadSession(sessionId: string, fetchImpl: typeof fe
   if (!response.ok) {
     throw new Error(await uploadErrorMessage(response));
   }
+}
+
+export async function listOpenUploadSessions(fetchImpl: typeof fetch = fetch): Promise<UploadSession[]> {
+  const response = await fetchImpl("/api/upload-sessions/open", {
+    method: "GET"
+  });
+
+  if (!response.ok) {
+    throw new Error(await uploadErrorMessage(response));
+  }
+
+  const body = (await response.json()) as { sessions?: UploadSession[] };
+  return body.sessions ?? [];
 }
 
 async function uploadErrorMessage(response: Response) {

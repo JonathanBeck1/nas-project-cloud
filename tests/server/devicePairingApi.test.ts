@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
     createDevicePairingCode: vi.fn(),
     getDevicePairingCodeByHash: vi.fn(),
     consumeDevicePairingCode: vi.fn(),
-    createDevice: vi.fn()
+    createDevice: vi.fn(),
+    revokeDevice: vi.fn()
   },
   requireApiSession: vi.fn()
 }));
@@ -30,6 +31,7 @@ describe("device pairing API", () => {
       id: "pair_1",
       expiresAt: "2026-05-02T12:00:00.000Z"
     });
+    mocks.repo.revokeDevice.mockReturnValue(false);
   });
 
   it("lists devices and creates pairing codes for the owner", async () => {
@@ -57,6 +59,31 @@ describe("device pairing API", () => {
         expiresAt: expect.any(String)
       })
     );
+  });
+
+  it("revokes another trusted device for the owner", async () => {
+    const { DELETE } = await import("@/app/api/devices/[id]/route");
+    mocks.repo.revokeDevice.mockReturnValue(true);
+
+    const response = await DELETE(new Request("http://localhost/api/devices/device_2"), {
+      params: Promise.resolve({ id: "device_2" })
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
+    expect(mocks.repo.revokeDevice).toHaveBeenCalledWith("user_1", "device_2");
+  });
+
+  it("refuses to revoke the current device session", async () => {
+    const { DELETE } = await import("@/app/api/devices/[id]/route");
+
+    const response = await DELETE(new Request("http://localhost/api/devices/device_1"), {
+      params: Promise.resolve({ id: "device_1" })
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: "cannot revoke current device" });
+    expect(mocks.repo.revokeDevice).not.toHaveBeenCalled();
   });
 });
 

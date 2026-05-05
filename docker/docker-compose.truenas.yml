@@ -1,6 +1,6 @@
 services:
   nas-project-cloud:
-    image: ghcr.io/YOUR_GITHUB_ORG/nas-project-cloud:latest
+    image: ghcr.io/jonathanbeck1/nas-project-cloud:latest
     container_name: nas-project-cloud
     restart: unless-stopped
     ports:
@@ -11,8 +11,15 @@ services:
       NAS_CLOUD_PUBLIC_BASE_PATH: /files
       NAS_CLOUD_MAX_UPLOAD_BYTES: "2147483648"
     volumes:
-      - /mnt/tank/nas-project-cloud:/mnt/nas-cloud
-      - nas-project-cloud-data:/data
-
-volumes:
-  nas-project-cloud-data:
+      - /mnt/OfficeNAS/nas-project-cloud/files:/mnt/nas-cloud
+      - /mnt/OfficeNAS/nas-project-cloud/appdata:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

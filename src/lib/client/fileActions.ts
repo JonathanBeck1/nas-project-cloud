@@ -13,6 +13,30 @@ export async function archiveFile(fileId: string): Promise<CloudFile> {
   );
 }
 
+export async function restoreFile(fileId: string): Promise<CloudFile> {
+  return fileFromResponse(
+    await fetch(`/api/files/${encodeURIComponent(fileId)}/restore`, {
+      method: "POST"
+    })
+  );
+}
+
+export async function deleteFilePermanently(fileId: string): Promise<void> {
+  const response = await fetch(`/api/files/${encodeURIComponent(fileId)}/delete`, {
+    method: "DELETE"
+  });
+  let payload: { ok?: boolean; error?: string };
+  try {
+    payload = (await response.json()) as { ok?: boolean; error?: string };
+  } catch {
+    payload = {};
+  }
+
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error ?? "File action failed");
+  }
+}
+
 export async function updateFileAssignment(fileId: string, input: FileAssignmentInput): Promise<CloudFile> {
   return fileFromResponse(
     await fetch(`/api/files/${encodeURIComponent(fileId)}`, {

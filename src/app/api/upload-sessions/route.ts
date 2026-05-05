@@ -69,6 +69,8 @@ export async function POST(request: Request) {
       mimeType,
       sizeBytes,
       checksum: nullableStringValue(body.checksum),
+      userId: auth.userId,
+      deviceId: auth.deviceId,
       targetKind,
       sourceDevice,
       projectId,

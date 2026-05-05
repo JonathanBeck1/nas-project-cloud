@@ -137,6 +137,8 @@ function migrate(db: AppDatabase) {
       size_bytes integer not null,
       received_bytes integer not null default 0,
       checksum text,
+      user_id text not null default '',
+      device_id text,
       target_kind text not null,
       source_device text not null,
       project_id text references projects(id) on delete set null,
@@ -165,6 +167,8 @@ function migrate(db: AppDatabase) {
 
   addColumnIfMissing(db, "files", "status", "text not null default 'active'");
   addColumnIfMissing(db, "files", "archived_at", "text");
+  addColumnIfMissing(db, "upload_sessions", "user_id", "text not null default ''");
+  addColumnIfMissing(db, "upload_sessions", "device_id", "text");
 }
 
 function addColumnIfMissing(db: AppDatabase, table: string, column: string, definition: string) {
