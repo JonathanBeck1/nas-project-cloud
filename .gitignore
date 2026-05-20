@@ -6,3 +6,12 @@ coverage/
 playwright-report/
 test-results/
 *.tsbuildinfo
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Local environment
+.env
+.env.local
+.env.*.local
