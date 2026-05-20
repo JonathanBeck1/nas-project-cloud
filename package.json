@@ -2,6 +2,17 @@
   "name": "nas-project-cloud",
   "version": "0.1.0",
   "private": true,
+  "description": "Self-hosted, project-first file cloud for TrueNAS SCALE.",
+  "license": "MIT",
+  "author": "Jonathan Beck",
+  "homepage": "https://github.com/JonathanBeck1/nas-project-cloud",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JonathanBeck1/nas-project-cloud.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JonathanBeck1/nas-project-cloud/issues"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
