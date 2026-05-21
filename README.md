@@ -4,8 +4,11 @@ A self-hosted, project-first file cloud for [TrueNAS SCALE](https://www.truenas.
 
 > **Status:** pre-1.0 (`v0.1.x`). The MVP is shippable on a LAN, but the product is roughly half of where it's headed. See [Roadmap](#roadmap) for what's next and [Known limitations](#known-limitations) for what to expect today.
 
+[![CI](https://github.com/JonathanBeck1/nas-project-cloud/actions/workflows/ci.yml/badge.svg)](https://github.com/JonathanBeck1/nas-project-cloud/actions/workflows/ci.yml)
 [![Publish Docker image](https://github.com/JonathanBeck1/nas-project-cloud/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/JonathanBeck1/nas-project-cloud/actions/workflows/docker-publish.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+
+![Workspace screenshot](./docs/screenshots/workspace.png)
 
 ## Why this exists
 
@@ -21,6 +24,17 @@ Tools like Nextcloud and OpenCloud are general-purpose. Tools like LocalSend are
 - **Trusted-device auth** — owner bootstrap on first run, scrypt password hashing, HTTP-only session cookie, route guards on every API and page, and pairing-code device trust.
 - **TrueNAS-ready** — Dockerfile, `docker-compose.truenas.yml`, deployment guide, and `/api/health` readiness check that exercises both the storage mount and the database.
 - **CI/CD** — GitHub Actions builds and publishes `ghcr.io/jonathanbeck1/nas-project-cloud:latest` on every push to `main`, after running unit, type, lint, and build checks.
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Projects list](./docs/screenshots/projects.png) | ![Project workspace](./docs/screenshots/project.png) |
+| Projects index — count of files per workspace. | Project workspace — Garden Shed Build files, search, and stats. |
+| ![Archive](./docs/screenshots/archive.png) | ![Devices](./docs/screenshots/devices.png) |
+| Archive — soft-deleted files with restore + permanent delete. | Trusted devices — pair new devices with a 6-digit code. |
+
+Captured with `npm run screenshots` (boots an isolated dev server, seeds sample data, drives Chromium via Playwright, and writes PNGs into `docs/screenshots/`).
 
 ## Tech stack
 
@@ -118,6 +132,7 @@ npm run build         # production build
 npm run test:e2e      # Playwright (boots its own dev server on :3100)
 npm run index:storage # rebuild the metadata index from disk
 npm run previews:generate # process pending preview jobs
+npm run screenshots   # regenerate docs/screenshots/*.png
 ```
 
 The verification gate before any commit to `main` is:
@@ -126,7 +141,7 @@ The verification gate before any commit to `main` is:
 npm test && npm run typecheck && npm run lint && npm run build && npm run test:e2e
 ```
 
-The same gate runs in [`.github/workflows/docker-publish.yml`](./.github/workflows/docker-publish.yml) before the image is published.
+The same gate runs on every pull request via [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) and again in [`.github/workflows/docker-publish.yml`](./.github/workflows/docker-publish.yml) before the image is published.
 
 ## Project layout
 
@@ -157,7 +172,7 @@ docs/
   implementation/           per-phase build summaries
   research/                 storage-engine spike notes
   superpowers/              internal design specs and plans
-scripts/                    index-storage, generate-previews, e2e prep
+scripts/                    index-storage, generate-previews, e2e prep, screenshot capture
 tests/
   components/               Testing Library + Vitest component tests
   server/                   API + repository + storage + auth tests
@@ -205,7 +220,7 @@ This is a working project, not a polished release. The internal design specs and
 
 ## Contributing
 
-Issues and PRs are welcome. Before opening a PR, please run the full verification gate listed under [Development](#development). There is no `CONTRIBUTING.md` yet — the short version is: small, focused changes; tests with the change; nothing committed under `.data/`, `.next/`, `node_modules/`, or `.worktrees/`.
+Issues and PRs are welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the verification gate, branch conventions, and schema-change rules. Bug and feature templates live under [`.github/ISSUE_TEMPLATE/`](./.github/ISSUE_TEMPLATE/). Security issues should be reported privately via [GitHub Security Advisories](https://github.com/JonathanBeck1/nas-project-cloud/security/advisories/new).
 
 ## License
 
