@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   lastSuccessfulPreviewAt: vi.fn(),
   getDatabase: vi.fn().mockReturnValue({}),
   createMetadataRepository: vi.fn(),
-  probeFfmpeg: vi.fn()
+  probeFfmpeg: vi.fn(),
+  probePoppler: vi.fn()
 }));
 
 vi.mock("@/lib/server/auth/guards", () => ({ requireApiSession: mocks.requireApiSession }));
@@ -15,6 +16,7 @@ vi.mock("@/lib/server/metadata", () => ({
   createMetadataRepository: mocks.createMetadataRepository
 }));
 vi.mock("@/lib/server/previews/ffmpeg", () => ({ probeFfmpeg: mocks.probeFfmpeg }));
+vi.mock("@/lib/server/previews/poppler", () => ({ probePoppler: mocks.probePoppler }));
 
 describe("preview status API", () => {
   beforeEach(() => {
@@ -38,9 +40,10 @@ describe("preview status API", () => {
       lastSuccessfulPreviewAt: mocks.lastSuccessfulPreviewAt
     });
     mocks.probeFfmpeg.mockResolvedValue({ available: true, version: "6.0" });
+    mocks.probePoppler.mockResolvedValue({ available: true, version: "23.04.0" });
   });
 
-  it("returns counts, last ready timestamp, and ffmpeg availability for an authenticated session", async () => {
+  it("returns counts, last ready timestamp, and binary availability for an authenticated session", async () => {
     const { GET } = await import("@/app/api/maintenance/previews/status/route");
 
     const response = await GET(new Request("http://localhost/api/maintenance/previews/status"));
@@ -49,18 +52,24 @@ describe("preview status API", () => {
     await expect(response.json()).resolves.toEqual({
       counts: { pending: 4, ready: 12, failed: 1, skipped: 7, unsupported: 0 },
       lastReadyAt: "2026-05-20T12:34:56.000Z",
-      ffmpeg: { available: true, version: "6.0" }
+      ffmpeg: { available: true, version: "6.0" },
+      poppler: { available: true, version: "23.04.0" }
     });
   });
 
-  it("reports ffmpeg.available=false when the probe fails", async () => {
+  it("reports ffmpeg.available=false and poppler.available=false when the probes fail", async () => {
     mocks.probeFfmpeg.mockResolvedValue({ available: false, error: "ENOENT" });
+    mocks.probePoppler.mockResolvedValue({ available: false, error: "ENOENT" });
     const { GET } = await import("@/app/api/maintenance/previews/status/route");
 
     const response = await GET(new Request("http://localhost/api/maintenance/previews/status"));
-    const body = (await response.json()) as { ffmpeg: { available: boolean; version: string | null } };
+    const body = (await response.json()) as {
+      ffmpeg: { available: boolean; version: string | null };
+      poppler: { available: boolean; version: string | null };
+    };
 
     expect(body.ffmpeg).toEqual({ available: false, version: null });
+    expect(body.poppler).toEqual({ available: false, version: null });
   });
 
   it("requires an authenticated session", async () => {

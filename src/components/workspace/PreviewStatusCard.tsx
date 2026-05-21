@@ -9,12 +9,13 @@ const POLL_INTERVAL_MS = 5_000;
 
 type Counts = Record<FilePreviewStatus, number>;
 
-type FfmpegStatus = { available: boolean; version: string | null };
+type BinaryStatus = { available: boolean; version: string | null };
 
 type StatusResponse = {
   counts: Counts;
   lastReadyAt: string | null;
-  ffmpeg?: FfmpegStatus;
+  ffmpeg?: BinaryStatus;
+  poppler?: BinaryStatus;
 };
 
 const ZERO_COUNTS: Counts = { pending: 0, ready: 0, failed: 0, skipped: 0, unsupported: 0 };
@@ -22,7 +23,8 @@ const ZERO_COUNTS: Counts = { pending: 0, ready: 0, failed: 0, skipped: 0, unsup
 export function PreviewStatusCard() {
   const [counts, setCounts] = useState<Counts>(ZERO_COUNTS);
   const [lastReadyAt, setLastReadyAt] = useState<string | null>(null);
-  const [ffmpeg, setFfmpeg] = useState<FfmpegStatus | null>(null);
+  const [ffmpeg, setFfmpeg] = useState<BinaryStatus | null>(null);
+  const [poppler, setPoppler] = useState<BinaryStatus | null>(null);
   const [error, setError] = useState("");
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [reprocessMessage, setReprocessMessage] = useState("");
@@ -42,6 +44,7 @@ export function PreviewStatusCard() {
       setCounts({ ...ZERO_COUNTS, ...json.counts });
       setLastReadyAt(json.lastReadyAt);
       setFfmpeg(json.ffmpeg ?? null);
+      setPoppler(json.poppler ?? null);
       setError("");
     } catch (loadError) {
       if (!isMountedRef.current) return;
@@ -140,18 +143,10 @@ export function PreviewStatusCard() {
             this tab is visible.
           </p>
         </div>
-        {ffmpeg ? (
-          <span
-            className={
-              ffmpeg.available
-                ? "shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
-                : "shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
-            }
-            title={ffmpeg.available && ffmpeg.version ? `ffmpeg ${ffmpeg.version}` : undefined}
-          >
-            {ffmpeg.available ? "ffmpeg ready" : "ffmpeg unavailable"}
-          </span>
-        ) : null}
+        <div className="flex shrink-0 flex-wrap items-center gap-1">
+          {ffmpeg ? <BinaryBadge name="ffmpeg" status={ffmpeg} /> : null}
+          {poppler ? <BinaryBadge name="poppler" status={poppler} /> : null}
+        </div>
       </div>
 
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -193,6 +188,21 @@ export function PreviewStatusCard() {
         </p>
       ) : null}
     </section>
+  );
+}
+
+function BinaryBadge({ name, status }: { name: string; status: BinaryStatus }) {
+  return (
+    <span
+      className={
+        status.available
+          ? "rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+          : "rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
+      }
+      title={status.available && status.version ? `${name} ${status.version}` : undefined}
+    >
+      {status.available ? `${name} ready` : `${name} unavailable`}
+    </span>
   );
 }
 
