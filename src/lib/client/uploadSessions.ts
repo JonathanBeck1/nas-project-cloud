@@ -103,8 +103,25 @@ export async function abortUploadSession(sessionId: string, fetchImpl: typeof fe
   }
 }
 
-export async function listOpenUploadSessions(fetchImpl: typeof fetch = fetch): Promise<UploadSession[]> {
-  const response = await fetchImpl("/api/upload-sessions/open", {
+export type UploadSessionStatusFilter = "open" | "completed" | "failed" | "aborted" | "all";
+
+export type ListUploadSessionsOptions = {
+  status?: UploadSessionStatusFilter;
+  deviceId?: string | null;
+  fetchImpl?: typeof fetch;
+};
+
+export async function listUploadSessions({
+  status = "open",
+  deviceId = null,
+  fetchImpl = fetch
+}: ListUploadSessionsOptions = {}): Promise<UploadSession[]> {
+  const params = new URLSearchParams({ status });
+  if (deviceId) {
+    params.set("deviceId", deviceId);
+  }
+
+  const response = await fetchImpl(`/api/upload-sessions?${params.toString()}`, {
     method: "GET"
   });
 
@@ -114,6 +131,11 @@ export async function listOpenUploadSessions(fetchImpl: typeof fetch = fetch): P
 
   const body = (await response.json()) as { sessions?: UploadSession[] };
   return body.sessions ?? [];
+}
+
+/** @deprecated Use listUploadSessions({ status: "open" }) instead. */
+export async function listOpenUploadSessions(fetchImpl: typeof fetch = fetch): Promise<UploadSession[]> {
+  return listUploadSessions({ status: "open", fetchImpl });
 }
 
 async function uploadErrorMessage(response: Response) {

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
   const repo = {
     createUploadSession: vi.fn(),
     listOpenUploadSessions: vi.fn(),
+    listUploadSessions: vi.fn(),
     getUploadSession: vi.fn(),
     advanceUploadSession: vi.fn(),
     completeUploadSession: vi.fn(),
@@ -87,6 +88,7 @@ describe("upload sessions API module", () => {
     mocks.appConfig.maxUploadBytes = 20;
     mocks.repo.listCategories.mockReturnValue([{ id: "cat_media", name: "Media", slug: "media" }]);
     mocks.repo.listOpenUploadSessions.mockReturnValue([]);
+    mocks.repo.listUploadSessions.mockReturnValue([]);
     mocks.repo.getProjectById.mockReturnValue(null);
     mocks.repo.createUploadSession.mockReturnValue(openSession);
     mocks.repo.getUploadSession.mockReturnValue(openSession);
@@ -186,6 +188,50 @@ describe("upload sessions API module", () => {
     await expect(response.json()).resolves.toEqual({
       sessions: [{ id: "upload_1", filename: "movie.webm", receivedBytes: 8388608, sizeBytes: 100000000 }]
     });
+  });
+
+  it("lists upload sessions filtered by status and device on the new GET endpoint", async () => {
+    const { GET } = await import("@/app/api/upload-sessions/route");
+    const failedSession: UploadSession = { ...openSession, status: "failed", error: "boom" };
+    mocks.repo.listUploadSessions.mockReturnValue([failedSession]);
+
+    const response = await GET(
+      new Request("http://localhost/api/upload-sessions?status=failed&deviceId=device_1")
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ sessions: [failedSession] });
+    expect(mocks.repo.listUploadSessions).toHaveBeenCalledWith({
+      userId: "user_1",
+      deviceId: "device_1",
+      status: "failed"
+    });
+  });
+
+  it("supports the 'all' status alias and ignores the 'all' deviceId placeholder", async () => {
+    const { GET } = await import("@/app/api/upload-sessions/route");
+    mocks.repo.listUploadSessions.mockReturnValue([]);
+
+    const response = await GET(
+      new Request("http://localhost/api/upload-sessions?status=all&deviceId=all")
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.repo.listUploadSessions).toHaveBeenCalledWith({
+      userId: "user_1",
+      deviceId: null,
+      status: "all"
+    });
+  });
+
+  it("rejects unknown status filters", async () => {
+    const { GET } = await import("@/app/api/upload-sessions/route");
+
+    const response = await GET(new Request("http://localhost/api/upload-sessions?status=garbage"));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid status filter" });
+    expect(mocks.repo.listUploadSessions).not.toHaveBeenCalled();
   });
 
   it("rejects missing projects before creating a temp file", async () => {

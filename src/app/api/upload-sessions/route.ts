@@ -5,6 +5,35 @@ import { appConfig } from "@/lib/server/config";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
+import type { UploadSessionStatus } from "@/lib/shared/types";
+
+const ALLOWED_STATUS_FILTERS = new Set<string>(["open", "completed", "failed", "aborted", "all"]);
+
+export async function GET(request: Request) {
+  const auth = await requireApiSession(request);
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url = new URL(request.url);
+  const rawStatus = (url.searchParams.get("status") ?? "open").toLowerCase();
+  if (!ALLOWED_STATUS_FILTERS.has(rawStatus)) {
+    return NextResponse.json({ error: "invalid status filter" }, { status: 400 });
+  }
+
+  const status = rawStatus === "all" ? "all" : (rawStatus as UploadSessionStatus);
+  const deviceParam = url.searchParams.get("deviceId");
+  const deviceId = deviceParam && deviceParam !== "all" ? deviceParam : null;
+
+  const repo = createMetadataRepository(getDatabase());
+  const sessions = repo.listUploadSessions({
+    userId: auth.userId,
+    deviceId,
+    status
+  });
+
+  return NextResponse.json({ sessions });
+}
 
 export async function POST(request: Request) {
   const auth = await requireApiSession(request);

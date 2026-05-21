@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { listOpenUploadSessions, uploadFileInChunks } from "@/lib/client/uploadSessions";
+import {
+  listOpenUploadSessions,
+  listUploadSessions,
+  uploadFileInChunks
+} from "@/lib/client/uploadSessions";
 
 describe("uploadFileInChunks", () => {
   it("reports progress while uploading chunks", async () => {
@@ -30,13 +34,29 @@ describe("uploadFileInChunks", () => {
     expect(progress).toHaveBeenCalledWith({ loadedBytes: 5, totalBytes: 5 });
   });
 
-  it("lists open upload sessions", async () => {
+  it("lists open upload sessions through the unified endpoint", async () => {
     const sessions = [{ id: "upload_1", filename: "movie.webm", receivedBytes: 1024, sizeBytes: 2048 }];
     const fetchMock = vi.fn<typeof fetch>(() =>
       Promise.resolve(new Response(JSON.stringify({ sessions }), { status: 200 }))
     );
 
     await expect(listOpenUploadSessions(fetchMock)).resolves.toEqual(sessions);
-    expect(fetchMock).toHaveBeenCalledWith("/api/upload-sessions/open", { method: "GET" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/upload-sessions?status=open",
+      expect.objectContaining({ method: "GET" })
+    );
+  });
+
+  it("threads status and device filters through listUploadSessions", async () => {
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ sessions: [] }), { status: 200 }))
+    );
+
+    await listUploadSessions({ status: "failed", deviceId: "device_1", fetchImpl: fetchMock });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/upload-sessions?status=failed&deviceId=device_1",
+      expect.objectContaining({ method: "GET" })
+    );
   });
 });

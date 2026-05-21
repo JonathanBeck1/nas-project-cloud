@@ -286,6 +286,16 @@ type ListOpenUploadSessionsFilters = {
   deviceId?: string | null;
 };
 
+type ListUploadSessionsFilters = {
+  userId?: string;
+  deviceId?: string | null;
+  status?: UploadSessionStatus | UploadSessionStatus[] | "all";
+  limit?: number;
+};
+
+const DEFAULT_UPLOAD_SESSIONS_LIMIT = 100;
+const MAX_UPLOAD_SESSIONS_LIMIT = 200;
+
 type CreateUserInput = {
   email: string;
   name: string;
@@ -1195,8 +1205,30 @@ export function createMetadataRepository(db: AppDatabase) {
     },
 
     listOpenUploadSessions(filters: ListOpenUploadSessionsFilters = {}): UploadSession[] {
-      const clauses = ["status = 'open'"];
-      const params: Record<string, string> = {};
+      return this.listUploadSessions({ ...filters, status: "open" });
+    },
+
+    listUploadSessions(filters: ListUploadSessionsFilters = {}): UploadSession[] {
+      const clauses: string[] = [];
+      const params: Record<string, string | number> = {};
+
+      const statusFilter = normalizeStatusFilter(filters.status);
+      if (statusFilter !== "all") {
+        if (statusFilter.length === 0) {
+          return [];
+        }
+        if (statusFilter.length === 1) {
+          clauses.push("status = @status0");
+          params.status0 = statusFilter[0];
+        } else {
+          const placeholders = statusFilter.map((_, idx) => {
+            const key = `status${idx}`;
+            params[key] = statusFilter[idx];
+            return `@${key}`;
+          });
+          clauses.push(`status in (${placeholders.join(", ")})`);
+        }
+      }
 
       if (filters.userId) {
         clauses.push("user_id = @userId");
@@ -1207,11 +1239,17 @@ export function createMetadataRepository(db: AppDatabase) {
         params.deviceId = filters.deviceId;
       }
 
+      const limit = clampLimit(filters.limit);
+      params.limit = limit;
+
+      const where = clauses.length > 0 ? `where ${clauses.join(" and ")}` : "";
+
       return db
-        .prepare<Record<string, string>, UploadSessionRow>(`
+        .prepare<Record<string, string | number>, UploadSessionRow>(`
           select * from upload_sessions
-          where ${clauses.join(" and ")}
+          ${where}
           order by updated_at desc
+          limit @limit
         `)
         .all(params)
         .map(uploadSessionFromRow);
@@ -1226,6 +1264,29 @@ export function createMetadataRepository(db: AppDatabase) {
         `)
         .all(olderThanIso)
         .map(uploadSessionFromRow);
+    },
+
+    listOrphanedFailedUploadSessions(olderThanIso: string): UploadSession[] {
+      return db
+        .prepare<[string], UploadSessionRow>(`
+          select * from upload_sessions
+          where status = 'failed'
+            and temp_path_cleaned_at is null
+            and updated_at < ?
+          order by updated_at asc
+        `)
+        .all(olderThanIso)
+        .map(uploadSessionFromRow);
+    },
+
+    clearUploadSessionTempPath(id: string): void {
+      const now = new Date().toISOString();
+      db.prepare(`
+        update upload_sessions
+        set temp_path_cleaned_at = ?,
+            updated_at = ?
+        where id = ?
+      `).run(now, now, id);
     },
 
     advanceUploadSession(id: string, input: AdvanceUploadSessionInput): UploadSession | null {
@@ -1283,6 +1344,30 @@ export function createMetadataRepository(db: AppDatabase) {
       return result.changes === 0 ? null : this.getUploadSession(id);
     }
   };
+}
+
+const VALID_UPLOAD_SESSION_STATUSES: UploadSessionStatus[] = ["open", "completed", "failed", "aborted"];
+
+function normalizeStatusFilter(
+  status: ListUploadSessionsFilters["status"]
+): UploadSessionStatus[] | "all" {
+  if (status === undefined || status === "open") {
+    return ["open"];
+  }
+  if (status === "all") {
+    return "all";
+  }
+  if (Array.isArray(status)) {
+    return status.filter((value) => VALID_UPLOAD_SESSION_STATUSES.includes(value));
+  }
+  return VALID_UPLOAD_SESSION_STATUSES.includes(status) ? [status] : [];
+}
+
+function clampLimit(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return DEFAULT_UPLOAD_SESSIONS_LIMIT;
+  }
+  return Math.min(MAX_UPLOAD_SESSIONS_LIMIT, Math.floor(value));
 }
 
 function uniqueSlug(db: AppDatabase, tableName: "projects" | "tags" | "categories", baseSlug: string): string {
