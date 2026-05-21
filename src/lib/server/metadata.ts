@@ -884,6 +884,56 @@ export function createMetadataRepository(db: AppDatabase) {
       });
     },
 
+    countFilePreviewsByStatus(): Record<FilePreviewStatus, number> {
+      const rows = db
+        .prepare<[], { status: FilePreviewStatus; count: number }>(`
+          select status, count(*) as count
+          from file_previews
+          group by status
+        `)
+        .all();
+
+      const counts: Record<FilePreviewStatus, number> = {
+        pending: 0,
+        ready: 0,
+        failed: 0,
+        skipped: 0
+      };
+
+      for (const row of rows) {
+        if (row.status in counts) {
+          counts[row.status] = row.count;
+        }
+      }
+
+      return counts;
+    },
+
+    lastSuccessfulPreviewAt(): string | null {
+      const row = db
+        .prepare<[], { updated_at: string | null }>(`
+          select max(updated_at) as updated_at
+          from file_previews
+          where status = 'ready'
+        `)
+        .get();
+
+      return row?.updated_at ?? null;
+    },
+
+    resetFailedPreviews(): number {
+      const now = new Date().toISOString();
+      const result = db
+        .prepare<[string]>(`
+          update file_previews
+          set status = 'pending', error = null, updated_at = ?
+          where status = 'failed'
+        `)
+        .run(now);
+
+      return result.changes;
+    },
+
     listTags(): Tag[] {
       return db.prepare<[], TagRow>("select * from tags order by name").all().map(tagFromRow);
     },

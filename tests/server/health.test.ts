@@ -56,6 +56,7 @@ function testConfig(tempRoot: string): AppConfig {
     storageRoot: path.join(tempRoot, "files"),
     dbPath: path.join(tempRoot, "appdata", "nas-cloud.sqlite"),
     publicBasePath: "/files",
-    maxUploadBytes: 2_147_483_648
+    maxUploadBytes: 2_147_483_648,
+    previewScheduler: "off"
   };
 }

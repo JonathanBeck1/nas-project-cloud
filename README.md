@@ -181,27 +181,26 @@ tests/
 
 ## Known limitations
 
-NAS Project Cloud is intentionally LAN-only and unfinished. Things that are stubbed, partial, or deliberately deferred:
+NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbed, partial, or deliberately deferred:
 
 - **Search uses `LIKE`, not FTS.** Good for the typical NAS corpus; an SQLite FTS5 index lands once the test corpus exposes a hot path. Result lists are capped at 200 rows with a banner.
-- **Only image previews are generated.** Video, document, and CAD previews are enqueued and marked `skipped`.
-- **Upload Center shows open sessions only.** Failed and aborted sessions don't surface, and the UI doesn't auto-resume after a refresh.
+- **Previews: image only today.** Video and document previews are queued and marked `skipped`. The Settings → Preview pipeline card shows live counts; v0.3 lands video poster frames (via `ffmpeg`) and single-page PDF previews.
+- **Preview worker is opt-in.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on` to run the in-process scheduler, or hit `POST /api/maintenance/previews` from cron. Defaults to off so dev environments don't fight the test runner.
+- **Upload Center shows open sessions only.** Failed and aborted sessions don't surface yet — coming in v0.3. Resume after a stale or failed session needs a desktop helper or explicit drag-back UX and is queued for v0.4.
 - **Project delete leaves files on disk.** The metadata detaches them (project_id becomes null) but the bytes still live under `Projects/<slug>/Inbox/`. Move them via the bulk action bar in the inbox view if you want them out of that folder.
-- **No CSRF token, no login rate limiting, and no auto session refresh.** Fine for a LAN with one user; harden these before exposing the app to the open internet.
-- **Maintenance endpoints (`/api/maintenance/previews`, `/api/maintenance/upload-cleanup`) require a live owner session.** A token-protected variant for cron is on the roadmap.
-- **Direct (`POST /api/files`) uploads buffer into memory.** Use the chunked path for anything large; that's what the dropzone does automatically over 64 MiB.
+- **No share / temp-link surface.** Files are owner-only. Sharing requires the `nas_cloud_session` cookie or a paired device.
 
 A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers/plans/2026-05-03-product-completion-sprint.md`](./docs/superpowers/plans/2026-05-03-product-completion-sprint.md).
 
 ## Roadmap
 
-Near-term, in priority order:
+`v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). Near-term, in priority order:
 
-1. **CSRF + login rate limiting + session sliding expiration + last-seen tracking** as a hardening pass before any reverse-proxied deployment.
-2. **Token-protected maintenance endpoints** plus an optional preview-worker sidecar so previews keep up after large drops.
-3. **Upload Center expansion**: failed/aborted history, auto-resume after refresh, retry, per-device filtering.
-4. **Move-files-back-on-project-delete** so the storage tree never has orphan project folders.
-5. **Video poster frames** (validate `ffmpeg` first) and a CAD preview strategy decision.
+1. **`v0.3` preview pipeline.** In-process preview scheduler with a Settings status card *(in flight)*, video poster frames via `ffmpeg`, single-page PDF previews via `pdfjs-dist`, and Upload Center tabs that surface failed and aborted sessions. See [`docs/superpowers/plans/2026-05-20-v0.3-preview-pipeline-sprint.md`](./docs/superpowers/plans/2026-05-20-v0.3-preview-pipeline-sprint.md).
+2. **Upload resume.** Either a desktop helper that retains the file handle or an explicit drag-back UX. Queued for `v0.4`.
+3. **Move-files-back-on-project-delete** so the storage tree never has orphan project folders.
+4. **CAD preview strategy decision** (STL/STEP) and a renderer-choice spike.
+5. **Bulk download / zip stream**, **file rename in UI**, and **share / temp-link surface**.
 6. **SQLite FTS5 migration** once the corpus exposes a hot path on the `LIKE`-backed search.
 7. **Benchmark checklist** for 1 GiB and 5 GiB transfers over 2.5 Gb LAN, recorded in the deployment guide.
 8. **Desktop helpers** (Tauri tray + clipboard sync + watch-folder ingest) once the web product is solid.

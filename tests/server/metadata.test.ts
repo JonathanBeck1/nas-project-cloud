@@ -455,6 +455,86 @@ describe("metadata repository", () => {
     }
   });
 
+  it("counts file previews by status, tracks last successful preview, and resets failed rows", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+
+      expect(repo.countFilePreviewsByStatus()).toEqual({ pending: 0, ready: 0, failed: 0, skipped: 0 });
+      expect(repo.lastSuccessfulPreviewAt()).toBeNull();
+      expect(repo.resetFailedPreviews()).toBe(0);
+
+      const fileA = repo.createFile({
+        name: "a.png",
+        extension: "png",
+        family: "image",
+        mimeType: "image/png",
+        sizeBytes: 10,
+        checksum: "a",
+        storagePath: "Inbox/Browser/a.png",
+        sourceDevice: "Browser"
+      });
+      const fileB = repo.createFile({
+        name: "b.png",
+        extension: "png",
+        family: "image",
+        mimeType: "image/png",
+        sizeBytes: 11,
+        checksum: "b",
+        storagePath: "Inbox/Browser/b.png",
+        sourceDevice: "Browser"
+      });
+      const fileC = repo.createFile({
+        name: "c.mov",
+        extension: "mov",
+        family: "video",
+        mimeType: "video/quicktime",
+        sizeBytes: 12,
+        checksum: "c",
+        storagePath: "Inbox/Browser/c.mov",
+        sourceDevice: "Browser"
+      });
+      const fileD = repo.createFile({
+        name: "d.docx",
+        extension: "docx",
+        family: "document",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 13,
+        checksum: "d",
+        storagePath: "Inbox/Browser/d.docx",
+        sourceDevice: "Browser"
+      });
+
+      repo.upsertFilePreview({ fileId: fileA.id, kind: "image", status: "pending" });
+      const ready = repo.upsertFilePreview({
+        fileId: fileB.id,
+        kind: "image",
+        status: "ready",
+        previewPath: ".previews/images/b.webp",
+        width: 320,
+        height: 180
+      }) as { updatedAt: string };
+      repo.upsertFilePreview({ fileId: fileC.id, kind: "video", status: "failed", error: "ffmpeg crash" });
+      repo.upsertFilePreview({ fileId: fileD.id, kind: "document", status: "skipped" });
+
+      expect(repo.countFilePreviewsByStatus()).toEqual({ pending: 1, ready: 1, failed: 1, skipped: 1 });
+      expect(repo.lastSuccessfulPreviewAt()).toBe(ready.updatedAt);
+
+      const reset = repo.resetFailedPreviews();
+      expect(reset).toBe(1);
+      expect(repo.countFilePreviewsByStatus()).toEqual({ pending: 2, ready: 1, failed: 0, skipped: 1 });
+
+      const requeued = repo.getFilePreview(fileC.id, "video");
+      expect(requeued?.status).toBe("pending");
+      expect(requeued?.error).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
   it("skips file updates when expected storage path or status no longer matches", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
     createdDirs.push(dir);

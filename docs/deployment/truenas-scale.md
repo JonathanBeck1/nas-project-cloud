@@ -160,6 +160,8 @@ POST /api/maintenance/previews        # process pending preview jobs
 POST /api/maintenance/upload-cleanup  # delete abandoned upload sessions older than 24h
 ```
 
+> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process preview loop that ticks every 60 seconds while there is pending work and idles to every 5 minutes when the queue is empty. The cron approach below still works either way and is the safe choice if you run multiple replicas.
+
 Both routes accept either:
 
 - a logged-in owner session cookie (so you can hit them from a browser tab while testing), **or**
