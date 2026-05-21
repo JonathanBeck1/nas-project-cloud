@@ -462,7 +462,13 @@ describe("metadata repository", () => {
     try {
       const repo = createMetadataRepository(db);
 
-      expect(repo.countFilePreviewsByStatus()).toEqual({ pending: 0, ready: 0, failed: 0, skipped: 0 });
+      expect(repo.countFilePreviewsByStatus()).toEqual({
+        pending: 0,
+        ready: 0,
+        failed: 0,
+        skipped: 0,
+        unsupported: 0
+      });
       expect(repo.lastSuccessfulPreviewAt()).toBeNull();
       expect(repo.resetFailedPreviews()).toBe(0);
 
@@ -520,12 +526,24 @@ describe("metadata repository", () => {
       repo.upsertFilePreview({ fileId: fileC.id, kind: "video", status: "failed", error: "ffmpeg crash" });
       repo.upsertFilePreview({ fileId: fileD.id, kind: "document", status: "skipped" });
 
-      expect(repo.countFilePreviewsByStatus()).toEqual({ pending: 1, ready: 1, failed: 1, skipped: 1 });
+      expect(repo.countFilePreviewsByStatus()).toEqual({
+        pending: 1,
+        ready: 1,
+        failed: 1,
+        skipped: 1,
+        unsupported: 0
+      });
       expect(repo.lastSuccessfulPreviewAt()).toBe(ready.updatedAt);
 
       const reset = repo.resetFailedPreviews();
       expect(reset).toBe(1);
-      expect(repo.countFilePreviewsByStatus()).toEqual({ pending: 2, ready: 1, failed: 0, skipped: 1 });
+      expect(repo.countFilePreviewsByStatus()).toEqual({
+        pending: 2,
+        ready: 1,
+        failed: 0,
+        skipped: 1,
+        unsupported: 0
+      });
 
       const requeued = repo.getFilePreview(fileC.id, "video");
       expect(requeued?.status).toBe("pending");

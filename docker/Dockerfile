@@ -27,7 +27,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
-RUN addgroup -S -g 1001 nodejs \
+# ffmpeg powers the v0.3 video poster-frame extractor. The probe in
+# src/lib/server/previews/ffmpeg.ts caches availability at boot, so a
+# missing binary degrades cleanly to status: "unsupported".
+RUN apk add --no-cache ffmpeg \
+  && addgroup -S -g 1001 nodejs \
   && adduser -S -u 1001 nextjs -G nodejs \
   && mkdir -p /data /mnt/nas-cloud \
   && chown -R nextjs:nodejs /data /mnt/nas-cloud

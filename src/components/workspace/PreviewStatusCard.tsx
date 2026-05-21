@@ -9,16 +9,20 @@ const POLL_INTERVAL_MS = 5_000;
 
 type Counts = Record<FilePreviewStatus, number>;
 
+type FfmpegStatus = { available: boolean; version: string | null };
+
 type StatusResponse = {
   counts: Counts;
   lastReadyAt: string | null;
+  ffmpeg?: FfmpegStatus;
 };
 
-const ZERO_COUNTS: Counts = { pending: 0, ready: 0, failed: 0, skipped: 0 };
+const ZERO_COUNTS: Counts = { pending: 0, ready: 0, failed: 0, skipped: 0, unsupported: 0 };
 
 export function PreviewStatusCard() {
   const [counts, setCounts] = useState<Counts>(ZERO_COUNTS);
   const [lastReadyAt, setLastReadyAt] = useState<string | null>(null);
+  const [ffmpeg, setFfmpeg] = useState<FfmpegStatus | null>(null);
   const [error, setError] = useState("");
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [reprocessMessage, setReprocessMessage] = useState("");
@@ -37,6 +41,7 @@ export function PreviewStatusCard() {
       if (!isMountedRef.current) return;
       setCounts({ ...ZERO_COUNTS, ...json.counts });
       setLastReadyAt(json.lastReadyAt);
+      setFfmpeg(json.ffmpeg ?? null);
       setError("");
     } catch (loadError) {
       if (!isMountedRef.current) return;
@@ -115,7 +120,7 @@ export function PreviewStatusCard() {
     }
   }
 
-  const total = counts.pending + counts.ready + counts.failed + counts.skipped;
+  const total = counts.pending + counts.ready + counts.failed + counts.skipped + counts.unsupported;
 
   return (
     <section
@@ -135,13 +140,26 @@ export function PreviewStatusCard() {
             this tab is visible.
           </p>
         </div>
+        {ffmpeg ? (
+          <span
+            className={
+              ffmpeg.available
+                ? "shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+                : "shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
+            }
+            title={ffmpeg.available && ffmpeg.version ? `ffmpeg ${ffmpeg.version}` : undefined}
+          >
+            {ffmpeg.available ? "ffmpeg ready" : "ffmpeg unavailable"}
+          </span>
+        ) : null}
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Counter label="Ready" value={counts.ready} tone="ready" />
         <Counter label="Pending" value={counts.pending} tone="pending" />
         <Counter label="Failed" value={counts.failed} tone="failed" />
         <Counter label="Skipped" value={counts.skipped} tone="muted" />
+        <Counter label="Unsupported" value={counts.unsupported} tone="muted" />
       </dl>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">

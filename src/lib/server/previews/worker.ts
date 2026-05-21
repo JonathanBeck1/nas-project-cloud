@@ -1,10 +1,14 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { nanoid } from "nanoid";
 import sharp from "sharp";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
 import type { FilePreview, PreviewJob } from "@/lib/shared/types";
+import { probeFfmpeg } from "./ffmpeg";
+import { generateVideoPoster } from "./video";
 
 type PreviewRepo = {
   listPendingPreviewJobs?: (limit?: number) => PreviewJob[];
@@ -43,7 +47,7 @@ export type PreviewWorkerResult = {
 };
 
 export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJobInput): Promise<void> {
-  if (job.file.family !== "image") {
+  if (job.file.family !== "image" && job.file.family !== "video") {
     repo.upsertFilePreview({
       fileId: job.file.id,
       kind: job.preview.kind,
@@ -69,7 +73,12 @@ export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJo
     return;
   }
 
-  await generateImageThumbnail({ job, repo, storage, absolutePath });
+  if (job.file.family === "image") {
+    await generateImageThumbnail({ job, repo, storage, absolutePath });
+    return;
+  }
+
+  await generateVideoPosterFrame({ job, repo, storage, absolutePath });
 }
 
 async function generateImageThumbnail({
@@ -105,6 +114,63 @@ async function generateImageThumbnail({
       status: "failed",
       error: error instanceof Error ? error.message : "image thumbnail generation failed"
     });
+  }
+}
+
+async function generateVideoPosterFrame({
+  job,
+  repo,
+  storage,
+  absolutePath
+}: ProcessPreviewJobInput & { absolutePath: string }) {
+  const probe = await probeFfmpeg();
+  if (!probe.available) {
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "unsupported",
+      error: probe.error ?? "ffmpeg binary not available"
+    });
+    return;
+  }
+
+  const previewPath = path.posix.join(".previews", "images", `${job.file.id}.webp`);
+  const absolutePreviewPath = storage.absolutePathFor(previewPath);
+  const tempFramePath = path.join(os.tmpdir(), `nas-cloud-poster-${job.file.id}-${nanoid(6)}.jpg`);
+
+  await fs.mkdir(path.dirname(absolutePreviewPath), { recursive: true });
+
+  try {
+    const poster = await generateVideoPoster({
+      absolutePath,
+      outputJpegPath: tempFramePath
+    });
+
+    const info = await sharp(tempFramePath)
+      .rotate()
+      .resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toFile(absolutePreviewPath);
+
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "ready",
+      previewPath,
+      width: info.width,
+      height: info.height,
+      durationSeconds: poster.durationSeconds,
+      error: null
+    });
+  } catch (error) {
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "failed",
+      error: error instanceof Error ? error.message : "video poster generation failed"
+    });
+  } finally {
+    await fs.unlink(tempFramePath).catch(() => undefined);
   }
 }
 

@@ -14,7 +14,7 @@ export type UploadSessionStatus = "open" | "completed" | "failed" | "aborted";
 
 export type FilePreviewKind = "image" | "video" | "document" | "other";
 
-export type FilePreviewStatus = "pending" | "ready" | "failed" | "skipped";
+export type FilePreviewStatus = "pending" | "ready" | "failed" | "skipped" | "unsupported";
 
 export type Category = {
   id: string;

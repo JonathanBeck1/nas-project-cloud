@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   countFilePreviewsByStatus: vi.fn(),
   lastSuccessfulPreviewAt: vi.fn(),
   getDatabase: vi.fn().mockReturnValue({}),
-  createMetadataRepository: vi.fn()
+  createMetadataRepository: vi.fn(),
+  probeFfmpeg: vi.fn()
 }));
 
 vi.mock("@/lib/server/auth/guards", () => ({ requireApiSession: mocks.requireApiSession }));
@@ -13,6 +14,7 @@ vi.mock("@/lib/server/db", () => ({ getDatabase: mocks.getDatabase }));
 vi.mock("@/lib/server/metadata", () => ({
   createMetadataRepository: mocks.createMetadataRepository
 }));
+vi.mock("@/lib/server/previews/ffmpeg", () => ({ probeFfmpeg: mocks.probeFfmpeg }));
 
 describe("preview status API", () => {
   beforeEach(() => {
@@ -23,24 +25,42 @@ describe("preview status API", () => {
       sessionId: "session_1",
       deviceId: "device_1"
     });
-    mocks.countFilePreviewsByStatus.mockReturnValue({ pending: 4, ready: 12, failed: 1, skipped: 7 });
+    mocks.countFilePreviewsByStatus.mockReturnValue({
+      pending: 4,
+      ready: 12,
+      failed: 1,
+      skipped: 7,
+      unsupported: 0
+    });
     mocks.lastSuccessfulPreviewAt.mockReturnValue("2026-05-20T12:34:56.000Z");
     mocks.createMetadataRepository.mockReturnValue({
       countFilePreviewsByStatus: mocks.countFilePreviewsByStatus,
       lastSuccessfulPreviewAt: mocks.lastSuccessfulPreviewAt
     });
+    mocks.probeFfmpeg.mockResolvedValue({ available: true, version: "6.0" });
   });
 
-  it("returns counts and the last ready timestamp for an authenticated session", async () => {
+  it("returns counts, last ready timestamp, and ffmpeg availability for an authenticated session", async () => {
     const { GET } = await import("@/app/api/maintenance/previews/status/route");
 
     const response = await GET(new Request("http://localhost/api/maintenance/previews/status"));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      counts: { pending: 4, ready: 12, failed: 1, skipped: 7 },
-      lastReadyAt: "2026-05-20T12:34:56.000Z"
+      counts: { pending: 4, ready: 12, failed: 1, skipped: 7, unsupported: 0 },
+      lastReadyAt: "2026-05-20T12:34:56.000Z",
+      ffmpeg: { available: true, version: "6.0" }
     });
+  });
+
+  it("reports ffmpeg.available=false when the probe fails", async () => {
+    mocks.probeFfmpeg.mockResolvedValue({ available: false, error: "ENOENT" });
+    const { GET } = await import("@/app/api/maintenance/previews/status/route");
+
+    const response = await GET(new Request("http://localhost/api/maintenance/previews/status"));
+    const body = (await response.json()) as { ffmpeg: { available: boolean; version: string | null } };
+
+    expect(body.ffmpeg).toEqual({ available: false, version: null });
   });
 
   it("requires an authenticated session", async () => {
