@@ -1,6 +1,7 @@
 import React from "react";
 import { Settings } from "lucide-react";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
+import { DeviceLabelEditor } from "@/components/workspace/DeviceLabelEditor";
 import { appConfig } from "@/lib/server/config";
 import { requirePageSession } from "@/lib/server/pageSession";
 import { formatBytes } from "@/components/workspace/FileGrid";
@@ -44,6 +45,8 @@ export default async function SettingsPage() {
             </div>
           ))}
         </dl>
+
+        <DeviceLabelEditor />
       </div>
     </WorkspaceFrame>
   );

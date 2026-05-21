@@ -16,7 +16,7 @@ Tools like Nextcloud and OpenCloud are general-purpose. Tools like LocalSend are
 
 ## Features
 
-- **Project-first workspace** — Inbox, projects (with rename, status, delete), custom categories with color, taggable files, smart views, archive, and a 6-digit-code device pairing flow.
+- **Project-first workspace** — Inbox, projects (with rename, status, delete), custom categories with color, taggable files, server-side search with composable filters, grid + list views, mobile sidebar drawer, dark mode, smart views, archive, and a 6-digit-code device pairing flow.
 - **Direct filesystem storage** — files live as real files under `Inbox/`, `Projects/<slug>/Inbox/`, `Library/`, and `Archive/<year>/<month>/`. SMB and Finder still work.
 - **SQLite metadata** — fast, single-file, journal-mode WAL. Indexed on project, category, family, and uploaded_at.
 - **Resumable large uploads** — chunked sessions with 8 MiB chunks, offset checking, abort, and stale-session cleanup. Default upload cap 2 GiB.
@@ -183,14 +183,13 @@ tests/
 
 NAS Project Cloud is intentionally LAN-only and unfinished. Things that are stubbed, partial, or deliberately deferred:
 
-- **Search is client-side only.** The workspace filters loaded files in the browser. There is no SQLite-FTS index yet.
+- **Search uses `LIKE`, not FTS.** Good for the typical NAS corpus; an SQLite FTS5 index lands once the test corpus exposes a hot path. Result lists are capped at 200 rows with a banner.
 - **Only image previews are generated.** Video, document, and CAD previews are enqueued and marked `skipped`.
 - **Upload Center shows open sessions only.** Failed and aborted sessions don't surface, and the UI doesn't auto-resume after a refresh.
 - **Project delete leaves files on disk.** The metadata detaches them (project_id becomes null) but the bytes still live under `Projects/<slug>/Inbox/`. Move them via the bulk action bar in the inbox view if you want them out of that folder.
 - **No CSRF token, no login rate limiting, and no auto session refresh.** Fine for a LAN with one user; harden these before exposing the app to the open internet.
 - **Maintenance endpoints (`/api/maintenance/previews`, `/api/maintenance/upload-cleanup`) require a live owner session.** A token-protected variant for cron is on the roadmap.
 - **Direct (`POST /api/files`) uploads buffer into memory.** Use the chunked path for anything large; that's what the dropzone does automatically over 64 MiB.
-- **List view, dark mode, mobile sidebar, and per-device source detection** are not implemented yet.
 
 A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers/plans/2026-05-03-product-completion-sprint.md`](./docs/superpowers/plans/2026-05-03-product-completion-sprint.md).
 
@@ -198,16 +197,14 @@ A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers
 
 Near-term, in priority order:
 
-1. **Server-side search** with `LIKE` first and SQLite FTS5 once the corpus exceeds it.
-2. **CSRF + login rate limiting + session sliding expiration + last-seen tracking** as a hardening pass before any reverse-proxied deployment.
-3. **Token-protected maintenance endpoints** plus an optional preview-worker sidecar so previews keep up after large drops.
-4. **Mobile sidebar + list-view mode + dark mode**.
-5. **Per-device source detection** so the `from-windows` and `from-mac` smart views actually fill.
-6. **Upload Center expansion**: failed/aborted history, auto-resume after refresh, retry, per-device filtering.
-7. **Move-files-back-on-project-delete** so the storage tree never has orphan project folders.
-8. **Video poster frames** (validate `ffmpeg` first) and a CAD preview strategy decision.
-9. **Benchmark checklist** for 1 GiB and 5 GiB transfers over 2.5 Gb LAN, recorded in the deployment guide.
-10. **Desktop helpers** (Tauri tray + clipboard sync + watch-folder ingest) once the web product is solid.
+1. **CSRF + login rate limiting + session sliding expiration + last-seen tracking** as a hardening pass before any reverse-proxied deployment.
+2. **Token-protected maintenance endpoints** plus an optional preview-worker sidecar so previews keep up after large drops.
+3. **Upload Center expansion**: failed/aborted history, auto-resume after refresh, retry, per-device filtering.
+4. **Move-files-back-on-project-delete** so the storage tree never has orphan project folders.
+5. **Video poster frames** (validate `ffmpeg` first) and a CAD preview strategy decision.
+6. **SQLite FTS5 migration** once the corpus exposes a hot path on the `LIKE`-backed search.
+7. **Benchmark checklist** for 1 GiB and 5 GiB transfers over 2.5 Gb LAN, recorded in the deployment guide.
+8. **Desktop helpers** (Tauri tray + clipboard sync + watch-folder ingest) once the web product is solid.
 
 ## Project history
 

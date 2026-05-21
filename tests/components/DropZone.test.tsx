@@ -1,8 +1,9 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DropZone } from "@/components/workspace/DropZone";
+import { DEVICE_LABEL_STORAGE_KEY } from "@/lib/client/sourceDevice";
 
 describe("DropZone", () => {
   const uploadedFile = {
@@ -22,8 +23,13 @@ describe("DropZone", () => {
     updatedAt: "2026-04-30T12:00:00.000Z"
   };
 
+  beforeEach(() => {
+    window.localStorage.setItem(DEVICE_LABEL_STORAGE_KEY, "Browser");
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+    window.localStorage.clear();
   });
 
   it("uploads dropped files to the inbox with an accessible status", async () => {
