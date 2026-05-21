@@ -156,6 +156,23 @@ type CreateProjectInput = {
   categoryId?: string | null;
 };
 
+type CreateCategoryInput = {
+  name: string;
+  color: string;
+};
+
+type UpdateCategoryInput = {
+  name?: string;
+  color?: string;
+};
+
+export class SystemCategoryError extends Error {
+  constructor(message = "system categories cannot be modified") {
+    super(message);
+    this.name = "SystemCategoryError";
+  }
+}
+
 type CreateFileInput = {
   name: string;
   extension: string;
@@ -368,6 +385,92 @@ export function createMetadataRepository(db: AppDatabase) {
         .prepare<[], CategoryRow>("select * from categories order by sort_order, name")
         .all()
         .map(categoryFromRow);
+    },
+
+    getCategoryById(id: string): Category | null {
+      const row = db
+        .prepare<[string], CategoryRow>("select * from categories where id = ? limit 1")
+        .get(id);
+      return row ? categoryFromRow(row) : null;
+    },
+
+    getCategoryBySlug(slug: string): Category | null {
+      const row = db
+        .prepare<[string], CategoryRow>("select * from categories where slug = ? limit 1")
+        .get(slug);
+      return row ? categoryFromRow(row) : null;
+    },
+
+    createCategory(input: CreateCategoryInput): Category {
+      const next = db
+        .prepare<[], { next_sort: number | null }>("select max(sort_order) as next_sort from categories")
+        .get();
+      const sortOrder = (next?.next_sort ?? 0) + 10;
+      const category = {
+        id: `cat_${nanoid(12)}`,
+        name: input.name,
+        slug: uniqueSlug(db, "categories", slugify(input.name)),
+        color: input.color,
+        isSystem: 0,
+        sortOrder
+      };
+
+      db.prepare(`
+        insert into categories (id, name, slug, color, is_system, sort_order)
+        values (@id, @name, @slug, @color, @isSystem, @sortOrder)
+      `).run(category);
+
+      return {
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+        color: category.color,
+        isSystem: false,
+        sortOrder: category.sortOrder
+      };
+    },
+
+    updateCategory(id: string, input: UpdateCategoryInput): Category | null {
+      const existing = this.getCategoryById(id);
+      if (!existing) {
+        return null;
+      }
+      if (existing.isSystem) {
+        throw new SystemCategoryError();
+      }
+
+      const fields: string[] = [];
+      const params: Record<string, string> = { id };
+
+      if (input.name !== undefined) {
+        fields.push("name = @name");
+        params.name = input.name;
+      }
+      if (input.color !== undefined) {
+        fields.push("color = @color");
+        params.color = input.color;
+      }
+
+      if (fields.length === 0) {
+        return existing;
+      }
+
+      db.prepare(`update categories set ${fields.join(", ")} where id = @id`).run(params);
+      return this.getCategoryById(id);
+    },
+
+    deleteCategory(id: string): boolean {
+      const existing = this.getCategoryById(id);
+      if (!existing) {
+        return false;
+      }
+      if (existing.isSystem) {
+        throw new SystemCategoryError();
+      }
+
+      // files.category_id falls back to null via on-delete-set-null FK.
+      const result = db.prepare<[string]>("delete from categories where id = ?").run(id);
+      return result.changes > 0;
     },
 
     listProjects(): Project[] {
@@ -958,7 +1061,7 @@ export function createMetadataRepository(db: AppDatabase) {
   };
 }
 
-function uniqueSlug(db: AppDatabase, tableName: "projects" | "tags", baseSlug: string): string {
+function uniqueSlug(db: AppDatabase, tableName: "projects" | "tags" | "categories", baseSlug: string): string {
   const exists = db.prepare<[string], { id: string }>(`select id from ${tableName} where slug = ? limit 1`);
   let candidate = baseSlug;
   let suffix = 2;

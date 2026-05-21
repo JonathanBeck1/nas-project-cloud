@@ -188,6 +188,62 @@ describe("metadata repository", () => {
     }
   });
 
+  it("creates, updates, and deletes custom categories while protecting system ones", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+
+      const custom = repo.createCategory({ name: "Reference", color: "#0F62FE" });
+      expect(custom.isSystem).toBe(false);
+      expect(custom.slug).toBe("reference");
+      expect(repo.getCategoryBySlug("reference")?.id).toBe(custom.id);
+
+      const renamed = repo.updateCategory(custom.id, { name: "References", color: "#42BE65" });
+      expect(renamed?.name).toBe("References");
+      expect(renamed?.color).toBe("#42BE65");
+
+      const systemCategory = repo.listCategories().find((category) => category.isSystem);
+      expect(systemCategory).toBeDefined();
+      expect(() => repo.updateCategory(systemCategory!.id, { name: "Renamed" })).toThrow();
+      expect(() => repo.deleteCategory(systemCategory!.id)).toThrow();
+
+      expect(repo.deleteCategory(custom.id)).toBe(true);
+      expect(repo.getCategoryById(custom.id)).toBeNull();
+      expect(repo.deleteCategory(custom.id)).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("clears category_id on files when a custom category is deleted", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const category = repo.createCategory({ name: "Workshop", color: "#FF6F00" });
+      const file = repo.createFile({
+        name: "drill.jpg",
+        extension: "jpg",
+        family: "image",
+        mimeType: "image/jpeg",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/drill.jpg",
+        sourceDevice: "Browser",
+        categoryId: category.id
+      });
+
+      expect(repo.getFileById(file.id)?.categoryId).toBe(category.id);
+      expect(repo.deleteCategory(category.id)).toBe(true);
+      expect(repo.getFileById(file.id)?.categoryId).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
   it("looks up tags by slug and deletes them, cascading file_tags", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
     createdDirs.push(dir);
