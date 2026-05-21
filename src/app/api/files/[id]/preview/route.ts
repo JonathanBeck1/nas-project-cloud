@@ -42,7 +42,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     headers: {
       "content-type": previewMimeType(file.preview.previewPath),
       "content-length": String(size),
-      "cache-control": "private, max-age=3600"
+      "cache-control": "private, max-age=3600",
+      "x-content-type-options": "nosniff",
+      "cross-origin-resource-policy": "same-origin"
     }
   });
 }

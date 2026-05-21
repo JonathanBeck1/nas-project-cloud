@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 import { createStorageService } from "@/lib/server/storage";
 
@@ -292,5 +293,45 @@ describe("storage service", () => {
     expect(() => storage.absolutePathFor(siblingPrefixEscape)).toThrow(
       "Storage path escapes configured root"
     );
+  });
+
+  it("streamUpload pipes the body to a temp file and moves it into the target", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(root);
+    const storage = createStorageService(root);
+
+    const stored = await storage.streamUpload({
+      target: { kind: "inbox", sourceDevice: "Windows-PC" },
+      filename: "stream.bin",
+      mimeType: "application/octet-stream",
+      body: Readable.from(Buffer.from("hello stream")),
+      maxBytes: 1024
+    });
+
+    expect(stored.relativePath).toBe("Inbox/Windows-PC/stream.bin");
+    expect(stored.sizeBytes).toBe(12);
+    expect(stored.checksum).toMatch(/^[a-f0-9]{64}$/);
+    expect(fs.readFileSync(path.join(root, stored.relativePath), "utf8")).toBe("hello stream");
+    expect(fs.existsSync(path.join(root, ".uploads"))).toBe(true);
+    expect(fs.readdirSync(path.join(root, ".uploads"))).toHaveLength(0);
+  });
+
+  it("streamUpload aborts and cleans up when the body exceeds maxBytes", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(root);
+    const storage = createStorageService(root);
+
+    await expect(
+      storage.streamUpload({
+        target: { kind: "inbox", sourceDevice: "Windows-PC" },
+        filename: "too-big.bin",
+        mimeType: "application/octet-stream",
+        body: Readable.from(Buffer.from("0123456789")),
+        maxBytes: 5
+      })
+    ).rejects.toThrow("upload exceeds size limit");
+
+    expect(fs.readdirSync(path.join(root, ".uploads"))).toHaveLength(0);
+    expect(fs.existsSync(path.join(root, "Inbox", "Windows-PC", "too-big.bin"))).toBe(false);
   });
 });

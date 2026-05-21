@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
   };
   const storage = {
     writeUpload: vi.fn(),
+    streamUpload: vi.fn(),
     absolutePathFor: vi.fn(),
     moveToProject: vi.fn(),
     archiveFile: vi.fn(),
@@ -41,7 +42,8 @@ const mocks = vi.hoisted(() => {
 const createdDirs: string[] = [];
 
 vi.mock("@/lib/server/config", () => ({
-  appConfig: mocks.appConfig
+  appConfig: mocks.appConfig,
+  getAppConfig: () => mocks.appConfig
 }));
 
 vi.mock("@/lib/server/db", () => ({
@@ -96,7 +98,7 @@ describe("files API module", () => {
       ...input
     }));
     mocks.repo.updateFile.mockReturnValue(null);
-    mocks.storage.writeUpload.mockResolvedValue({
+    mocks.storage.streamUpload.mockResolvedValue({
       absolutePath: "/storage/Inbox/Mac/part.stl",
       relativePath: "Inbox/Mac/part.stl",
       sizeBytes: 5,
@@ -156,7 +158,7 @@ describe("files API module", () => {
       extension: "png",
       family: "image" as FileFamily
     });
-    mocks.storage.writeUpload.mockResolvedValue({
+    mocks.storage.streamUpload.mockResolvedValue({
       absolutePath: "/storage/Inbox/Mac/render.png",
       relativePath: "Inbox/Mac/render.png",
       sizeBytes: 5,
@@ -164,13 +166,12 @@ describe("files API module", () => {
       mimeType: "image/png"
     });
 
-    const bytes = Buffer.from("image");
-    const file = new File(["image"], "render.png", { type: "image/png" });
-    Object.defineProperty(file, "arrayBuffer", {
-      value: vi.fn(async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
-    });
-
-    const response = await POST(formRequest({ file, sourceDevice: "Mac" }));
+    const response = await POST(uploadRequest({
+      filename: "render.png",
+      sourceDevice: "Mac",
+      mimeType: "image/png",
+      body: "image"
+    }));
 
     expect(response.status).toBe(201);
     expect(mocks.repo.upsertFilePreview).toHaveBeenCalledWith({
@@ -906,6 +907,9 @@ describe("files API module", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/pdf");
     expect(response.headers.get("content-disposition")).toContain('filename="manual.pdf"');
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+    expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; sandbox");
     expect(mocks.storage.absolutePathFor).toHaveBeenCalledWith("Inbox/Browser/manual.pdf");
     await expect(response.text()).resolves.toBe("manual");
   });
@@ -937,6 +941,9 @@ describe("files API module", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/webp");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+    expect(response.headers.get("cache-control")).toBe("private, max-age=3600");
     await expect(response.text()).resolves.toBe("preview");
   });
 
@@ -1100,75 +1107,46 @@ describe("files API module", () => {
     await expect(response.json()).resolves.toEqual({ error: "file not found" });
   });
 
-  it("returns 400 when POST is missing a file", async () => {
-    const { POST } = await import("@/app/api/files/route");
-
-    const response = await POST(formRequest({ sourceDevice: "Mac" }));
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "file is required" });
-    expect(mocks.storage.writeUpload).not.toHaveBeenCalled();
-    expect(mocks.repo.createFile).not.toHaveBeenCalled();
-  });
-
-  it("rejects oversized Content-Length before parsing the body", async () => {
+  it("rejects oversized Content-Length before reading the body", async () => {
     const { POST } = await import("@/app/api/files/route");
 
     const response = await POST(
-      new Request("http://localhost/api/files", {
+      new Request("http://localhost/api/files?filename=big.bin&sourceDevice=Mac", {
         method: "POST",
         headers: {
           "content-length": "11",
-          "content-type": "multipart/form-data; boundary=broken"
+          "content-type": "application/octet-stream"
         },
-        body: "this is not valid multipart data"
+        body: "this body is irrelevant"
       })
     );
 
     expect(response.status).toBe(413);
     await expect(response.json()).resolves.toEqual({ error: "file exceeds upload size limit" });
-    expect(mocks.storage.writeUpload).not.toHaveBeenCalled();
-    expect(mocks.repo.createFile).not.toHaveBeenCalled();
-  });
-
-  it("returns 400 when form data cannot be parsed", async () => {
-    const { POST } = await import("@/app/api/files/route");
-
-    const response = await POST(
-      new Request("http://localhost/api/files", {
-        method: "POST",
-        headers: {
-          "content-length": "9",
-          "content-type": "multipart/form-data; boundary=broken"
-        },
-        body: "not-valid"
-      })
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "invalid form data" });
-    expect(mocks.storage.writeUpload).not.toHaveBeenCalled();
+    expect(mocks.storage.streamUpload).not.toHaveBeenCalled();
     expect(mocks.repo.createFile).not.toHaveBeenCalled();
   });
 
   it("stores inbox uploads under the source device and records inbox metadata", async () => {
     const { POST } = await import("@/app/api/files/route");
 
-    const response = await POST(
-      formRequest({
-        file: uploadFile("hello"),
-        sourceDevice: "Mac",
-        categoryId: "cat_cad"
-      })
-    );
+    const response = await POST(uploadRequest({
+      filename: "part.stl",
+      sourceDevice: "Mac",
+      categoryId: "cat_cad",
+      mimeType: "model/stl",
+      body: "hello"
+    }));
 
     expect(response.status).toBe(201);
-    expect(mocks.storage.writeUpload).toHaveBeenCalledWith({
-      target: { kind: "inbox", sourceDevice: "Mac" },
-      filename: "part.stl",
-      mimeType: "model/stl",
-      bytes: Buffer.from("hello")
-    });
+    expect(mocks.storage.streamUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "inbox", sourceDevice: "Mac" },
+        filename: "part.stl",
+        mimeType: "model/stl",
+        maxBytes: mocks.appConfig.maxUploadBytes
+      })
+    );
     expect(mocks.repo.createFile).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "part.stl",
@@ -1187,7 +1165,7 @@ describe("files API module", () => {
       slug: "garage-build",
       name: "Garage Build"
     });
-    mocks.storage.writeUpload.mockResolvedValue({
+    mocks.storage.streamUpload.mockResolvedValue({
       absolutePath: "/storage/Projects/garage-build/Inbox/part.stl",
       relativePath: "Projects/garage-build/Inbox/part.stl",
       sizeBytes: 5,
@@ -1195,22 +1173,23 @@ describe("files API module", () => {
       mimeType: "model/stl"
     });
 
-    const response = await POST(
-      formRequest({
-        file: uploadFile("hello"),
-        sourceDevice: "Mac",
-        projectId: "proj_1",
-        projectSlug: "garage-build"
-      })
-    );
+    const response = await POST(uploadRequest({
+      filename: "part.stl",
+      sourceDevice: "Mac",
+      mimeType: "model/stl",
+      body: "hello",
+      projectId: "proj_1",
+      projectSlug: "garage-build"
+    }));
 
     expect(response.status).toBe(201);
-    expect(mocks.storage.writeUpload).toHaveBeenCalledWith({
-      target: { kind: "project", projectSlug: "garage-build" },
-      filename: "part.stl",
-      mimeType: "model/stl",
-      bytes: Buffer.from("hello")
-    });
+    expect(mocks.storage.streamUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "project", projectSlug: "garage-build" },
+        filename: "part.stl",
+        mimeType: "model/stl"
+      })
+    );
     expect(mocks.repo.createFile).toHaveBeenCalledWith(
       expect.objectContaining({
         projectId: "proj_1",
@@ -1223,21 +1202,19 @@ describe("files API module", () => {
   it("rejects project uploads for a missing project before writing storage", async () => {
     const { POST } = await import("@/app/api/files/route");
     mocks.repo.getProjectById.mockReturnValue(null);
-    const file = uploadFile("hello");
 
-    const response = await POST(
-      formRequest({
-        file,
-        sourceDevice: "Mac",
-        projectId: "proj_missing",
-        projectSlug: "garage-build"
-      })
-    );
+    const response = await POST(uploadRequest({
+      filename: "part.stl",
+      sourceDevice: "Mac",
+      mimeType: "model/stl",
+      body: "hello",
+      projectId: "proj_missing",
+      projectSlug: "garage-build"
+    }));
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({ error: "project not found" });
-    expect(file.arrayBuffer).not.toHaveBeenCalled();
-    expect(mocks.storage.writeUpload).not.toHaveBeenCalled();
+    expect(mocks.storage.streamUpload).not.toHaveBeenCalled();
     expect(mocks.repo.createFile).not.toHaveBeenCalled();
   });
 
@@ -1248,41 +1225,53 @@ describe("files API module", () => {
       slug: "real-project",
       name: "Real Project"
     });
-    const file = uploadFile("hello");
 
-    const response = await POST(
-      formRequest({
-        file,
-        sourceDevice: "Mac",
-        projectId: "proj_1",
-        projectSlug: "wrong-project"
-      })
-    );
+    const response = await POST(uploadRequest({
+      filename: "part.stl",
+      sourceDevice: "Mac",
+      mimeType: "model/stl",
+      body: "hello",
+      projectId: "proj_1",
+      projectSlug: "wrong-project"
+    }));
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "project slug mismatch" });
-    expect(file.arrayBuffer).not.toHaveBeenCalled();
-    expect(mocks.storage.writeUpload).not.toHaveBeenCalled();
+    expect(mocks.storage.streamUpload).not.toHaveBeenCalled();
     expect(mocks.repo.createFile).not.toHaveBeenCalled();
   });
 
   it("rejects uploads for missing categories before writing storage", async () => {
     const { POST } = await import("@/app/api/files/route");
     mocks.repo.listCategories.mockReturnValue([{ id: "cat_cad", name: "CAD", slug: "cad" }]);
-    const file = uploadFile("hello");
 
-    const response = await POST(
-      formRequest({
-        file,
-        sourceDevice: "Mac",
-        categoryId: "cat_missing"
-      })
-    );
+    const response = await POST(uploadRequest({
+      filename: "part.stl",
+      sourceDevice: "Mac",
+      mimeType: "model/stl",
+      body: "hello",
+      categoryId: "cat_missing"
+    }));
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({ error: "category not found" });
-    expect(file.arrayBuffer).not.toHaveBeenCalled();
-    expect(mocks.storage.writeUpload).not.toHaveBeenCalled();
+    expect(mocks.storage.streamUpload).not.toHaveBeenCalled();
+    expect(mocks.repo.createFile).not.toHaveBeenCalled();
+  });
+
+  it("returns 413 when streamUpload rejects with the size-cap error", async () => {
+    const { POST } = await import("@/app/api/files/route");
+    mocks.storage.streamUpload.mockRejectedValue(new Error("upload exceeds size limit"));
+
+    const response = await POST(uploadRequest({
+      filename: "part.stl",
+      sourceDevice: "Mac",
+      mimeType: "model/stl",
+      body: "hello"
+    }));
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toEqual({ error: "file exceeds upload size limit" });
     expect(mocks.repo.createFile).not.toHaveBeenCalled();
   });
 
@@ -1292,12 +1281,12 @@ describe("files API module", () => {
       throw new Error("database unavailable");
     });
 
-    const response = await POST(
-      formRequest({
-        file: uploadFile("hello"),
-        sourceDevice: "Mac"
-      })
-    );
+    const response = await POST(uploadRequest({
+      filename: "part.stl",
+      sourceDevice: "Mac",
+      mimeType: "model/stl",
+      body: "hello"
+    }));
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: "file metadata create failed" });
@@ -1311,12 +1300,12 @@ describe("files API module", () => {
     });
     mocks.storage.deleteFile.mockRejectedValue(new Error("cleanup failed"));
 
-    const response = await POST(
-      formRequest({
-        file: uploadFile("hello"),
-        sourceDevice: "Mac"
-      })
-    );
+    const response = await POST(uploadRequest({
+      filename: "part.stl",
+      sourceDevice: "Mac",
+      mimeType: "model/stl",
+      body: "hello"
+    }));
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: "file operation requires manual repair" });
@@ -1328,55 +1317,45 @@ describe("files API module", () => {
   ])("rejects project uploads with only %s", async (_label, fields) => {
     const { POST } = await import("@/app/api/files/route");
 
-    const response = await POST(
-      formRequest({
-        file: uploadFile("hello"),
-        sourceDevice: "Mac",
-        ...fields
-      })
-    );
+    const response = await POST(uploadRequest({
+      filename: "part.stl",
+      sourceDevice: "Mac",
+      mimeType: "model/stl",
+      body: "hello",
+      ...fields
+    }));
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: "projectId and projectSlug must be provided together"
     });
-    expect(mocks.storage.writeUpload).not.toHaveBeenCalled();
+    expect(mocks.storage.streamUpload).not.toHaveBeenCalled();
     expect(mocks.repo.createFile).not.toHaveBeenCalled();
   });
 });
 
-function formRequest(fields: {
-  file?: File;
+function uploadRequest(fields: {
+  filename: string;
   sourceDevice?: string;
   projectId?: string;
   projectSlug?: string;
   categoryId?: string;
+  mimeType?: string;
+  body: string;
 }) {
-  const formData = new FormData();
+  const params = new URLSearchParams();
+  params.set("filename", fields.filename);
+  if (fields.sourceDevice !== undefined) params.set("sourceDevice", fields.sourceDevice);
+  if (fields.projectId !== undefined) params.set("projectId", fields.projectId);
+  if (fields.projectSlug !== undefined) params.set("projectSlug", fields.projectSlug);
+  if (fields.categoryId !== undefined) params.set("categoryId", fields.categoryId);
+  if (fields.mimeType !== undefined) params.set("mimeType", fields.mimeType);
 
-  if (fields.file) {
-    formData.set("file", fields.file);
-  }
-
-  for (const field of ["sourceDevice", "projectId", "projectSlug", "categoryId"] as const) {
-    const value = fields[field];
-    if (value !== undefined) {
-      formData.set(field, value);
-    }
-  }
-
-  const request = new Request("http://localhost/api/files", {
-    method: "POST"
+  return new Request(`http://localhost/api/files?${params.toString()}`, {
+    method: "POST",
+    headers: {
+      "content-type": fields.mimeType ?? "application/octet-stream"
+    },
+    body: fields.body
   });
-  vi.spyOn(request, "formData").mockResolvedValue(formData);
-  return request;
-}
-
-function uploadFile(contents: string) {
-  const bytes = Buffer.from(contents);
-  const file = new File([contents], "part.stl", { type: "model/stl" });
-  Object.defineProperty(file, "arrayBuffer", {
-    value: vi.fn(async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
-  });
-  return file;
 }

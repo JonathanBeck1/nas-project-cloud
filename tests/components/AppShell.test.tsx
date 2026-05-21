@@ -99,7 +99,12 @@ describe("AppShell", () => {
       }
     });
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/files", expect.objectContaining({ method: "POST" })));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/api\/files\?/),
+        expect.objectContaining({ method: "POST" })
+      )
+    );
     expect(await screen.findByRole("status")).toHaveTextContent("Uploaded manual.pdf");
     expect(screen.getByText("manual.pdf")).toBeVisible();
   });

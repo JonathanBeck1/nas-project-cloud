@@ -42,7 +42,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     headers: {
       "content-type": safeMimeType(file.mimeType),
       "content-length": String(size),
-      "content-disposition": contentDispositionFor(file.name)
+      "content-disposition": contentDispositionFor(file.name),
+      "x-content-type-options": "nosniff",
+      "cross-origin-resource-policy": "same-origin",
+      "content-security-policy": "default-src 'none'; sandbox"
     }
   });
 }

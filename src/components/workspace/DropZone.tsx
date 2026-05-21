@@ -80,14 +80,19 @@ export function DropZone({
   }
 
   async function uploadSingle(file: File): Promise<CloudFile> {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("sourceDevice", sourceDevice);
+    const params = new URLSearchParams({
+      filename: file.name || "upload.bin",
+      sourceDevice,
+      mimeType: file.type || "application/octet-stream"
+    });
 
-    const response = await fetch("/api/files", {
+    const response = await fetch(`/api/files?${params.toString()}`, {
       method: "POST",
-      headers: { ...csrfHeaders() },
-      body: formData
+      headers: {
+        ...csrfHeaders(),
+        "content-type": file.type || "application/octet-stream"
+      },
+      body: file
     });
 
     if (!response.ok) {
