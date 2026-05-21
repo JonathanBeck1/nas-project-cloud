@@ -1,15 +1,22 @@
 import React from "react";
-import { Tags } from "lucide-react";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
+import { CategoryEditor } from "@/components/workspace/CategoryEditor";
 import { requirePageSession } from "@/lib/server/pageSession";
 
 export const dynamic = "force-dynamic";
 
 export default async function CategoriesPage() {
-  const { repo } = await requirePageSession();
+  const { db, repo } = await requirePageSession();
   const projects = repo.listProjects();
   const categories = repo.listCategories();
-  const files = repo.listFiles();
+
+  const usageRows = db
+    .prepare<[], { category_id: string; file_count: number }>(
+      "select category_id, count(*) as file_count from files where category_id is not null and status = 'active' group by category_id"
+    )
+    .all();
+
+  const usage = usageRows.map((row) => ({ categoryId: row.category_id, fileCount: row.file_count }));
 
   return (
     <WorkspaceFrame projects={projects} activeHref="/categories">
@@ -18,36 +25,13 @@ export default async function CategoriesPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">Organization</p>
           <h1 className="mt-1 text-2xl font-semibold text-ink">Categories</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-            System categories group files by broad workflow: CAD, media, documents, software, personal files, archive, and inbox.
+            Categories group files by broad workflow. The defaults cover the common ones; add custom categories
+            here for anything specific to how you organize files. Deleting a custom category leaves its files
+            uncategorized rather than removing them.
           </p>
         </section>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {categories.map((category) => {
-            const count = files.filter((file) => file.categoryId === category.id).length;
-            return (
-              <section key={category.id} className="rounded-md border border-line bg-panel p-4 shadow-panel">
-                <div className="flex items-start gap-3">
-                  <span
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line text-white"
-                    style={{ backgroundColor: category.color }}
-                  >
-                    <Tags aria-hidden="true" className="h-5 w-5" />
-                  </span>
-                  <div className="min-w-0">
-                    <h2 className="truncate text-base font-semibold text-ink">{category.name}</h2>
-                    <p className="mt-1 text-sm leading-6 text-muted">
-                      {count} {count === 1 ? "file" : "files"}
-                    </p>
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted">
-                      {category.isSystem ? "System category" : "Custom category"}
-                    </p>
-                  </div>
-                </div>
-              </section>
-            );
-          })}
-        </div>
+        <CategoryEditor categories={categories} usage={usage} />
       </div>
     </WorkspaceFrame>
   );

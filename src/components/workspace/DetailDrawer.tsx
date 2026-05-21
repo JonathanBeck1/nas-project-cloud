@@ -1,18 +1,28 @@
-import React from "react";
+import React, { useMemo } from "react";
 import Image from "next/image";
-import { Info } from "lucide-react";
-import type { CloudFile, Project } from "@/lib/shared/types";
+import { Info, X } from "lucide-react";
+import type { CloudFile, Project, Tag } from "@/lib/shared/types";
 import { formatBytes } from "./FileGrid";
 
 type DetailDrawerProps = {
   file: CloudFile | null;
   projects?: Project[];
+  availableTags?: Tag[];
   isBusy?: boolean;
   onArchive?: (file: CloudFile) => void;
   onAssignProject?: (file: CloudFile, projectId: string) => void;
+  onAssignTags?: (file: CloudFile, tagIds: string[]) => void;
 };
 
-export function DetailDrawer({ file, projects = [], isBusy = false, onArchive, onAssignProject }: DetailDrawerProps) {
+export function DetailDrawer({
+  file,
+  projects = [],
+  availableTags = [],
+  isBusy = false,
+  onArchive,
+  onAssignProject,
+  onAssignTags
+}: DetailDrawerProps) {
   if (!file) {
     return (
       <aside className="h-full rounded-md border border-line bg-panel p-4 shadow-panel" aria-label="File details">
@@ -88,6 +98,13 @@ export function DetailDrawer({ file, projects = [], isBusy = false, onArchive, o
         </select>
       </label>
 
+      <TagPicker
+        file={file}
+        availableTags={availableTags}
+        isBusy={isBusy}
+        onAssignTags={onAssignTags}
+      />
+
       <dl className="mt-5 grid grid-cols-1 gap-3 text-sm">
         <DetailRow label="Size" value={formatBytes(file.sizeBytes)} />
         <DetailRow label="Source" value={file.sourceDevice} />
@@ -126,6 +143,88 @@ function DetailRow({ label, value, wrap = false }: { label: string; value: strin
     <div className="min-w-0 rounded-md border border-line bg-surface px-3 py-2">
       <dt className="text-xs font-medium text-muted">{label}</dt>
       <dd className={`mt-1 font-medium text-ink ${wrap ? "break-words" : "truncate"}`}>{value}</dd>
+    </div>
+  );
+}
+
+type TagPickerProps = {
+  file: CloudFile;
+  availableTags: Tag[];
+  isBusy: boolean;
+  onAssignTags?: (file: CloudFile, tagIds: string[]) => void;
+};
+
+function TagPicker({ file, availableTags, isBusy, onAssignTags }: TagPickerProps) {
+  const assignedIds = useMemo(() => new Set((file.tags ?? []).map((tag) => tag.id)), [file.tags]);
+  const unassignedTags = availableTags.filter((tag) => !assignedIds.has(tag.id));
+
+  const removeTag = (tagId: string) => {
+    if (!onAssignTags) return;
+    const next = (file.tags ?? []).filter((tag) => tag.id !== tagId).map((tag) => tag.id);
+    onAssignTags(file, next);
+  };
+
+  const addTag = (tagId: string) => {
+    if (!onAssignTags || !tagId) return;
+    if (assignedIds.has(tagId)) return;
+    const next = [...(file.tags ?? []).map((tag) => tag.id), tagId];
+    onAssignTags(file, next);
+  };
+
+  return (
+    <div className="mt-4">
+      <p className="text-sm font-semibold text-ink">Tags</p>
+      <div className="mt-2 flex flex-wrap gap-1.5" aria-label={`Tags for ${file.name}`}>
+        {(file.tags ?? []).length === 0 ? (
+          <span className="text-xs text-muted">No tags yet.</span>
+        ) : null}
+        {(file.tags ?? []).map((tag) => (
+          <span
+            key={tag.id}
+            className="inline-flex h-7 items-center gap-1 rounded-full border border-line bg-surface px-2.5 text-xs font-medium text-ink"
+          >
+            <span className="truncate" title={tag.slug}>
+              {tag.name}
+            </span>
+            {onAssignTags ? (
+              <button
+                type="button"
+                onClick={() => removeTag(tag.id)}
+                disabled={isBusy}
+                aria-label={`Remove tag ${tag.name}`}
+                className="grid h-4 w-4 place-items-center rounded-full text-muted transition hover:bg-line/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <X aria-hidden="true" className="h-3 w-3" />
+              </button>
+            ) : null}
+          </span>
+        ))}
+      </div>
+      {onAssignTags ? (
+        <select
+          aria-label="Add tag"
+          className="mt-2 h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink disabled:cursor-not-allowed disabled:opacity-60"
+          value=""
+          onChange={(event) => {
+            addTag(event.target.value);
+            event.target.value = "";
+          }}
+          disabled={isBusy || unassignedTags.length === 0}
+        >
+          <option value="">
+            {availableTags.length === 0
+              ? "No tags exist yet"
+              : unassignedTags.length === 0
+                ? "All tags applied"
+                : "Add a tag..."}
+          </option>
+          {unassignedTags.map((tag) => (
+            <option key={tag.id} value={tag.id}>
+              {tag.name}
+            </option>
+          ))}
+        </select>
+      ) : null}
     </div>
   );
 }

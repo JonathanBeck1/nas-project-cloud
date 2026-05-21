@@ -188,6 +188,149 @@ describe("metadata repository", () => {
     }
   });
 
+  it("creates, updates, and deletes custom categories while protecting system ones", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+
+      const custom = repo.createCategory({ name: "Reference", color: "#0F62FE" });
+      expect(custom.isSystem).toBe(false);
+      expect(custom.slug).toBe("reference");
+      expect(repo.getCategoryBySlug("reference")?.id).toBe(custom.id);
+
+      const renamed = repo.updateCategory(custom.id, { name: "References", color: "#42BE65" });
+      expect(renamed?.name).toBe("References");
+      expect(renamed?.color).toBe("#42BE65");
+
+      const systemCategory = repo.listCategories().find((category) => category.isSystem);
+      expect(systemCategory).toBeDefined();
+      expect(() => repo.updateCategory(systemCategory!.id, { name: "Renamed" })).toThrow();
+      expect(() => repo.deleteCategory(systemCategory!.id)).toThrow();
+
+      expect(repo.deleteCategory(custom.id)).toBe(true);
+      expect(repo.getCategoryById(custom.id)).toBeNull();
+      expect(repo.deleteCategory(custom.id)).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("updates project name, description, status, and category", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const project = repo.createProject({ name: "Garage Build" });
+
+      const renamed = repo.updateProject(project.id, {
+        name: "Garage Build v2",
+        description: "Phase 2",
+        status: "complete",
+        categoryId: "cat_cad"
+      });
+
+      expect(renamed?.name).toBe("Garage Build v2");
+      expect(renamed?.description).toBe("Phase 2");
+      expect(renamed?.status).toBe("complete");
+      expect(renamed?.categoryId).toBe("cat_cad");
+      expect(renamed?.slug).toBe(project.slug);
+      expect(repo.updateProject("missing", { name: "x" })).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("detaches files from a project on delete instead of removing them", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const project = repo.createProject({ name: "Garage Build" });
+      const file = repo.createFile({
+        name: "drill.jpg",
+        extension: "jpg",
+        family: "image",
+        mimeType: "image/jpeg",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Projects/garage-build/Inbox/drill.jpg",
+        sourceDevice: "Browser",
+        projectId: project.id
+      });
+
+      const result = repo.deleteProject(project.id);
+
+      expect(result).toEqual({ removed: true, detachedFiles: 1 });
+      expect(repo.getProjectById(project.id)).toBeNull();
+      expect(repo.getFileById(file.id)?.projectId).toBeNull();
+      expect(repo.deleteProject(project.id)).toEqual({ removed: false, detachedFiles: 0 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("clears category_id on files when a custom category is deleted", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const category = repo.createCategory({ name: "Workshop", color: "#FF6F00" });
+      const file = repo.createFile({
+        name: "drill.jpg",
+        extension: "jpg",
+        family: "image",
+        mimeType: "image/jpeg",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/drill.jpg",
+        sourceDevice: "Browser",
+        categoryId: category.id
+      });
+
+      expect(repo.getFileById(file.id)?.categoryId).toBe(category.id);
+      expect(repo.deleteCategory(category.id)).toBe(true);
+      expect(repo.getFileById(file.id)?.categoryId).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("looks up tags by slug and deletes them, cascading file_tags", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const file = repo.createFile({
+        name: "render.png",
+        extension: "png",
+        family: "image",
+        mimeType: "image/png",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/render.png",
+        sourceDevice: "Browser"
+      });
+      const tag = repo.createTag({ name: "Reference" });
+      repo.setFileTags(file.id, [tag.id]);
+
+      expect(repo.getTagBySlug("reference")?.id).toBe(tag.id);
+      expect(repo.getFileById(file.id)?.tags).toEqual([tag]);
+
+      expect(repo.deleteTag(tag.id)).toBe(true);
+      expect(repo.listTags()).toEqual([]);
+      expect(repo.getFileById(file.id)?.tags).toEqual([]);
+      expect(repo.deleteTag(tag.id)).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
   it("bulk updates file project and category metadata", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
     createdDirs.push(dir);

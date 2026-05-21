@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DetailDrawer } from "@/components/workspace/DetailDrawer";
-import type { CloudFile, Project } from "@/lib/shared/types";
+import type { CloudFile, Project, Tag } from "@/lib/shared/types";
 
 const fixture: CloudFile = {
   id: "file_manual",
@@ -145,5 +145,47 @@ describe("DetailDrawer", () => {
 
     expect(screen.getByText("Preview")).toBeVisible();
     expect(screen.getByText("Failed: unsupported image")).toBeVisible();
+  });
+
+  it("renders existing tag chips and allows removing one", async () => {
+    const user = userEvent.setup();
+    const onAssignTags = vi.fn();
+    const reference: Tag = { id: "tag_ref", name: "Reference", slug: "reference" };
+    const draft: Tag = { id: "tag_draft", name: "Draft", slug: "draft" };
+    const tagged: CloudFile = { ...fixture, tags: [reference, draft] };
+
+    render(
+      <DetailDrawer file={tagged} availableTags={[reference, draft]} onAssignTags={onAssignTags} />
+    );
+
+    expect(screen.getByText("Reference")).toBeVisible();
+    expect(screen.getByText("Draft")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Remove tag Reference" }));
+
+    expect(onAssignTags).toHaveBeenCalledWith(tagged, ["tag_draft"]);
+  });
+
+  it("adds a tag through the picker without re-adding existing tags", async () => {
+    const user = userEvent.setup();
+    const onAssignTags = vi.fn();
+    const reference: Tag = { id: "tag_ref", name: "Reference", slug: "reference" };
+    const draft: Tag = { id: "tag_draft", name: "Draft", slug: "draft" };
+    const tagged: CloudFile = { ...fixture, tags: [reference] };
+
+    render(
+      <DetailDrawer file={tagged} availableTags={[reference, draft]} onAssignTags={onAssignTags} />
+    );
+
+    await user.selectOptions(screen.getByLabelText("Add tag"), "tag_draft");
+
+    expect(onAssignTags).toHaveBeenCalledWith(tagged, ["tag_ref", "tag_draft"]);
+  });
+
+  it("disables the tag picker when there are no available tags", () => {
+    render(<DetailDrawer file={fixture} availableTags={[]} onAssignTags={vi.fn()} />);
+
+    expect(screen.getByLabelText("Add tag")).toBeDisabled();
+    expect(screen.getByText("No tags yet.")).toBeVisible();
   });
 });

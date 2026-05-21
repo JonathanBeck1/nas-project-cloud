@@ -5,6 +5,7 @@ import {
   Clock3,
   FolderKanban,
   HardDrive,
+  Hash,
   Image,
   Inbox,
   Layers3,
@@ -29,7 +30,8 @@ type NavItem = {
 const libraryItems: NavItem[] = [
   { label: "Inbox", icon: Inbox, href: "/" },
   { label: "Projects", icon: FolderKanban, href: "/projects" },
-  { label: "Categories", icon: Tags, href: "/categories" }
+  { label: "Categories", icon: Tags, href: "/categories" },
+  { label: "Tags", icon: Hash, href: "/tags" }
 ];
 
 const systemItems: NavItem[] = [
