@@ -4,6 +4,11 @@ import { createMetadataRepository } from "@/lib/server/metadata";
 import { verifyPassword } from "@/lib/server/auth/passwords";
 import { createSessionToken, hashSessionToken, sessionExpiresAt } from "@/lib/server/auth/sessions";
 import { withSessionCookie } from "@/lib/server/auth/http";
+import { clientIpFromRequest, createRateLimiter } from "@/lib/server/rateLimit";
+
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_PER_EMAIL_MAX = 10;
+const LOGIN_PER_IP_MAX = 60;
 
 export async function POST(request: Request) {
   const body = await jsonBody(request);
@@ -18,11 +23,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "email and password are required" }, { status: 400 });
   }
 
+  const limiter = createRateLimiter();
+  const ip = clientIpFromRequest(request);
+
+  const ipResult = limiter.consume({
+    bucket: "login_ip",
+    key: ip,
+    max: LOGIN_PER_IP_MAX,
+    windowMs: LOGIN_WINDOW_MS
+  });
+  if (!ipResult.allowed) {
+    return rateLimited(ipResult.retryAfterSeconds);
+  }
+
+  const emailResult = limiter.consume({
+    bucket: "login_email",
+    key: email,
+    max: LOGIN_PER_EMAIL_MAX,
+    windowMs: LOGIN_WINDOW_MS
+  });
+  if (!emailResult.allowed) {
+    return rateLimited(emailResult.retryAfterSeconds);
+  }
+
   const repo = createMetadataRepository(getDatabase());
   const user = repo.getUserByEmail(email);
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
     return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
   }
+
+  // Successful login — clear any throttling state for this identity.
+  limiter.reset("login_email", email);
+  limiter.reset("login_ip", ip);
 
   const device = repo.createDevice({
     userId: user.id,
@@ -49,6 +81,16 @@ export async function POST(request: Request) {
       }
     }),
     token
+  );
+}
+
+function rateLimited(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: "too many requests", retryAfterSeconds },
+    {
+      status: 429,
+      headers: { "Retry-After": String(Math.max(1, retryAfterSeconds)) }
+    }
   );
 }
 

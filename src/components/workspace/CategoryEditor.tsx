@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { Pencil, Plus, Save, Tags, Trash2, X } from "lucide-react";
+import { csrfHeaders } from "@/lib/client/csrf";
 import type { Category } from "@/lib/shared/types";
 
 type CategoryUsage = {
@@ -70,7 +71,7 @@ export function CategoryEditor({ categories: initialCategories, usage }: Categor
     try {
       const response = await fetch("/api/categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify({ name: trimmedName, color })
       });
       const payload = (await safeJson(response)) as { category?: Category; error?: string };
@@ -107,7 +108,7 @@ export function CategoryEditor({ categories: initialCategories, usage }: Categor
     try {
       const response = await fetch(`/api/categories/${encodeURIComponent(category.id)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify({ name: trimmedName, color: editColor })
       });
       const payload = (await safeJson(response)) as { category?: Category; error?: string };
@@ -142,7 +143,8 @@ export function CategoryEditor({ categories: initialCategories, usage }: Categor
 
     try {
       const response = await fetch(`/api/categories/${encodeURIComponent(category.id)}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: { ...csrfHeaders() }
       });
       const payload = (await safeJson(response)) as { ok?: boolean; error?: string };
 

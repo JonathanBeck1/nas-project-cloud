@@ -1,3 +1,4 @@
+import { csrfHeaders } from "@/lib/client/csrf";
 import type { CloudFile, UploadSession } from "@/lib/shared/types";
 
 export type UploadProgress = {
@@ -33,7 +34,7 @@ export async function uploadFileInChunks({
 }: UploadFileInChunksInput): Promise<CloudFile> {
   const sessionResponse = await fetchImpl("/api/upload-sessions", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...csrfHeaders() },
     body: JSON.stringify({
       filename: file.name || "upload.bin",
       mimeType: file.type || "application/octet-stream",
@@ -58,7 +59,7 @@ export async function uploadFileInChunks({
     const end = Math.min(offset + chunkSizeBytes, file.size);
     const chunkResponse = await fetchImpl(`/api/upload-sessions/${sessionId}/chunk`, {
       method: "POST",
-      headers: { "upload-offset": String(offset) },
+      headers: { "upload-offset": String(offset), ...csrfHeaders() },
       body: file.slice(offset, end),
       signal
     });
@@ -76,6 +77,7 @@ export async function uploadFileInChunks({
 
   const completeResponse = await fetchImpl(`/api/upload-sessions/${sessionId}/complete`, {
     method: "POST",
+    headers: { ...csrfHeaders() },
     signal
   });
 
@@ -92,7 +94,8 @@ export async function uploadFileInChunks({
 
 export async function abortUploadSession(sessionId: string, fetchImpl: typeof fetch = fetch): Promise<void> {
   const response = await fetchImpl(`/api/upload-sessions/${encodeURIComponent(sessionId)}/abort`, {
-    method: "POST"
+    method: "POST",
+    headers: { ...csrfHeaders() }
   });
 
   if (!response.ok) {

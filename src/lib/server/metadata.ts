@@ -1039,6 +1039,17 @@ export function createMetadataRepository(db: AppDatabase) {
       db.prepare<[string]>("delete from sessions where id = ?").run(id);
     },
 
+    touchSession(id: string, expiresAt: string, lastSeenAt: string = new Date().toISOString()): void {
+      db.prepare<[string, string, string]>(
+        "update sessions set expires_at = ?, last_seen_at = ? where id = ?"
+      ).run(expiresAt, lastSeenAt, id);
+    },
+
+    touchDevice(deviceId: string, lastSeenAt: string = new Date().toISOString()): void {
+      db.prepare<[string, string]>("update devices set last_seen_at = ? where id = ?")
+        .run(lastSeenAt, deviceId);
+    },
+
     createDevicePairingCode(input: CreateDevicePairingCodeInput): DevicePairingCode {
       const code: DevicePairingCode = {
         id: `pair_${nanoid(12)}`,

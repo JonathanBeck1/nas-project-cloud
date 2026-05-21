@@ -1,10 +1,9 @@
-import { Buffer } from "node:buffer";
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
-import { appConfig } from "@/lib/server/config";
+import { getAppConfig } from "@/lib/server/config";
 import { enqueuePreviewForFile } from "@/lib/server/previews/enqueue";
 import { classifyFile } from "@/lib/shared/fileTypes";
 
@@ -31,39 +30,30 @@ export async function POST(request: Request) {
     return auth.response;
   }
 
-  const contentLength = Number.parseInt(request.headers.get("content-length") ?? "", 10);
-  if (Number.isFinite(contentLength) && contentLength > appConfig.maxUploadBytes) {
-    return NextResponse.json({ error: "file exceeds upload size limit" }, { status: 413 });
-  }
+  const config = getAppConfig();
+  const url = new URL(request.url);
+  const params = url.searchParams;
 
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch {
-    return NextResponse.json({ error: "invalid form data" }, { status: 400 });
-  }
+  const filename = stringValue(params.get("filename")) || "upload.bin";
+  const sourceDevice = stringValue(params.get("sourceDevice")) || "Unknown Device";
+  const projectId = nullableStringValue(params.get("projectId"));
+  const projectSlug = stringValue(params.get("projectSlug"));
+  const categoryId = nullableStringValue(params.get("categoryId"));
+  const mimeType = stringValue(params.get("mimeType")) || request.headers.get("content-type") || "application/octet-stream";
 
-  const upload = formData.get("file");
-
-  if (!(upload instanceof File)) {
-    return NextResponse.json({ error: "file is required" }, { status: 400 });
-  }
-
-  if (upload.size > appConfig.maxUploadBytes) {
-    return NextResponse.json({ error: "file exceeds upload size limit" }, { status: 413 });
-  }
-
-  const filename = upload.name || "upload.bin";
-  const mimeType = upload.type || "application/octet-stream";
-
-  const sourceDevice = stringValue(formData.get("sourceDevice")) || "Unknown Device";
-  const projectId = nullableStringValue(formData.get("projectId"));
-  const projectSlug = stringValue(formData.get("projectSlug"));
   if (Boolean(projectId) !== Boolean(projectSlug)) {
     return NextResponse.json({ error: "projectId and projectSlug must be provided together" }, { status: 400 });
   }
 
-  const categoryId = nullableStringValue(formData.get("categoryId"));
+  const contentLength = Number.parseInt(request.headers.get("content-length") ?? "", 10);
+  if (Number.isFinite(contentLength) && contentLength > config.maxUploadBytes) {
+    return NextResponse.json({ error: "file exceeds upload size limit" }, { status: 413 });
+  }
+
+  if (!request.body) {
+    return NextResponse.json({ error: "request body is required" }, { status: 400 });
+  }
+
   const repo = createMetadataRepository(getDatabase());
 
   let target: { kind: "inbox"; sourceDevice: string } | { kind: "project"; projectSlug: string } = {
@@ -91,18 +81,23 @@ export async function POST(request: Request) {
     target = { kind: "project", projectSlug: project.slug };
   }
 
-  const bytes = Buffer.from(await upload.arrayBuffer());
-  if (bytes.length > appConfig.maxUploadBytes) {
-    return NextResponse.json({ error: "file exceeds upload size limit" }, { status: 413 });
+  const storage = createStorageService();
+  let stored;
+  try {
+    stored = await storage.streamUpload({
+      target,
+      filename,
+      mimeType,
+      body: request.body,
+      maxBytes: config.maxUploadBytes
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "upload exceeds size limit") {
+      return NextResponse.json({ error: "file exceeds upload size limit" }, { status: 413 });
+    }
+    return NextResponse.json({ error: "upload failed" }, { status: 500 });
   }
 
-  const storage = createStorageService();
-  const stored = await storage.writeUpload({
-    target,
-    filename,
-    mimeType,
-    bytes
-  });
   const classification = classifyFile(filename);
   let file;
   try {
@@ -131,11 +126,11 @@ export async function POST(request: Request) {
   return NextResponse.json({ file }, { status: 201 });
 }
 
-function stringValue(value: FormDataEntryValue | null): string {
+function stringValue(value: string | null): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function nullableStringValue(value: FormDataEntryValue | null): string | null {
+function nullableStringValue(value: string | null): string | null {
   const parsed = stringValue(value);
   return parsed.length > 0 ? parsed : null;
 }

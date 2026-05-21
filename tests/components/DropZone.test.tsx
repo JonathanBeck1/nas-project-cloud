@@ -55,13 +55,21 @@ describe("DropZone", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent("Uploading manual.pdf");
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/files", expect.objectContaining({ method: "POST" })));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/api\/files\?/),
+        expect.objectContaining({ method: "POST" })
+      )
+    );
 
-    const [, init] = fetchMock.mock.calls[0];
-    const body = init?.body;
-    expect(body).toBeInstanceOf(FormData);
-    expect((body as FormData).get("file")).toBe(file);
-    expect((body as FormData).get("sourceDevice")).toBe("Browser");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(typeof url).toBe("string");
+    const calledUrl = new URL(url as string, "http://localhost");
+    expect(calledUrl.pathname).toBe("/api/files");
+    expect(calledUrl.searchParams.get("filename")).toBe("manual.pdf");
+    expect(calledUrl.searchParams.get("sourceDevice")).toBe("Browser");
+    expect(calledUrl.searchParams.get("mimeType")).toBe("application/pdf");
+    expect(init?.body).toBe(file);
     resolveUpload(new Response(JSON.stringify({ file: { id: "file_upload" } }), { status: 201 }));
     expect(await screen.findByRole("status")).toHaveTextContent("Uploaded manual.pdf");
   });

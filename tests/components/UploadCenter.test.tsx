@@ -66,9 +66,10 @@ describe("UploadCenter", () => {
     await user.click(screen.getByRole("button", { name: "Abort movie.webm" }));
 
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith("/api/upload-sessions/upload_1/abort", {
-        method: "POST"
-      })
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/upload-sessions/upload_1/abort",
+        expect.objectContaining({ method: "POST" })
+      )
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Aborted movie.webm");
     expect(screen.queryByText("movie.webm")).not.toBeInTheDocument();

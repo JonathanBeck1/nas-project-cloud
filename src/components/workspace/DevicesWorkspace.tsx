@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { HardDrive, KeyRound, Monitor, Smartphone, Terminal, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { csrfHeaders } from "@/lib/client/csrf";
 import type { TrustedDevice, TrustedDeviceKind } from "@/lib/shared/types";
 
 type DevicesWorkspaceProps = {
@@ -51,7 +52,7 @@ export function DevicesWorkspace({ devices: initialDevices, currentDeviceId }: D
     try {
       const response = await fetch("/api/devices", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify({ deviceName, deviceKind })
       });
       const payload = (await safeJson(response)) as PairingResponse;
@@ -82,7 +83,8 @@ export function DevicesWorkspace({ devices: initialDevices, currentDeviceId }: D
 
     try {
       const response = await fetch(`/api/devices/${encodeURIComponent(device.id)}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: { ...csrfHeaders() }
       });
       const payload = (await safeJson(response)) as { ok?: boolean; error?: string };
 

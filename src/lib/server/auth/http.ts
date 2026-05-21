@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { sessionCookieName } from "./sessions";
+import { SESSION_LIFETIME_DAYS, sessionCookieName } from "./sessions";
+import { clearCsrfCookie, createCsrfToken, withCsrfCookie } from "./csrf";
 
 export function withSessionCookie(response: NextResponse, token: string): NextResponse {
   response.cookies.set(sessionCookieName, token, {
@@ -7,9 +8,9 @@ export function withSessionCookie(response: NextResponse, token: string): NextRe
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30
+    maxAge: 60 * 60 * 24 * SESSION_LIFETIME_DAYS
   });
-  return response;
+  return withCsrfCookie(response, createCsrfToken());
 }
 
 export function clearSessionCookie(response: NextResponse): NextResponse {
@@ -20,5 +21,5 @@ export function clearSessionCookie(response: NextResponse): NextResponse {
     path: "/",
     maxAge: 0
   });
-  return response;
+  return clearCsrfCookie(response);
 }

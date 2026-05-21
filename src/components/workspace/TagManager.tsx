@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { Hash, Plus, Trash2 } from "lucide-react";
+import { csrfHeaders } from "@/lib/client/csrf";
 import type { Tag } from "@/lib/shared/types";
 
 type TagUsage = {
@@ -43,7 +44,7 @@ export function TagManager({ tags: initialTags, usage }: TagManagerProps) {
     try {
       const response = await fetch("/api/tags", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify({ name: trimmed })
       });
       const payload = (await safeJson(response)) as { tag?: Tag; error?: string };
@@ -78,7 +79,8 @@ export function TagManager({ tags: initialTags, usage }: TagManagerProps) {
 
     try {
       const response = await fetch(`/api/tags/${encodeURIComponent(tag.id)}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: { ...csrfHeaders() }
       });
       const payload = (await safeJson(response)) as { ok?: boolean; error?: string };
 

@@ -12,7 +12,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("project workspace route renders", async ({ page }) => {
+  const csrf = await readCsrfCookie(page);
   const response = await page.request.post("/api/projects", {
+    headers: { "x-nas-csrf": csrf },
     data: { name: `Garage Build ${Date.now()}`, description: "Parts" }
   });
   expect(response.status()).toBe(201);
@@ -41,4 +43,11 @@ async function authenticate(page: import("@playwright/test").Page) {
     }
   });
   expect(login.status()).toBe(200);
+}
+
+async function readCsrfCookie(page: import("@playwright/test").Page): Promise<string> {
+  const cookies = await page.context().cookies();
+  const cookie = cookies.find((candidate) => candidate.name === "nas_cloud_csrf");
+  expect(cookie?.value).toBeTruthy();
+  return cookie!.value;
 }

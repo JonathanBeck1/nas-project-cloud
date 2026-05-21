@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireApiSession } from "@/lib/server/auth/guards";
+import { requireMaintenanceAuth } from "@/lib/server/auth/maintenance";
 import { cleanupStaleUploads } from "@/lib/server/uploadCleanup";
 
 const DEFAULT_STALE_UPLOAD_MS = 24 * 60 * 60 * 1000;
 
 export async function POST(request: Request) {
-  const auth = await requireApiSession(request);
+  const auth = await requireMaintenanceAuth(request);
   if (!auth.ok) {
     return auth.response;
   }

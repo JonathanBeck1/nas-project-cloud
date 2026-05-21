@@ -98,7 +98,10 @@ describe("ProjectSettingsCard", () => {
     await user.click(screen.getByRole("button", { name: "Delete project" }));
 
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith("/api/projects/proj_garage", { method: "DELETE" })
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/projects/proj_garage",
+        expect.objectContaining({ method: "DELETE" })
+      )
     );
     expect(await screen.findByRole("status")).toHaveTextContent(/Deleted Garage Build/);
     expect(router.push).toHaveBeenCalledWith("/projects");

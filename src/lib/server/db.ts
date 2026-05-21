@@ -130,6 +130,13 @@ function migrate(db: AppDatabase) {
       created_at text not null
     );
 
+    create table if not exists rate_limit_events (
+      id integer primary key autoincrement,
+      bucket text not null,
+      key text not null,
+      occurred_at text not null
+    );
+
     create table if not exists upload_sessions (
       id text primary key,
       filename text not null,
@@ -163,6 +170,8 @@ function migrate(db: AppDatabase) {
     create index if not exists devices_user_id_idx on devices(user_id);
     create index if not exists device_pairing_codes_code_hash_idx on device_pairing_codes(code_hash);
     create index if not exists upload_sessions_status_idx on upload_sessions(status);
+    create index if not exists rate_limit_events_bucket_key_idx
+      on rate_limit_events(bucket, key, occurred_at);
   `);
 
   addColumnIfMissing(db, "files", "status", "text not null default 'active'");

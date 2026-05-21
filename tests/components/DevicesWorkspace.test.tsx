@@ -76,9 +76,10 @@ describe("DevicesWorkspace", () => {
 
     expect(confirmSpy).toHaveBeenCalledWith("Revoke Windows PC? This device will need a new pairing code to reconnect.");
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith("/api/devices/device_windows", {
-        method: "DELETE"
-      })
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/devices/device_windows",
+        expect.objectContaining({ method: "DELETE" })
+      )
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Revoked Windows PC");
     expect(screen.queryByText("Windows PC")).not.toBeInTheDocument();

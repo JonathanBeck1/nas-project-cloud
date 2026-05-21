@@ -2,13 +2,14 @@
 
 import React, { useState } from "react";
 import { LogOut } from "lucide-react";
+import { csrfHeaders } from "@/lib/client/csrf";
 
 export function LogoutButton() {
   const [isBusy, setIsBusy] = useState(false);
 
   async function logout() {
     setIsBusy(true);
-    await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    await fetch("/api/auth/logout", { method: "POST", headers: { ...csrfHeaders() } }).catch(() => undefined);
     window.location.href = "/login";
   }
 

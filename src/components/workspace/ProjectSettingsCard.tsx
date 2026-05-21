@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Save, Settings, Trash2, X } from "lucide-react";
+import { csrfHeaders } from "@/lib/client/csrf";
 import type { Category, Project, ProjectStatus } from "@/lib/shared/types";
 
 type ProjectSettingsCardProps = {
@@ -60,7 +61,7 @@ export function ProjectSettingsCard({ project: initialProject, categories, fileC
     try {
       const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify(payload)
       });
       const responsePayload = (await safeJson(response)) as { project?: Project; error?: string };
@@ -96,7 +97,8 @@ export function ProjectSettingsCard({ project: initialProject, categories, fileC
 
     try {
       const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: { ...csrfHeaders() }
       });
       const payload = (await safeJson(response)) as {
         ok?: boolean;

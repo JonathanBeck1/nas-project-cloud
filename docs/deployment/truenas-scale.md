@@ -151,21 +151,63 @@ If this fails after deploying to TrueNAS, check dataset permissions first. The t
 - `/mnt/OfficeNAS/nas-project-cloud/files` is not writable by the container user
 - `/mnt/OfficeNAS/nas-project-cloud/appdata` is not writable by the container user
 
-## Preview Processing
+## Maintenance Endpoints
 
-Uploads enqueue preview work for images, videos, and documents. The current worker can generate image thumbnails and marks unsupported preview families as skipped.
+The app exposes two maintenance routes that can be driven from a TrueNAS cron job (or any scheduler that can issue HTTP):
 
-Current production behavior:
+```text
+POST /api/maintenance/previews        # process pending preview jobs
+POST /api/maintenance/upload-cleanup  # delete abandoned upload sessions older than 24h
+```
 
-- The app can enqueue preview rows during direct and chunked uploads.
-- `POST /api/maintenance/previews` processes pending rows for an authenticated owner session.
-- The Docker Compose file does not yet run a separate always-on preview scheduler.
+Both routes accept either:
 
-Until a tokenized cron endpoint or worker service is added, run preview processing manually from an authenticated admin session after large upload batches. The next production hardening pass should add one of these:
+- a logged-in owner session cookie (so you can hit them from a browser tab while testing), **or**
+- a `Authorization: Bearer <token>` header that matches the `NAS_CLOUD_MAINTENANCE_TOKEN` environment variable. When set, this token is the only credential the route trusts for headless callers; comparison is constant-time.
 
-- a dedicated worker container with the preview runner included in the production image
-- a token-protected internal maintenance endpoint suitable for TrueNAS cron
-- an in-app background job loop with rate limits and visibility in Settings
+Generate a strong token once and add it to the Compose env:
+
+```bash
+openssl rand -hex 32
+```
+
+```yaml
+environment:
+  NAS_CLOUD_MAINTENANCE_TOKEN: "<paste 64 hex chars here>"
+```
+
+Restart the container so the new env is picked up. Without `NAS_CLOUD_MAINTENANCE_TOKEN`, headless callers cannot authenticate at all — the routes still work from a logged-in browser session.
+
+### TrueNAS Cron Job
+
+In TrueNAS SCALE, **System > Advanced > Cron Jobs > Add**:
+
+- Description: `nas-project-cloud previews`
+- Schedule: every 5 minutes (`*/5 * * * *`) is a reasonable default
+- Run as: `root` (or any user that can run `curl`)
+- Command:
+
+```bash
+curl --silent --show-error --fail \
+  --max-time 60 \
+  -H "Authorization: Bearer ${NAS_CLOUD_MAINTENANCE_TOKEN}" \
+  -X POST http://127.0.0.1:3000/api/maintenance/previews
+```
+
+Add a second cron job for upload cleanup, e.g. once per hour (`5 * * * *`):
+
+```bash
+curl --silent --show-error --fail \
+  --max-time 60 \
+  -H "Authorization: Bearer ${NAS_CLOUD_MAINTENANCE_TOKEN}" \
+  -X POST http://127.0.0.1:3000/api/maintenance/upload-cleanup
+```
+
+Tips:
+
+- Use `127.0.0.1:3000` (the loopback interface) so the request never leaves the NAS.
+- Export `NAS_CLOUD_MAINTENANCE_TOKEN` in the TrueNAS cron environment, or hard-code the bearer value into the cron command itself if you prefer not to expose it in the parent shell.
+- Every successful run returns JSON. A non-2xx response indicates the token did not match (`401`) or the worker hit an unexpected error.
 
 ## Backups And Snapshots
 

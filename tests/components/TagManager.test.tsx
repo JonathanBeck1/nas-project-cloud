@@ -68,7 +68,10 @@ describe("TagManager", () => {
       'Delete the "Reference" tag? It will be removed from 2 files.'
     );
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith("/api/tags/tag_ref", { method: "DELETE" })
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/tags/tag_ref",
+        expect.objectContaining({ method: "DELETE" })
+      )
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Deleted Reference");
     expect(screen.queryByText("Reference")).not.toBeInTheDocument();

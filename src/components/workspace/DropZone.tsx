@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { UploadCloud } from "lucide-react";
 import { abortUploadSession, uploadFileInChunks } from "@/lib/client/uploadSessions";
+import { csrfHeaders } from "@/lib/client/csrf";
 import { resolveSourceDeviceLabel } from "@/lib/client/sourceDevice";
 import type { CloudFile } from "@/lib/shared/types";
 
@@ -79,13 +80,19 @@ export function DropZone({
   }
 
   async function uploadSingle(file: File): Promise<CloudFile> {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("sourceDevice", sourceDevice);
+    const params = new URLSearchParams({
+      filename: file.name || "upload.bin",
+      sourceDevice,
+      mimeType: file.type || "application/octet-stream"
+    });
 
-    const response = await fetch("/api/files", {
+    const response = await fetch(`/api/files?${params.toString()}`, {
       method: "POST",
-      body: formData
+      headers: {
+        ...csrfHeaders(),
+        "content-type": file.type || "application/octet-stream"
+      },
+      body: file
     });
 
     if (!response.ok) {

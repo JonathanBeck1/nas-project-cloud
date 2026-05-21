@@ -1,3 +1,4 @@
+import { csrfHeaders } from "@/lib/client/csrf";
 import type { CloudFile } from "@/lib/shared/types";
 
 export type FileAssignmentInput = {
@@ -8,7 +9,8 @@ export type FileAssignmentInput = {
 export async function archiveFile(fileId: string): Promise<CloudFile> {
   return fileFromResponse(
     await fetch(`/api/files/${encodeURIComponent(fileId)}/archive`, {
-      method: "POST"
+      method: "POST",
+      headers: { ...csrfHeaders() }
     })
   );
 }
@@ -16,14 +18,16 @@ export async function archiveFile(fileId: string): Promise<CloudFile> {
 export async function restoreFile(fileId: string): Promise<CloudFile> {
   return fileFromResponse(
     await fetch(`/api/files/${encodeURIComponent(fileId)}/restore`, {
-      method: "POST"
+      method: "POST",
+      headers: { ...csrfHeaders() }
     })
   );
 }
 
 export async function deleteFilePermanently(fileId: string): Promise<void> {
   const response = await fetch(`/api/files/${encodeURIComponent(fileId)}/delete`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers: { ...csrfHeaders() }
   });
   let payload: { ok?: boolean; error?: string };
   try {
@@ -41,7 +45,7 @@ export async function updateFileAssignment(fileId: string, input: FileAssignment
   return fileFromResponse(
     await fetch(`/api/files/${encodeURIComponent(fileId)}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeaders() },
       body: JSON.stringify(input)
     })
   );
@@ -51,7 +55,7 @@ export async function setFileTags(fileId: string, tagIds: string[]): Promise<Clo
   return fileFromResponse(
     await fetch(`/api/files/${encodeURIComponent(fileId)}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeaders() },
       body: JSON.stringify({ tagIds })
     })
   );

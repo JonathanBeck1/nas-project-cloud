@@ -26,4 +26,34 @@ export function resolveAppConfig(env: Partial<NodeJS.ProcessEnv> = process.env):
   };
 }
 
-export const appConfig = resolveAppConfig();
+let cached: AppConfig | undefined;
+
+/**
+ * Validate and return the application config. The first call resolves
+ * and caches the result so a missing or malformed env var only fails
+ * the first request that needs it, instead of crashing the module
+ * import (which makes test isolation and DI awkward).
+ */
+export function getAppConfig(): AppConfig {
+  if (!cached) {
+    cached = resolveAppConfig();
+  }
+  return cached;
+}
+
+/** For tests: drop the cached config so the next call re-reads process.env. */
+export function resetAppConfigForTesting(): void {
+  cached = undefined;
+}
+
+/**
+ * Lazy proxy preserved for ergonomics — existing callers can still
+ * `import { appConfig } from "./config"` and read `appConfig.storageRoot`,
+ * and the env will only be validated on first property access.
+ */
+export const appConfig: AppConfig = new Proxy({} as AppConfig, {
+  get(_target, prop) {
+    const config = getAppConfig();
+    return config[prop as keyof AppConfig];
+  }
+});

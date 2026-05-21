@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createReadStream, createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { appConfig } from "./config";
 
 export type UploadTarget =
@@ -13,6 +15,14 @@ export type WriteUploadInput = {
   filename: string;
   mimeType: string;
   bytes: Buffer;
+};
+
+export type StreamUploadInput = {
+  target: UploadTarget;
+  filename: string;
+  mimeType: string;
+  body: ReadableStream<Uint8Array> | NodeJS.ReadableStream;
+  maxBytes: number;
 };
 
 export type MoveToProjectInput = {
@@ -85,6 +95,62 @@ export function createStorageService(root = appConfig.storageRoot) {
     },
 
     absolutePathFor,
+
+    /**
+     * Stream the request body straight to a temp file, hash it on the
+     * way through, then atomically move it into the target directory.
+     * Aborts and cleans up the temp file when the size cap is exceeded.
+     */
+    async streamUpload(input: StreamUploadInput): Promise<StoredFile> {
+      const tempRelative = path.join(".uploads", `direct-${crypto.randomUUID()}.part`);
+      const tempAbsolute = absolutePathFor(tempRelative);
+      await fs.mkdir(path.dirname(tempAbsolute), { recursive: true });
+
+      const source =
+        input.body instanceof ReadableStream
+          ? Readable.fromWeb(input.body as unknown as import("node:stream/web").ReadableStream<Uint8Array>)
+          : (input.body as NodeJS.ReadableStream);
+      const writer = createWriteStream(tempAbsolute, { flags: "wx" });
+
+      const hash = crypto.createHash("sha256");
+      let received = 0;
+      const limiter = new Transform({
+        transform(chunk: Buffer, _encoding, callback) {
+          received += chunk.length;
+          if (received > input.maxBytes) {
+            callback(new Error("upload exceeds size limit"));
+            return;
+          }
+          hash.update(chunk);
+          callback(null, chunk);
+        }
+      });
+
+      try {
+        await pipeline(source, limiter, writer);
+      } catch (error) {
+        await fs.unlink(tempAbsolute).catch(() => undefined);
+        throw error;
+      }
+
+      try {
+        const moved = await moveIntoDirectory({
+          storageRoot,
+          from: tempAbsolute,
+          directory: path.join(storageRoot, targetDirectory(input.target)),
+          filename: input.filename
+        });
+        return {
+          ...moved,
+          sizeBytes: received,
+          checksum: hash.digest("hex"),
+          mimeType: input.mimeType || "application/octet-stream"
+        };
+      } catch (error) {
+        await fs.unlink(tempAbsolute).catch(() => undefined);
+        throw error;
+      }
+    },
 
     async createUploadTempPath(sessionId: string): Promise<{ absolutePath: string; relativePath: string }> {
       const relativePath = path.join(".uploads", `${sanitizePathSegment(sessionId)}.part`);
