@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Apple,
   Archive,
   Boxes,
   Clock3,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { LogoutButton } from "@/components/auth/LogoutButton";
+import { ThemeToggle } from "./ThemeToggle";
 import { SMART_VIEWS } from "@/lib/shared/defaults";
 import type { Project, SmartViewKey } from "@/lib/shared/types";
 
@@ -48,16 +50,15 @@ const smartViewIcons: Partial<Record<SmartViewKey, LucideIcon>> = {
   media: Layers3,
   images: Image,
   videos: Video,
-  "from-windows": MonitorUp
+  "from-windows": MonitorUp,
+  "from-mac": Apple
 };
 
-const smartViewItems = SMART_VIEWS.filter((view) => view.key !== "inbox")
-  .slice(0, 6)
-  .map<NavItem>((view) => ({
-    label: view.name,
-    icon: smartViewIcons[view.key] ?? Layers3,
-    href: `/smart-views/${view.key}`
-  }));
+const smartViewItems = SMART_VIEWS.filter((view) => view.key !== "inbox").map<NavItem>((view) => ({
+  label: view.name,
+  icon: smartViewIcons[view.key] ?? Layers3,
+  href: `/smart-views/${view.key}`
+}));
 
 function NavigationGroup({ title, items, activeHref }: { title: string; items: NavItem[]; activeHref: string }) {
   return (
@@ -116,7 +117,8 @@ export function Sidebar({ projects = [], activeHref = "/" }: { projects?: Projec
         <NavigationGroup title="Smart Views" items={smartViewItems} activeHref={activeHref} />
         <NavigationGroup title="System" items={systemItems} activeHref={activeHref} />
       </nav>
-      <div className="border-t border-line px-3 py-3">
+      <div className="space-y-3 border-t border-line px-3 py-3">
+        <ThemeToggle />
         <LogoutButton />
       </div>
     </aside>

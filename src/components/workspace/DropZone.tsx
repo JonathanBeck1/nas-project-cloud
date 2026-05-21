@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { UploadCloud } from "lucide-react";
 import { abortUploadSession, uploadFileInChunks } from "@/lib/client/uploadSessions";
+import { resolveSourceDeviceLabel } from "@/lib/client/sourceDevice";
 import type { CloudFile } from "@/lib/shared/types";
 
 type DropZoneProps = {
@@ -36,8 +37,13 @@ export function DropZone({
   const [dragDepth, setDragDepth] = useState(0);
   const [status, setStatus] = useState<UploadStatus | null>(null);
   const [activeUpload, setActiveUpload] = useState<ActiveUpload | null>(null);
+  const [sourceDevice, setSourceDevice] = useState<string>("Browser");
   const cancelRequestedRef = useRef(false);
   const isDragging = dragDepth > 0;
+
+  useEffect(() => {
+    setSourceDevice(resolveSourceDeviceLabel());
+  }, []);
 
   async function uploadFiles(files: File[]) {
     if (files.length === 0) {
@@ -75,7 +81,7 @@ export function DropZone({
   async function uploadSingle(file: File): Promise<CloudFile> {
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("sourceDevice", "Browser");
+    formData.append("sourceDevice", sourceDevice);
 
     const response = await fetch("/api/files", {
       method: "POST",
@@ -99,7 +105,7 @@ export function DropZone({
 
     return uploadFileInChunks({
       file,
-      sourceDevice: "Browser",
+      sourceDevice,
       chunkSizeBytes,
       signal: controller.signal,
       onSessionCreated: (sessionId) => setActiveUpload({ controller, sessionId }),

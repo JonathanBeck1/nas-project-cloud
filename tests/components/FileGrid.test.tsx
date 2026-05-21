@@ -130,4 +130,43 @@ describe("FileGrid", () => {
     expect(screen.queryByRole("img", { name: "Preview of bracket.stl" })).not.toBeInTheDocument();
     expect(screen.getByText("bracket.stl")).toBeVisible();
   });
+
+  it("renders a row-per-file table in list mode with shared selection", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const onToggleSelected = vi.fn();
+
+    render(
+      <FileGrid
+        files={[fixture, notesFixture]}
+        mode="list"
+        selectionMode="multiple"
+        selectedFileIds={[fixture.id]}
+        onSelectFile={onSelect}
+        onToggleSelected={onToggleSelected}
+      />
+    );
+
+    const table = screen.getByRole("table", { name: "Files" });
+    expect(table).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Name" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Size" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Type" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Source" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Updated" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Actions" })).toBeVisible();
+
+    expect(screen.getByRole("checkbox", { name: "Select bracket.stl" })).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "bracket.stl" }));
+    expect(onSelect).toHaveBeenCalledWith(fixture);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select notes.txt" }));
+    expect(onToggleSelected).toHaveBeenCalledWith("file_notes");
+
+    const downloadLinks = screen.getAllByRole("link", { name: /Download/ });
+    expect(downloadLinks).toHaveLength(2);
+    expect(downloadLinks[0]).toHaveAttribute("href", "/api/files/file_bracket/download");
+    expect(downloadLinks[1]).toHaveAttribute("href", "/api/files/file_notes/download");
+  });
 });

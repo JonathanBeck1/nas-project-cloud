@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Inbox, UploadCloud } from "lucide-react";
 import { CommandBar } from "./CommandBar";
 import { BulkActionBar } from "./BulkActionBar";
 import { DetailDrawer } from "./DetailDrawer";
 import { DropZone } from "./DropZone";
 import { FileGrid } from "./FileGrid";
+import { MobileNavTrigger } from "./MobileNavTrigger";
 import { ProjectDialog } from "./ProjectDialog";
 import { Sidebar } from "./Sidebar";
 import { UploadCenter } from "./UploadCenter";
@@ -14,11 +15,29 @@ import { archiveFile, setFileTags as setFileTagsRequest, updateFileAssignment } 
 import type { Category, CloudFile, Project, Tag } from "@/lib/shared/types";
 import type { WorkspaceData } from "@/lib/server/workspaceData";
 import type { ProjectDialogInput } from "./ProjectDialog";
+import type { FileGridMode } from "./FileGrid";
 
 type AppShellProps = {
   initialData?: WorkspaceData;
   initialFiles?: CloudFile[];
 };
+
+const SEARCH_DEBOUNCE_MS = 200;
+const VIEW_MODE_STORAGE_KEY = "nas-cloud:viewMode";
+
+type SearchStatus = "idle" | "loading" | "success" | "error";
+
+function readStoredViewMode(): FileGridMode {
+  if (typeof window === "undefined") {
+    return "grid";
+  }
+  try {
+    const raw = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return raw === "list" ? "list" : "grid";
+  } catch {
+    return "grid";
+  }
+}
 
 export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
@@ -26,12 +45,94 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [categories] = useState<Category[]>(initialData?.categories ?? []);
   const [tags] = useState<Tag[]>(initialData?.tags ?? []);
   const [query, setQuery] = useState("");
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>("idle");
+  const [searchResults, setSearchResults] = useState<CloudFile[]>([]);
+  const [searchTruncated, setSearchTruncated] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const [viewMode, setViewMode] = useState<FileGridMode>("grid");
+
+  useEffect(() => {
+    setViewMode(readStoredViewMode());
+  }, []);
+
+  const handleViewModeChange = (mode: FileGridMode) => {
+    setViewMode(mode);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
+      } catch {
+        // localStorage can be unavailable (private mode, quota); fall back gracefully.
+      }
+    }
+  };
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [fileActionMessage, setFileActionMessage] = useState("");
   const [fileActionError, setFileActionError] = useState("");
   const [isFileActionBusy, setIsFileActionBusy] = useState(false);
-  const visibleFiles = files.filter((file) => matchesQuery(file, query));
+
+  const trimmedQuery = query.trim();
+  const isQueryActive = trimmedQuery.length > 0;
+
+  useEffect(() => {
+    if (!isQueryActive) {
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
+      setSearchStatus("idle");
+      setSearchResults([]);
+      setSearchTruncated(false);
+      setSearchError(null);
+      return;
+    }
+
+    const handle = window.setTimeout(() => {
+      searchAbortRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+      setSearchStatus("loading");
+      setSearchError(null);
+
+      const url = `/api/search?q=${encodeURIComponent(trimmedQuery)}`;
+      void fetch(url, { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error("Search failed");
+          }
+          return (await response.json()) as { files?: CloudFile[]; truncated?: boolean };
+        })
+        .then((body) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+          setSearchResults(body.files ?? []);
+          setSearchTruncated(Boolean(body.truncated));
+          setSearchStatus("success");
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+            return;
+          }
+          setSearchError(error instanceof Error ? error.message : "Search failed");
+          setSearchStatus("error");
+        });
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [isQueryActive, trimmedQuery]);
+
+  useEffect(() => {
+    return () => {
+      searchAbortRef.current?.abort();
+    };
+  }, []);
+
+  const visibleFiles = isQueryActive ? searchResults : files;
+  const isSearching = isQueryActive && searchStatus === "loading";
+  const showTruncationBanner = isQueryActive && searchStatus === "success" && searchTruncated;
+  const searchErrorMessage = isQueryActive && searchStatus === "error" ? searchError : null;
   const selectedFile = visibleFiles.find((file) => file.id === selectedFileId) ?? null;
   const selectedBulkFiles = files.filter((file) => selectedFileIds.includes(file.id));
 
@@ -170,12 +271,23 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   return (
     <div className="min-h-screen bg-surface text-ink">
       <div className="grid min-h-screen grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
-        <div className="min-h-0">
+        <div className="hidden min-h-0 md:block">
           <Sidebar projects={projects} activeHref="/" />
         </div>
 
         <div className="flex min-w-0 flex-col">
-          <CommandBar query={query} onQueryChange={setQuery} uploadInputId="workspace-file-upload" />
+          <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-3 md:hidden">
+            <MobileNavTrigger projects={projects} activeHref="/" />
+            <p className="truncate text-sm font-semibold text-ink">NAS Project Cloud</p>
+          </div>
+          <CommandBar
+            query={query}
+            onQueryChange={setQuery}
+            uploadInputId="workspace-file-upload"
+            isSearching={isSearching}
+            viewMode={viewMode}
+            onChangeViewMode={handleViewModeChange}
+          />
 
           <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 lg:px-6">
             <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -184,8 +296,13 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">Local Library</p>
                     <h1 id="inbox-heading" className="mt-1 text-xl font-semibold text-ink">
-                      Inbox
+                      {isQueryActive ? "Search" : "Inbox"}
                     </h1>
+                    {isQueryActive ? (
+                      <p className="mt-1 text-xs text-muted">
+                        Showing results for &ldquo;{trimmedQuery}&rdquo;
+                      </p>
+                    ) : null}
                   </div>
                   <ProjectDialog onCreate={handleCreateProject} />
                 </div>
@@ -222,6 +339,22 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
 
                   <UploadCenter initialSessions={initialData?.openUploadSessions ?? []} />
 
+                  {showTruncationBanner ? (
+                    <p
+                      role="status"
+                      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700"
+                    >
+                      Showing the first 200 results. Refine the query to narrow them down.
+                    </p>
+                  ) : null}
+                  {searchErrorMessage ? (
+                    <p
+                      role="alert"
+                      className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700"
+                    >
+                      {searchErrorMessage}
+                    </p>
+                  ) : null}
                   {fileActionMessage ? (
                     <p
                       role="status"
@@ -239,7 +372,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                     </p>
                   ) : null}
 
-                  <div aria-label="Inbox files">
+                  <div aria-label={isQueryActive ? "Search results" : "Inbox files"}>
                     <BulkActionBar
                       selectedCount={selectedFileIds.length}
                       projects={projects}
@@ -254,6 +387,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                       selectedFileId={selectedFileId}
                       selectedFileIds={selectedFileIds}
                       selectionMode="multiple"
+                      mode={viewMode}
                       onSelectFile={(file) => setSelectedFileId(file.id)}
                       onToggleSelected={handleToggleSelectedFile}
                     />
@@ -280,13 +414,3 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   );
 }
 
-function matchesQuery(file: CloudFile, query: string): boolean {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) {
-    return true;
-  }
-
-  return [file.name, file.storagePath, file.sourceDevice, file.extension, file.family].some((value) =>
-    value.toLowerCase().includes(normalized)
-  );
-}

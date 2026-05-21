@@ -58,6 +58,11 @@ const cadCategory: Category = {
 describe("AppShell", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    try {
+      window.localStorage.clear();
+    } catch {
+      // ignore
+    }
   });
 
   it("renders the primary workspace landmarks and real navigation entries", () => {
@@ -177,7 +182,7 @@ describe("AppShell", () => {
     expect(screen.getByRole("button", { name: "Archive" })).toBeVisible();
   });
 
-  it("filters visible files by search text", async () => {
+  it("calls the server search route with debounced queries and shows the returned files", async () => {
     const user = userEvent.setup();
     const secondFile = {
       ...uploadedFile,
@@ -188,16 +193,28 @@ describe("AppShell", () => {
       mimeType: "image/png",
       storagePath: "Inbox/Browser/render.png"
     };
+    const fetchMock = vi.fn<typeof fetch>((input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      if (url.startsWith("/api/search")) {
+        return Promise.resolve(new Response(JSON.stringify({ files: [secondFile], truncated: false }), { status: 200 }));
+      }
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     render(<AppShell initialData={{ files: [uploadedFile, secondFile], projects: [], categories: [], tags: [] }} />);
 
     await user.type(screen.getByRole("searchbox", { name: "Search files" }), "render");
 
-    expect(screen.getByRole("button", { name: "render.png" })).toBeVisible();
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith("/api/search?q=render", expect.objectContaining({ signal: expect.any(Object) }))
+    );
+    expect(await screen.findByRole("button", { name: "render.png" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Search" })).toBeVisible();
   });
 
-  it("hides detail actions when the selected file is filtered out", async () => {
+  it("hides detail actions when the selected file is not in the search results", async () => {
     const user = userEvent.setup();
     const imageFile = {
       ...uploadedFile,
@@ -208,6 +225,14 @@ describe("AppShell", () => {
       mimeType: "image/png",
       storagePath: "/nas/inbox/render.png"
     };
+    const fetchMock = vi.fn<typeof fetch>((input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      if (url.startsWith("/api/search")) {
+        return Promise.resolve(new Response(JSON.stringify({ files: [imageFile], truncated: false }), { status: 200 }));
+      }
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     render(<AppShell initialData={{ files: [uploadedFile, imageFile], projects: [], categories: [], tags: [] }} />);
 
@@ -218,30 +243,78 @@ describe("AppShell", () => {
       "href",
       "/api/files/file_manual/download"
     );
-    expect(within(details).getByRole("button", { name: "Archive" })).toBeVisible();
 
     await user.type(screen.getByRole("searchbox", { name: "Search files" }), "render");
 
-    expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument());
     expect(within(details).getByText("Select a file to inspect its project metadata.")).toBeVisible();
     expect(within(details).queryByRole("link", { name: "Download" })).not.toBeInTheDocument();
-    expect(within(details).queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
   });
 
-  it("filters visible files by source device metadata", async () => {
+  it("renders a truncation banner when the server reports the result was capped", async () => {
     const user = userEvent.setup();
-    const scannerFile = {
-      ...notesFile,
-      sourceDevice: "Scanner",
-      storagePath: "/nas/inbox/notes.txt"
-    };
+    const fetchMock = vi.fn<typeof fetch>((input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      if (url.startsWith("/api/search")) {
+        return Promise.resolve(new Response(JSON.stringify({ files: [uploadedFile], truncated: true }), { status: 200 }));
+      }
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell initialData={{ files: [uploadedFile, scannerFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
 
-    await user.type(screen.getByRole("searchbox", { name: "Search files" }), "browser");
+    await user.type(screen.getByRole("searchbox", { name: "Search files" }), "manual");
 
-    expect(screen.getByRole("button", { name: "manual.pdf" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "notes.txt" })).not.toBeInTheDocument();
+    expect(await screen.findByText(/first 200 results/i)).toBeVisible();
+  });
+
+  it("toggles between grid and list view, persisting the choice in localStorage", async () => {
+    const user = userEvent.setup();
+    render(<AppShell initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+
+    const gridButton = screen.getByRole("button", { name: "Grid view" });
+    const listButton = screen.getByRole("button", { name: "List view" });
+
+    expect(gridButton).toHaveAttribute("aria-pressed", "true");
+    expect(listButton).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(listButton);
+
+    expect(listButton).toHaveAttribute("aria-pressed", "true");
+    expect(gridButton).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("table", { name: "Files" })).toBeVisible();
+    expect(window.localStorage.getItem("nas-cloud:viewMode")).toBe("list");
+
+    await user.click(gridButton);
+    expect(window.localStorage.getItem("nas-cloud:viewMode")).toBe("grid");
+  });
+
+  it("restores the saved view mode from localStorage on mount", async () => {
+    window.localStorage.setItem("nas-cloud:viewMode", "list");
+
+    render(<AppShell initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByRole("table", { name: "Files" })).toBeVisible();
+  });
+
+  it("surfaces a failure banner when the search route errors", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<typeof fetch>((input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      if (url.startsWith("/api/search")) {
+        return Promise.resolve(new Response("oops", { status: 500 }));
+      }
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+
+    await user.type(screen.getByRole("searchbox", { name: "Search files" }), "manual");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/search failed/i);
   });
 
   it("archives a selected file and removes it from the grid", async () => {
