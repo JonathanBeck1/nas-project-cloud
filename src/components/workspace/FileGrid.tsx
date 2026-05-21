@@ -1,6 +1,6 @@
 import React from "react";
 import Image from "next/image";
-import { Box, Download, File, FileImage, FileVideo } from "lucide-react";
+import { Box, Download, File, FileImage, FileVideo, Play } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CloudFile, FileFamily, FilePreviewStatus } from "@/lib/shared/types";
 
@@ -140,14 +140,24 @@ export function FileGrid({
             >
               <div className="flex min-w-0 items-start gap-3 pr-7">
                 {previewUrl ? (
-                  <Image
-                    unoptimized
-                    src={previewUrl}
-                    alt={`Preview of ${file.name}`}
-                    width={48}
-                    height={48}
-                    className="h-12 w-12 shrink-0 rounded-md border border-line bg-surface object-cover"
-                  />
+                  <div className="relative h-12 w-12 shrink-0">
+                    <Image
+                      unoptimized
+                      src={previewUrl}
+                      alt={`Preview of ${file.name}`}
+                      width={48}
+                      height={48}
+                      className="h-12 w-12 rounded-md border border-line bg-surface object-cover"
+                    />
+                    {file.family === "video" ? (
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 grid place-items-center rounded-md bg-black/35"
+                      >
+                        <Play className="h-4 w-4 fill-white text-white drop-shadow" />
+                      </span>
+                    ) : null}
+                  </div>
                 ) : (
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line bg-surface text-accent">
                     <Icon aria-hidden="true" className="h-5 w-5" />
@@ -298,7 +308,7 @@ function previewStatusClass(status: FilePreviewStatus | undefined): string {
   if (status === "failed") {
     return "rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 font-medium text-red-700";
   }
-  if (status === "skipped") {
+  if (status === "skipped" || status === "unsupported") {
     return "rounded-md border border-line bg-surface px-1.5 py-0.5 font-medium text-muted";
   }
   return "rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700";

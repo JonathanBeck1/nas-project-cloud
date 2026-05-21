@@ -897,7 +897,8 @@ export function createMetadataRepository(db: AppDatabase) {
         pending: 0,
         ready: 0,
         failed: 0,
-        skipped: 0
+        skipped: 0,
+        unsupported: 0
       };
 
       for (const row of rows) {
