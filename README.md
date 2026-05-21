@@ -184,7 +184,7 @@ tests/
 NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbed, partial, or deliberately deferred:
 
 - **Search uses `LIKE`, not FTS.** Good for the typical NAS corpus; an SQLite FTS5 index lands once the test corpus exposes a hot path. Result lists are capped at 200 rows with a banner.
-- **Previews: image and video today.** Video poster frames need `ffmpeg` (baked into the default Docker image). Document and CAD previews stay `skipped` until v0.3 PR 3 lands single-page PDF rendering. The Settings → Preview pipeline card shows live counts and an "ffmpeg ready / unavailable" badge.
+- **Previews: image, video, and single-page PDF today.** Video poster frames need `ffmpeg`; PDF first-page previews need `poppler-utils` (`pdftoppm`). Both are baked into the default Docker image; missing binaries are recorded as `unsupported` instead of crashing the worker. Other document families (docx, xlsx) and CAD families stay `skipped`. The Settings → Preview pipeline card shows live counts and `ffmpeg ready / unavailable` + `poppler ready / unavailable` badges.
 - **Preview worker is opt-in.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on` to run the in-process scheduler, or hit `POST /api/maintenance/previews` from cron. Defaults to off so dev environments don't fight the test runner.
 - **Upload Center shows open sessions only.** Failed and aborted sessions don't surface yet — coming in v0.3. Resume after a stale or failed session needs a desktop helper or explicit drag-back UX and is queued for v0.4.
 - **Project delete leaves files on disk.** The metadata detaches them (project_id becomes null) but the bytes still live under `Projects/<slug>/Inbox/`. Move them via the bulk action bar in the inbox view if you want them out of that folder.

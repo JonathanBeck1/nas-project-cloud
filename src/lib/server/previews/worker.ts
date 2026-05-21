@@ -8,6 +8,8 @@ import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
 import type { FilePreview, PreviewJob } from "@/lib/shared/types";
 import { probeFfmpeg } from "./ffmpeg";
+import { renderPdfFirstPage } from "./pdf";
+import { probePoppler } from "./poppler";
 import { generateVideoPoster } from "./video";
 
 type PreviewRepo = {
@@ -47,12 +49,15 @@ export type PreviewWorkerResult = {
 };
 
 export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJobInput): Promise<void> {
-  if (job.file.family !== "image" && job.file.family !== "video") {
+  const isPdf = job.file.family === "document" && job.file.extension.toLowerCase() === "pdf";
+  const isSupported = job.file.family === "image" || job.file.family === "video" || isPdf;
+
+  if (!isSupported) {
     repo.upsertFilePreview({
       fileId: job.file.id,
       kind: job.preview.kind,
       status: "skipped",
-      error: `preview generation is not supported for ${job.file.family} files`
+      error: skippedReason(job.file.family)
     });
     return;
   }
@@ -78,7 +83,19 @@ export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJo
     return;
   }
 
-  await generateVideoPosterFrame({ job, repo, storage, absolutePath });
+  if (job.file.family === "video") {
+    await generateVideoPosterFrame({ job, repo, storage, absolutePath });
+    return;
+  }
+
+  await generatePdfFirstPage({ job, repo, storage, absolutePath });
+}
+
+function skippedReason(family: PreviewJob["file"]["family"]): string {
+  if (family === "document") {
+    return "preview generation is only supported for PDF documents in v0.3";
+  }
+  return `preview generation is not supported for ${family} files`;
 }
 
 async function generateImageThumbnail({
@@ -171,6 +188,62 @@ async function generateVideoPosterFrame({
     });
   } finally {
     await fs.unlink(tempFramePath).catch(() => undefined);
+  }
+}
+
+async function generatePdfFirstPage({
+  job,
+  repo,
+  storage,
+  absolutePath
+}: ProcessPreviewJobInput & { absolutePath: string }) {
+  const probe = await probePoppler();
+  if (!probe.available) {
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "unsupported",
+      error: probe.error ?? "pdftoppm (poppler-utils) not available"
+    });
+    return;
+  }
+
+  const previewPath = path.posix.join(".previews", "images", `${job.file.id}.webp`);
+  const absolutePreviewPath = storage.absolutePathFor(previewPath);
+  const tempPagePath = path.join(os.tmpdir(), `nas-cloud-pdf-${job.file.id}-${nanoid(6)}.png`);
+
+  await fs.mkdir(path.dirname(absolutePreviewPath), { recursive: true });
+
+  try {
+    await renderPdfFirstPage({
+      absolutePath,
+      outputPngPath: tempPagePath
+    });
+
+    const info = await sharp(tempPagePath)
+      .rotate()
+      .resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toFile(absolutePreviewPath);
+
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "ready",
+      previewPath,
+      width: info.width,
+      height: info.height,
+      error: null
+    });
+  } catch (error) {
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "failed",
+      error: error instanceof Error ? error.message : "pdf preview generation failed"
+    });
+  } finally {
+    await fs.unlink(tempPagePath).catch(() => undefined);
   }
 }
 

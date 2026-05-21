@@ -27,10 +27,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
-# ffmpeg powers the v0.3 video poster-frame extractor. The probe in
-# src/lib/server/previews/ffmpeg.ts caches availability at boot, so a
-# missing binary degrades cleanly to status: "unsupported".
-RUN apk add --no-cache ffmpeg \
+# Native binaries the v0.3 preview pipeline depends on:
+#   ffmpeg        — video poster frames (PR 2)
+#   poppler-utils — pdftoppm for first-page PDF previews (PR 3)
+# Each is probed once at first use; a missing binary degrades cleanly
+# to status: "unsupported" without crashing the worker.
+RUN apk add --no-cache ffmpeg poppler-utils \
   && addgroup -S -g 1001 nodejs \
   && adduser -S -u 1001 nextjs -G nodejs \
   && mkdir -p /data /mnt/nas-cloud \
