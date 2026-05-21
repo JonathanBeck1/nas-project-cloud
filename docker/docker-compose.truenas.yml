@@ -10,6 +10,8 @@ services:
       NAS_CLOUD_DB_PATH: /data/nas-cloud.sqlite
       NAS_CLOUD_PUBLIC_BASE_PATH: /files
       NAS_CLOUD_MAX_UPLOAD_BYTES: "2147483648"
+      # Generate previews in-process. Set to "off" to drive previews from cron instead.
+      NAS_CLOUD_PREVIEW_SCHEDULER: "on"
     volumes:
       - /mnt/OfficeNAS/nas-project-cloud/files:/mnt/nas-cloud
       - /mnt/OfficeNAS/nas-project-cloud/appdata:/data

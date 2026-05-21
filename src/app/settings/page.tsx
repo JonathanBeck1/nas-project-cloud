@@ -2,6 +2,7 @@ import React from "react";
 import { Settings } from "lucide-react";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
 import { DeviceLabelEditor } from "@/components/workspace/DeviceLabelEditor";
+import { PreviewStatusCard } from "@/components/workspace/PreviewStatusCard";
 import { appConfig } from "@/lib/server/config";
 import { requirePageSession } from "@/lib/server/pageSession";
 import { formatBytes } from "@/components/workspace/FileGrid";
@@ -16,7 +17,8 @@ export default async function SettingsPage() {
     { label: "Storage root", value: appConfig.storageRoot },
     { label: "Database path", value: appConfig.dbPath },
     { label: "Public base path", value: appConfig.publicBasePath },
-    { label: "Max upload size", value: formatBytes(appConfig.maxUploadBytes) }
+    { label: "Max upload size", value: formatBytes(appConfig.maxUploadBytes) },
+    { label: "Preview scheduler", value: appConfig.previewScheduler === "on" ? "on (in-process)" : "off (use cron)" }
   ];
 
   return (
@@ -45,6 +47,8 @@ export default async function SettingsPage() {
             </div>
           ))}
         </dl>
+
+        <PreviewStatusCard />
 
         <DeviceLabelEditor />
       </div>
