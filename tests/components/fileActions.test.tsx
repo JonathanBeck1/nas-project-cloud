@@ -14,7 +14,10 @@ describe("fileActions", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(archiveFile("file_123")).resolves.toEqual(file);
-    expect(fetchMock).toHaveBeenCalledWith("/api/files/file_123/archive", { method: "POST" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_123/archive",
+      expect.objectContaining({ method: "POST" })
+    );
   });
 
   it("updates file assignment through patch", async () => {
@@ -45,7 +48,10 @@ describe("fileActions", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(restoreFile("file_123")).resolves.toEqual(file);
-    expect(fetchMock).toHaveBeenCalledWith("/api/files/file_123/restore", { method: "POST" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_123/restore",
+      expect.objectContaining({ method: "POST" })
+    );
   });
 
   it("permanently deletes archived files through the delete endpoint", async () => {
@@ -55,6 +61,9 @@ describe("fileActions", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(deleteFilePermanently("file_123")).resolves.toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledWith("/api/files/file_123/delete", { method: "DELETE" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_123/delete",
+      expect.objectContaining({ method: "DELETE" })
+    );
   });
 });

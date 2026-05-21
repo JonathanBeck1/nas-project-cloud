@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sessionCookieName } from "./sessions";
+import { clearCsrfCookie, createCsrfToken, withCsrfCookie } from "./csrf";
 
 export function withSessionCookie(response: NextResponse, token: string): NextResponse {
   response.cookies.set(sessionCookieName, token, {
@@ -9,7 +10,7 @@ export function withSessionCookie(response: NextResponse, token: string): NextRe
     path: "/",
     maxAge: 60 * 60 * 24 * 30
   });
-  return response;
+  return withCsrfCookie(response, createCsrfToken());
 }
 
 export function clearSessionCookie(response: NextResponse): NextResponse {
@@ -20,5 +21,5 @@ export function clearSessionCookie(response: NextResponse): NextResponse {
     path: "/",
     maxAge: 0
   });
-  return response;
+  return clearCsrfCookie(response);
 }

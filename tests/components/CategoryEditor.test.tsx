@@ -120,7 +120,10 @@ describe("CategoryEditor", () => {
       'Delete the "Reference" category? 4 files will become uncategorized.'
     );
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith("/api/categories/cat_reference", { method: "DELETE" })
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/categories/cat_reference",
+        expect.objectContaining({ method: "DELETE" })
+      )
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Deleted Reference");
     expect(screen.queryByText("Reference")).not.toBeInTheDocument();

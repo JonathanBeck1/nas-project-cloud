@@ -330,7 +330,12 @@ describe("AppShell", () => {
     await user.click(screen.getByRole("button", { name: "manual.pdf" }));
     await user.click(screen.getByRole("button", { name: "Archive" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/files/file_manual/archive", { method: "POST" }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/files/file_manual/archive",
+        expect.objectContaining({ method: "POST" })
+      )
+    );
     expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
   });
 
@@ -351,8 +356,14 @@ describe("AppShell", () => {
     await user.click(screen.getByRole("button", { name: "Archive" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock).toHaveBeenCalledWith("/api/files/file_manual/archive", { method: "POST" });
-    expect(fetchMock).toHaveBeenCalledWith("/api/files/file_notes/archive", { method: "POST" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_manual/archive",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_notes/archive",
+      expect.objectContaining({ method: "POST" })
+    );
     expect(screen.queryByRole("button", { name: "manual.pdf" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "notes.txt" })).not.toBeInTheDocument();
     expect(await screen.findByRole("status")).toHaveTextContent("Archived 2 files");

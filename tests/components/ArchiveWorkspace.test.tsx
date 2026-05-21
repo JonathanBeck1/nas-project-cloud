@@ -46,7 +46,12 @@ describe("ArchiveWorkspace", () => {
 
     await user.click(screen.getByRole("button", { name: "Restore manual.pdf" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/files/file_manual/restore", { method: "POST" }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/files/file_manual/restore",
+        expect.objectContaining({ method: "POST" })
+      )
+    );
     expect(await screen.findByRole("status")).toHaveTextContent("Restored manual.pdf");
     expect(screen.queryByText("manual.pdf")).not.toBeInTheDocument();
     expect(screen.getByText("Archive is empty")).toBeVisible();
@@ -65,7 +70,12 @@ describe("ArchiveWorkspace", () => {
     await user.click(screen.getByRole("button", { name: "Permanently delete manual.pdf" }));
 
     expect(confirmSpy).toHaveBeenCalledWith("Permanently delete manual.pdf? This cannot be undone.");
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/files/file_manual/delete", { method: "DELETE" }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/files/file_manual/delete",
+        expect.objectContaining({ method: "DELETE" })
+      )
+    );
     expect(await screen.findByRole("status")).toHaveTextContent("Deleted manual.pdf");
     expect(screen.queryByText("manual.pdf")).not.toBeInTheDocument();
   });

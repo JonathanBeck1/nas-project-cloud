@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { hashSessionToken, sessionCookieName } from "./sessions";
+import { isMutatingMethod, verifyCsrfToken } from "./csrf";
 
 export type ApiSessionResult =
   | { ok: true; userId: string; sessionId: string; deviceId: string | null }
@@ -17,6 +18,10 @@ export async function requireApiSession(request: Request): Promise<ApiSessionRes
   const session = repo.getSessionByTokenHash(hashSessionToken(token));
   if (!session || Date.parse(session.expiresAt) <= Date.now()) {
     return unauthorized();
+  }
+
+  if (isMutatingMethod(request.method) && !verifyCsrfToken(request)) {
+    return csrfFailure();
   }
 
   return {
@@ -43,5 +48,12 @@ function unauthorized(): ApiSessionResult {
   return {
     ok: false,
     response: NextResponse.json({ error: "authentication required" }, { status: 401 })
+  };
+}
+
+function csrfFailure(): ApiSessionResult {
+  return {
+    ok: false,
+    response: NextResponse.json({ error: "invalid csrf token" }, { status: 403 })
   };
 }

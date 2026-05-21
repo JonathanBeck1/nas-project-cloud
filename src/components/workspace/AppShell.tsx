@@ -12,6 +12,7 @@ import { ProjectDialog } from "./ProjectDialog";
 import { Sidebar } from "./Sidebar";
 import { UploadCenter } from "./UploadCenter";
 import { archiveFile, setFileTags as setFileTagsRequest, updateFileAssignment } from "@/lib/client/fileActions";
+import { csrfHeaders } from "@/lib/client/csrf";
 import type { Category, CloudFile, Project, Tag } from "@/lib/shared/types";
 import type { WorkspaceData } from "@/lib/server/workspaceData";
 import type { ProjectDialogInput } from "./ProjectDialog";
@@ -139,7 +140,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const handleCreateProject = async (project: ProjectDialogInput) => {
     const response = await fetch("/api/projects", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeaders() },
       body: JSON.stringify(project)
     });
 

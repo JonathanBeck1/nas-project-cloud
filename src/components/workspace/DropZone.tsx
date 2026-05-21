@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { UploadCloud } from "lucide-react";
 import { abortUploadSession, uploadFileInChunks } from "@/lib/client/uploadSessions";
+import { csrfHeaders } from "@/lib/client/csrf";
 import { resolveSourceDeviceLabel } from "@/lib/client/sourceDevice";
 import type { CloudFile } from "@/lib/shared/types";
 
@@ -85,6 +86,7 @@ export function DropZone({
 
     const response = await fetch("/api/files", {
       method: "POST",
+      headers: { ...csrfHeaders() },
       body: formData
     });
 
