@@ -21,6 +21,13 @@ vi.mock("@/lib/server/auth/passwords", () => ({
   hashPassword: mocks.hashPassword,
   verifyPassword: mocks.verifyPassword
 }));
+vi.mock("@/lib/server/rateLimit", () => ({
+  createRateLimiter: () => ({
+    consume: () => ({ allowed: true, remaining: 99 }),
+    reset: () => undefined
+  }),
+  clientIpFromRequest: () => "127.0.0.1"
+}));
 
 describe("auth API", () => {
   beforeEach(() => {

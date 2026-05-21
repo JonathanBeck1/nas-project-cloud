@@ -4,6 +4,12 @@ import { withSessionCookie } from "@/lib/server/auth/http";
 import { hashPairingCode } from "@/lib/server/auth/pairing";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
+import { clientIpFromRequest, createRateLimiter } from "@/lib/server/rateLimit";
+
+const PAIR_SHORT_WINDOW_MS = 10 * 60 * 1000;
+const PAIR_SHORT_MAX = 5;
+const PAIR_LONG_WINDOW_MS = 24 * 60 * 60 * 1000;
+const PAIR_LONG_MAX = 50;
 
 export async function POST(request: Request) {
   const body = await jsonBody(request);
@@ -16,6 +22,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid pairing code" }, { status: 400 });
   }
 
+  const limiter = createRateLimiter();
+  const ip = clientIpFromRequest(request);
+
+  const longWindow = limiter.consume({
+    bucket: "pair_ip_day",
+    key: ip,
+    max: PAIR_LONG_MAX,
+    windowMs: PAIR_LONG_WINDOW_MS
+  });
+  if (!longWindow.allowed) {
+    return rateLimited(longWindow.retryAfterSeconds);
+  }
+
+  const shortWindow = limiter.consume({
+    bucket: "pair_ip_short",
+    key: ip,
+    max: PAIR_SHORT_MAX,
+    windowMs: PAIR_SHORT_WINDOW_MS
+  });
+  if (!shortWindow.allowed) {
+    return rateLimited(shortWindow.retryAfterSeconds);
+  }
+
   const repo = createMetadataRepository(getDatabase());
   const pairing = repo.getDevicePairingCodeByHash(hashPairingCode(code));
   if (!pairing || pairing.consumedAt || Date.parse(pairing.expiresAt) <= Date.now()) {
@@ -26,6 +55,9 @@ export async function POST(request: Request) {
   if (!consumed) {
     return NextResponse.json({ error: "invalid pairing code" }, { status: 401 });
   }
+
+  // Successful pair — release this IP from the short-window throttle.
+  limiter.reset("pair_ip_short", ip);
 
   const device = repo.createDevice({
     userId: pairing.userId,
@@ -41,6 +73,16 @@ export async function POST(request: Request) {
   });
 
   return withSessionCookie(NextResponse.json({ device }), token);
+}
+
+function rateLimited(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: "too many requests", retryAfterSeconds },
+    {
+      status: 429,
+      headers: { "Retry-After": String(Math.max(1, retryAfterSeconds)) }
+    }
+  );
 }
 
 async function jsonBody(request: Request): Promise<Record<string, unknown> | null> {
