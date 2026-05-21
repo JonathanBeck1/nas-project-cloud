@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireApiSession } from "@/lib/server/auth/guards";
+import { requireMaintenanceAuth } from "@/lib/server/auth/maintenance";
 import { runPreviewWorker } from "@/lib/server/previews/worker";
 
 export async function POST(request: Request) {
-  const auth = await requireApiSession(request);
+  const auth = await requireMaintenanceAuth(request);
   if (!auth.ok) {
     return auth.response;
   }
