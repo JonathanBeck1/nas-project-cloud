@@ -4,11 +4,13 @@ import { createStorageService } from "@/lib/server/storage";
 
 type UploadCleanupSession = {
   id: string;
-  tempPath: string;
+  tempPath: string | null;
 };
 
 type UploadCleanupRepo = {
   listStaleUploadSessions: (olderThanIso: string) => UploadCleanupSession[];
+  listOrphanedFailedUploadSessions?: (olderThanIso: string) => UploadCleanupSession[];
+  clearUploadSessionTempPath?: (id: string) => unknown;
   failUploadSession: (id: string, error: string) => unknown;
 };
 
@@ -26,6 +28,7 @@ export type UploadCleanupResult = {
   scanned: number;
   cleaned: number;
   failed: number;
+  orphanedTempCleaned: number;
 };
 
 export async function cleanupStaleUploads({
@@ -33,18 +36,36 @@ export async function cleanupStaleUploads({
   storage = createStorageService(),
   olderThan
 }: CleanupStaleUploadsInput): Promise<UploadCleanupResult> {
-  const sessions = repo.listStaleUploadSessions(olderThan.toISOString());
+  const olderThanIso = olderThan.toISOString();
+  const stale = repo.listStaleUploadSessions(olderThanIso);
+  const orphaned = repo.listOrphanedFailedUploadSessions
+    ? repo.listOrphanedFailedUploadSessions(olderThanIso)
+    : [];
+
   const result: UploadCleanupResult = {
-    scanned: sessions.length,
+    scanned: stale.length + orphaned.length,
     cleaned: 0,
-    failed: 0
+    failed: 0,
+    orphanedTempCleaned: 0
   };
 
-  for (const session of sessions) {
+  for (const session of stale) {
+    if (!session.tempPath) continue;
     try {
       await storage.abortUploadSession(session.tempPath);
       repo.failUploadSession(session.id, "stale upload cleaned up");
       result.cleaned += 1;
+    } catch {
+      result.failed += 1;
+    }
+  }
+
+  for (const session of orphaned) {
+    if (!session.tempPath) continue;
+    try {
+      await storage.abortUploadSession(session.tempPath);
+      repo.clearUploadSessionTempPath?.(session.id);
+      result.orphanedTempCleaned += 1;
     } catch {
       result.failed += 1;
     }

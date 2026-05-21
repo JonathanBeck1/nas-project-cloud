@@ -186,7 +186,7 @@ NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbe
 - **Search uses `LIKE`, not FTS.** Good for the typical NAS corpus; an SQLite FTS5 index lands once the test corpus exposes a hot path. Result lists are capped at 200 rows with a banner.
 - **Previews: image, video, and single-page PDF today.** Video poster frames need `ffmpeg`; PDF first-page previews need `poppler-utils` (`pdftoppm`). Both are baked into the default Docker image; missing binaries are recorded as `unsupported` instead of crashing the worker. Other document families (docx, xlsx) and CAD families stay `skipped`. The Settings → Preview pipeline card shows live counts and `ffmpeg ready / unavailable` + `poppler ready / unavailable` badges.
 - **Preview worker is opt-in.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on` to run the in-process scheduler, or hit `POST /api/maintenance/previews` from cron. Defaults to off so dev environments don't fight the test runner.
-- **Upload Center shows open sessions only.** Failed and aborted sessions don't surface yet — coming in v0.3. Resume after a stale or failed session needs a desktop helper or explicit drag-back UX and is queued for v0.4.
+- **Upload Center has tabs for Active / Failed / Aborted sessions** with a per-device filter. The cleanup job tidies orphaned chunks for failed sessions older than 24 hours. Resume after a stale or failed session needs a desktop helper or explicit drag-back UX and is queued for v0.4.
 - **Project delete leaves files on disk.** The metadata detaches them (project_id becomes null) but the bytes still live under `Projects/<slug>/Inbox/`. Move them via the bulk action bar in the inbox view if you want them out of that folder.
 - **No share / temp-link surface.** Files are owner-only. Sharing requires the `nas_cloud_session` cookie or a paired device.
 
@@ -196,7 +196,7 @@ A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers
 
 `v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). Near-term, in priority order:
 
-1. **`v0.3` preview pipeline.** In-process preview scheduler with a Settings status card *(in flight)*, video poster frames via `ffmpeg`, single-page PDF previews via `pdfjs-dist`, and Upload Center tabs that surface failed and aborted sessions. See [`docs/superpowers/plans/2026-05-20-v0.3-preview-pipeline-sprint.md`](./docs/superpowers/plans/2026-05-20-v0.3-preview-pipeline-sprint.md).
+1. **`v0.3` preview pipeline.** In-process preview scheduler with a Settings status card, video poster frames via `ffmpeg`, single-page PDF previews via `poppler-utils`, and Upload Center tabs that surface failed and aborted sessions — all shipped. The remaining v0.3 work is cutting `v0.3.0` with a CHANGELOG and screenshots. See [`docs/superpowers/plans/2026-05-20-v0.3-preview-pipeline-sprint.md`](./docs/superpowers/plans/2026-05-20-v0.3-preview-pipeline-sprint.md).
 2. **Upload resume.** Either a desktop helper that retains the file handle or an explicit drag-back UX. Queued for `v0.4`.
 3. **Move-files-back-on-project-delete** so the storage tree never has orphan project folders.
 4. **CAD preview strategy decision** (STL/STEP) and a renderer-choice spike.
