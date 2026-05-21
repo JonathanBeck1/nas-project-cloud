@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
-import { hashSessionToken, sessionCookieName } from "./sessions";
+import {
+  hashSessionToken,
+  sessionCookieName,
+  sessionExpiresAt,
+  shouldTouchSession
+} from "./sessions";
 import { isMutatingMethod, verifyCsrfToken } from "./csrf";
 
 export type ApiSessionResult =
@@ -24,12 +29,35 @@ export async function requireApiSession(request: Request): Promise<ApiSessionRes
     return csrfFailure();
   }
 
+  slideSession(repo, session);
+
   return {
     ok: true,
     userId: session.userId,
     sessionId: session.id,
     deviceId: session.deviceId
   };
+}
+
+type SlideRepo = {
+  touchSession: (id: string, expiresAt: string, lastSeenAt?: string) => void;
+  touchDevice: (deviceId: string, lastSeenAt?: string) => void;
+};
+
+type SlideSession = {
+  id: string;
+  deviceId: string | null;
+  lastSeenAt: string;
+};
+
+function slideSession(repo: SlideRepo, session: SlideSession): void {
+  if (!shouldTouchSession(session.lastSeenAt)) return;
+  const now = new Date();
+  const nowIso = now.toISOString();
+  repo.touchSession(session.id, sessionExpiresAt(now), nowIso);
+  if (session.deviceId) {
+    repo.touchDevice(session.deviceId, nowIso);
+  }
 }
 
 function sessionTokenFromRequest(request: Request): string {

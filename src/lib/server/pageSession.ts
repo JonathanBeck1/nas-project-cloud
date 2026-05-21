@@ -1,6 +1,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { hashSessionToken, sessionCookieName } from "@/lib/server/auth/sessions";
+import {
+  hashSessionToken,
+  sessionCookieName,
+  sessionExpiresAt,
+  shouldTouchSession
+} from "@/lib/server/auth/sessions";
 import { type AppDatabase, getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 
@@ -27,6 +32,15 @@ export async function requirePageSession(): Promise<PageSession> {
   const session = repo.getSessionByTokenHash(hashSessionToken(token));
   if (!session || Date.parse(session.expiresAt) <= Date.now()) {
     redirect("/login");
+  }
+
+  if (shouldTouchSession(session.lastSeenAt)) {
+    const now = new Date();
+    const nowIso = now.toISOString();
+    repo.touchSession(session.id, sessionExpiresAt(now), nowIso);
+    if (session.deviceId) {
+      repo.touchDevice(session.deviceId, nowIso);
+    }
   }
 
   return {

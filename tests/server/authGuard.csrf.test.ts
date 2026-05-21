@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   db: {},
   repo: {
-    getSessionByTokenHash: vi.fn()
+    getSessionByTokenHash: vi.fn(),
+    touchSession: vi.fn(),
+    touchDevice: vi.fn()
   }
 }));
 
