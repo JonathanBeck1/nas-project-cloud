@@ -10,8 +10,8 @@ import { FileGrid } from "./FileGrid";
 import { ProjectDialog } from "./ProjectDialog";
 import { Sidebar } from "./Sidebar";
 import { UploadCenter } from "./UploadCenter";
-import { archiveFile, updateFileAssignment } from "@/lib/client/fileActions";
-import type { Category, CloudFile, Project } from "@/lib/shared/types";
+import { archiveFile, setFileTags as setFileTagsRequest, updateFileAssignment } from "@/lib/client/fileActions";
+import type { Category, CloudFile, Project, Tag } from "@/lib/shared/types";
 import type { WorkspaceData } from "@/lib/server/workspaceData";
 import type { ProjectDialogInput } from "./ProjectDialog";
 
@@ -24,6 +24,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
   const [projects, setProjects] = useState<Project[]>(initialData?.projects ?? []);
   const [categories] = useState<Category[]>(initialData?.categories ?? []);
+  const [tags] = useState<Tag[]>(initialData?.tags ?? []);
   const [query, setQuery] = useState("");
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
@@ -151,6 +152,21 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     }
   };
 
+  const handleAssignTags = async (file: CloudFile, tagIds: string[]) => {
+    setIsFileActionBusy(true);
+    setFileActionMessage("");
+    setFileActionError("");
+    try {
+      const updated = await setFileTagsRequest(file.id, tagIds);
+      setFiles((currentFiles) => currentFiles.map((candidate) => (candidate.id === updated.id ? updated : candidate)));
+      setFileActionMessage(`Updated tags on ${updated.name}`);
+    } catch (error) {
+      setFileActionError(error instanceof Error ? error.message : "Could not update tags");
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-surface text-ink">
       <div className="grid min-h-screen grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
@@ -249,9 +265,11 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                 <DetailDrawer
                   file={selectedFile}
                   projects={projects}
+                  availableTags={tags}
                   isBusy={isFileActionBusy}
                   onArchive={handleArchiveFile}
                   onAssignProject={handleAssignProject}
+                  onAssignTags={handleAssignTags}
                 />
               </div>
             </div>

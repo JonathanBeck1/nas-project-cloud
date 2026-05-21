@@ -638,6 +638,17 @@ export function createMetadataRepository(db: AppDatabase) {
       return tag;
     },
 
+    getTagBySlug(slug: string): Tag | null {
+      const row = db.prepare<[string], TagRow>("select * from tags where slug = ? limit 1").get(slug);
+      return row ? tagFromRow(row) : null;
+    },
+
+    deleteTag(id: string): boolean {
+      // file_tags rows for this tag are removed by FK on delete cascade.
+      const result = db.prepare<[string]>("delete from tags where id = ?").run(id);
+      return result.changes > 0;
+    },
+
     setFileTags(fileId: string, tagIds: string[]): CloudFile | null {
       const existing = this.getFileById(fileId);
       if (!existing) {

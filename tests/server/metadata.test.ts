@@ -188,6 +188,37 @@ describe("metadata repository", () => {
     }
   });
 
+  it("looks up tags by slug and deletes them, cascading file_tags", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const file = repo.createFile({
+        name: "render.png",
+        extension: "png",
+        family: "image",
+        mimeType: "image/png",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/render.png",
+        sourceDevice: "Browser"
+      });
+      const tag = repo.createTag({ name: "Reference" });
+      repo.setFileTags(file.id, [tag.id]);
+
+      expect(repo.getTagBySlug("reference")?.id).toBe(tag.id);
+      expect(repo.getFileById(file.id)?.tags).toEqual([tag]);
+
+      expect(repo.deleteTag(tag.id)).toBe(true);
+      expect(repo.listTags()).toEqual([]);
+      expect(repo.getFileById(file.id)?.tags).toEqual([]);
+      expect(repo.deleteTag(tag.id)).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
   it("bulk updates file project and category metadata", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
     createdDirs.push(dir);
