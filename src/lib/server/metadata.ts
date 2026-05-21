@@ -206,6 +206,27 @@ type ListFilesFilters = {
   includeArchived?: boolean;
 };
 
+export const SEARCH_FILES_LIMIT = 200;
+
+export type SearchFilesFilters = {
+  query?: string;
+  projectId?: string | null;
+  categoryId?: string | null;
+  tagId?: string | null;
+  family?: FileFamily;
+  minBytes?: number;
+  maxBytes?: number;
+  from?: string;
+  to?: string;
+  includeArchived?: boolean;
+  limit?: number;
+};
+
+export type SearchFilesResult = {
+  files: CloudFile[];
+  truncated: boolean;
+};
+
 type UpdateFileInput = {
   projectId?: string | null;
   categoryId?: string | null;
@@ -668,6 +689,89 @@ export function createMetadataRepository(db: AppDatabase) {
       const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name`;
       const files = db.prepare<Record<string, string | null>, FileRow>(sql).all(params);
       return filesFromRowsWithTags(db, files);
+    },
+
+    searchFiles(filters: SearchFilesFilters = {}): SearchFilesResult {
+      const where: string[] = [];
+      const params: Record<string, string | number> = {};
+
+      if (!filters.includeArchived) {
+        where.push("files.status = 'active'");
+      }
+
+      const trimmedQuery = filters.query?.trim();
+      if (trimmedQuery) {
+        where.push("(files.name like @query or files.storage_path like @query or files.extension like @query)");
+        params.query = `%${trimmedQuery}%`;
+      }
+
+      if (filters.projectId !== undefined) {
+        if (filters.projectId === null) {
+          where.push("files.project_id is null");
+        } else {
+          where.push("files.project_id = @projectId");
+          params.projectId = filters.projectId;
+        }
+      }
+
+      if (filters.categoryId !== undefined) {
+        if (filters.categoryId === null) {
+          where.push("files.category_id is null");
+        } else {
+          where.push("files.category_id = @categoryId");
+          params.categoryId = filters.categoryId;
+        }
+      }
+
+      if (filters.family !== undefined) {
+        where.push("files.family = @family");
+        params.family = filters.family;
+      }
+
+      if (typeof filters.minBytes === "number") {
+        where.push("files.size_bytes >= @minBytes");
+        params.minBytes = filters.minBytes;
+      }
+
+      if (typeof filters.maxBytes === "number") {
+        where.push("files.size_bytes <= @maxBytes");
+        params.maxBytes = filters.maxBytes;
+      }
+
+      if (filters.from) {
+        where.push("files.uploaded_at >= @from");
+        params.from = filters.from;
+      }
+
+      if (filters.to) {
+        where.push("files.uploaded_at <= @to");
+        params.to = filters.to;
+      }
+
+      const tagJoin = filters.tagId ? "inner join file_tags on file_tags.file_id = files.id" : "";
+      if (filters.tagId) {
+        where.push("file_tags.tag_id = @tagId");
+        params.tagId = filters.tagId;
+      }
+
+      const limit = Math.max(1, Math.min(filters.limit ?? SEARCH_FILES_LIMIT, SEARCH_FILES_LIMIT));
+      const fetchLimit = limit + 1;
+      params.limit = fetchLimit;
+
+      const sql = `
+        select files.* from files
+        ${tagJoin}
+        ${where.length ? `where ${where.join(" and ")}` : ""}
+        order by files.uploaded_at desc, files.name
+        limit @limit
+      `;
+      const rows = db.prepare<Record<string, string | number>, FileRow>(sql).all(params);
+      const truncated = rows.length > limit;
+      const trimmed = truncated ? rows.slice(0, limit) : rows;
+      return {
+        files: filesFromRowsWithTags(db, trimmed),
+        truncated
+      };
     },
 
     upsertFilePreview(input: UpsertFilePreviewInput): FilePreview {
