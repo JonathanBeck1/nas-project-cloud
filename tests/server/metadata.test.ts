@@ -217,6 +217,62 @@ describe("metadata repository", () => {
     }
   });
 
+  it("updates project name, description, status, and category", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const project = repo.createProject({ name: "Garage Build" });
+
+      const renamed = repo.updateProject(project.id, {
+        name: "Garage Build v2",
+        description: "Phase 2",
+        status: "complete",
+        categoryId: "cat_cad"
+      });
+
+      expect(renamed?.name).toBe("Garage Build v2");
+      expect(renamed?.description).toBe("Phase 2");
+      expect(renamed?.status).toBe("complete");
+      expect(renamed?.categoryId).toBe("cat_cad");
+      expect(renamed?.slug).toBe(project.slug);
+      expect(repo.updateProject("missing", { name: "x" })).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("detaches files from a project on delete instead of removing them", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const project = repo.createProject({ name: "Garage Build" });
+      const file = repo.createFile({
+        name: "drill.jpg",
+        extension: "jpg",
+        family: "image",
+        mimeType: "image/jpeg",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Projects/garage-build/Inbox/drill.jpg",
+        sourceDevice: "Browser",
+        projectId: project.id
+      });
+
+      const result = repo.deleteProject(project.id);
+
+      expect(result).toEqual({ removed: true, detachedFiles: 1 });
+      expect(repo.getProjectById(project.id)).toBeNull();
+      expect(repo.getFileById(file.id)?.projectId).toBeNull();
+      expect(repo.deleteProject(project.id)).toEqual({ removed: false, detachedFiles: 0 });
+    } finally {
+      db.close();
+    }
+  });
+
   it("clears category_id on files when a custom category is deleted", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
     createdDirs.push(dir);

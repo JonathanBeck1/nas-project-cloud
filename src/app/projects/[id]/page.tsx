@@ -1,5 +1,6 @@
 import React from "react";
 import { notFound } from "next/navigation";
+import { ProjectSettingsCard } from "@/components/workspace/ProjectSettingsCard";
 import { ProjectWorkspace } from "@/components/workspace/ProjectWorkspace";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
 import { requirePageSession } from "@/lib/server/pageSession";
@@ -21,7 +22,14 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   return (
     <WorkspaceFrame projects={repo.listProjects()} activeHref={`/projects/${id}`}>
-      <ProjectWorkspace project={data.project} files={data.files} categories={data.categories} tags={data.tags} />
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+        <ProjectWorkspace project={data.project} files={data.files} categories={data.categories} tags={data.tags} />
+        <ProjectSettingsCard
+          project={data.project}
+          categories={data.categories}
+          fileCount={data.files.length}
+        />
+      </div>
     </WorkspaceFrame>
   );
 }

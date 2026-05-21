@@ -161,6 +161,13 @@ type CreateCategoryInput = {
   color: string;
 };
 
+type UpdateProjectInput = {
+  name?: string;
+  description?: string;
+  status?: ProjectStatus;
+  categoryId?: string | null;
+};
+
 type UpdateCategoryInput = {
   name?: string;
   color?: string;
@@ -478,6 +485,57 @@ export function createMetadataRepository(db: AppDatabase) {
         .prepare<[], ProjectRow>("select * from projects order by created_at desc, name")
         .all()
         .map(projectFromRow);
+    },
+
+    updateProject(id: string, input: UpdateProjectInput): Project | null {
+      const existing = this.getProjectById(id);
+      if (!existing) {
+        return null;
+      }
+
+      const fields: string[] = [];
+      const params: Record<string, string | null> = { id, updatedAt: new Date().toISOString() };
+
+      if (input.name !== undefined) {
+        fields.push("name = @name");
+        params.name = input.name;
+      }
+      if (input.description !== undefined) {
+        fields.push("description = @description");
+        params.description = input.description;
+      }
+      if (input.status !== undefined) {
+        fields.push("status = @status");
+        params.status = input.status;
+      }
+      if (input.categoryId !== undefined) {
+        fields.push("category_id = @categoryId");
+        params.categoryId = input.categoryId;
+      }
+
+      if (fields.length === 0) {
+        return existing;
+      }
+
+      fields.push("updated_at = @updatedAt");
+
+      db.prepare(`update projects set ${fields.join(", ")} where id = @id`).run(params);
+      return this.getProjectById(id);
+    },
+
+    deleteProject(id: string): { removed: boolean; detachedFiles: number } {
+      const existing = this.getProjectById(id);
+      if (!existing) {
+        return { removed: false, detachedFiles: 0 };
+      }
+
+      const detached = db
+        .prepare<[string], { count: number }>("select count(*) as count from files where project_id = ?")
+        .get(id);
+
+      // files.project_id falls back to null via on-delete-set-null FK.
+      const result = db.prepare<[string]>("delete from projects where id = ?").run(id);
+      return { removed: result.changes > 0, detachedFiles: detached?.count ?? 0 };
     },
 
     getFileById(id: string): CloudFile | null {

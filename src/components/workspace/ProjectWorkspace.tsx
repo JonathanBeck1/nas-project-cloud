@@ -53,8 +53,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
-      <section className="rounded-md border border-line bg-panel shadow-panel" aria-labelledby="project-heading">
+    <section className="rounded-md border border-line bg-panel shadow-panel" aria-labelledby="project-heading">
           <div className="flex flex-col gap-4 border-b border-line px-4 py-4 md:flex-row md:items-end md:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">Project Workspace</p>
@@ -117,8 +116,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
               onToggleSelected={toggleSelectedFile}
             />
           </div>
-      </section>
-    </div>
+    </section>
   );
 }
 
