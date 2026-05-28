@@ -78,15 +78,179 @@ Key settings:
 - File dataset mount: `/mnt/OfficeNAS/nas-project-cloud/files:/mnt/nas-cloud`
 - App metadata mount: `/mnt/OfficeNAS/nas-project-cloud/appdata:/data`
 - Healthcheck: `GET /api/health`
-- Image: `ghcr.io/jonathanbeck1/nas-project-cloud:latest`
+- Image: `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or the pinned release `ghcr.io/jonathanbeck1/nas-project-cloud:0.3.0`
 
 Recommended TrueNAS Install via YAML flow:
 
 1. Build and publish the image first, for example to GitHub Container Registry.
-2. Confirm the compose file points at `ghcr.io/jonathanbeck1/nas-project-cloud:latest`.
+2. Confirm the compose file points at `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or a pinned release tag such as `ghcr.io/jonathanbeck1/nas-project-cloud:0.3.0`.
 3. Paste the compose YAML into TrueNAS SCALE's custom app YAML flow.
 4. Start the app and wait for the healthcheck to turn healthy.
 5. Browse to `http://<truenas-hostname-or-ip>:3000`.
+
+## TrueNAS Custom App Form
+
+If your TrueNAS version shows the custom-app form instead of a YAML editor, use these field values.
+
+### Application Name
+
+```text
+nas-project-cloud
+```
+
+### Image Configuration
+
+```text
+Repository: ghcr.io/jonathanbeck1/nas-project-cloud
+Tag: 0.3.0
+Pull Policy: Always pull an image even if it is present on the host
+```
+
+Use `latest` only when you intentionally want the newest `main` build. Use `0.3.0` for a repeatable install.
+
+### Container Configuration
+
+```text
+Hostname: nas-project-cloud
+Entrypoint: leave empty
+Command: leave empty
+```
+
+### Environment Variables
+
+Add these variables exactly:
+
+```text
+NAS_CLOUD_STORAGE_ROOT = /mnt/nas-cloud
+NAS_CLOUD_DB_PATH = /data/nas-cloud.sqlite
+NAS_CLOUD_PUBLIC_BASE_PATH = /files
+NAS_CLOUD_MAX_UPLOAD_BYTES = 2147483648
+NAS_CLOUD_PREVIEW_SCHEDULER = on
+```
+
+Optional, but recommended if you want cron-driven maintenance:
+
+```text
+NAS_CLOUD_MAINTENANCE_TOKEN = <64 hex characters from openssl rand -hex 32>
+```
+
+### Network Configuration
+
+Expose the web app on the NAS:
+
+```text
+Host Port: 3000
+Container Port: 3000
+Protocol: TCP
+```
+
+Leave host networking off unless you have a specific reason to use it.
+
+### Storage Configuration
+
+Add two host path mounts:
+
+```text
+Host Path: /mnt/OfficeNAS/nas-project-cloud/files
+Mount Path: /mnt/nas-cloud
+Read Only: false
+```
+
+```text
+Host Path: /mnt/OfficeNAS/nas-project-cloud/appdata
+Mount Path: /data
+Read Only: false
+```
+
+Do not mount the parent `/mnt/OfficeNAS/nas-project-cloud` over `/mnt/nas-cloud`; keep files and appdata separate so database writes do not mix with the user file tree.
+
+### Resource Configuration
+
+Start with modest limits:
+
+```text
+CPU: no strict limit, or 2 cores if your TrueNAS UI requires a value
+Memory: 2048 MiB minimum, 4096 MiB recommended if generating video/PDF previews
+```
+
+Video and PDF previews use `ffmpeg` and `pdftoppm`; they are short-lived but can spike CPU and memory while processing large files.
+
+## First-Run Verification
+
+After install, open:
+
+```text
+http://192.168.68.64:3000/api/health
+```
+
+Expected response:
+
+```json
+{
+  "ok": true,
+  "checks": {
+    "storage": { "ok": true },
+    "database": { "ok": true }
+  }
+}
+```
+
+Then open:
+
+```text
+http://192.168.68.64:3000
+```
+
+The first page should redirect to `/setup`. Create the owner account, then upload a small image file and confirm that:
+
+- it appears in the workspace,
+- it downloads successfully,
+- Settings shows the preview pipeline card,
+- `/mnt/OfficeNAS/nas-project-cloud/files` contains the uploaded file.
+
+## Troubleshooting
+
+### Image Pull Fails
+
+Check these first:
+
+- Repository is `ghcr.io/jonathanbeck1/nas-project-cloud`.
+- Tag is `0.3.0` or `latest`.
+- The GitHub Container Registry package is public, or TrueNAS has pull credentials configured.
+- TrueNAS has outbound internet access and working DNS.
+
+If the repo remains private, create a GitHub personal access token with package read access and configure it as an image pull secret in TrueNAS.
+
+### App Starts But `/api/health` Is Unhealthy
+
+Most health failures are dataset permissions. The container runs as UID/GID `1001`, so both datasets must be writable:
+
+```text
+/mnt/OfficeNAS/nas-project-cloud/files
+/mnt/OfficeNAS/nas-project-cloud/appdata
+```
+
+Use TrueNAS ACL Manager to grant read/write/execute to the container workload user or a group the container can use. Retest `/api/health` after restarting the app.
+
+### Browser Cannot Open Port 3000
+
+Check:
+
+- TrueNAS app is running.
+- Host port `3000` maps to container port `3000`.
+- No other TrueNAS app is already using port `3000`.
+- You are using the NAS IPv4 address, for example `http://192.168.68.64:3000`.
+- You did not configure a router port forward. This app should stay LAN-only unless you intentionally add a reverse proxy and public auth posture.
+
+### Preview Jobs Stay Pending
+
+Check Settings → Preview pipeline. For the default custom-app setup:
+
+```text
+NAS_CLOUD_PREVIEW_SCHEDULER = on
+```
+
+If `ffmpeg` or `poppler` shows unavailable while using the official Docker image, confirm the app is pulling `0.3.0` or newer. Older images only generated image thumbnails.
 
 ## Publishing The Image
 
@@ -107,6 +271,13 @@ When the workflow runs on `main` or through a manual `workflow_dispatch`, it pub
 ```text
 ghcr.io/jonathanbeck1/nas-project-cloud:latest
 ghcr.io/jonathanbeck1/nas-project-cloud:<commit-sha>
+```
+
+When a semver tag is pushed, for example `v0.3.0`, it also publishes:
+
+```text
+ghcr.io/jonathanbeck1/nas-project-cloud:0.3.0
+ghcr.io/jonathanbeck1/nas-project-cloud:0.3
 ```
 
 TrueNAS pulls the `latest` tag from the compose file. If the package is private in GitHub Container Registry, configure image pull credentials in TrueNAS or make the package public. For the first LAN-only install, a public package is the simplest path.

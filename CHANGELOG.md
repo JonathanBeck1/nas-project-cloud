@@ -5,6 +5,56 @@ All notable changes to NAS Project Cloud are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-28
+
+The preview pipeline release. v0.2.0 made the app safer and more usable
+on a home network; v0.3.0 makes visual file browsing more credible and
+surfaces more of the upload pipeline state in the UI.
+
+### Added
+
+- **In-process preview scheduler.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on`
+  to let the app process preview jobs automatically. The worker runs
+  every 60 seconds while work is pending and backs off to 5 minutes when
+  the queue is empty. The existing token-protected maintenance endpoint
+  remains available for TrueNAS cron-based deployments.
+- **Preview pipeline status card in Settings.** Owners can see pending,
+  ready, failed, skipped, and unsupported preview counts, plus `ffmpeg`
+  and `poppler` availability. Failed jobs can be requeued from the UI.
+- **Video poster frames.** Video files now generate 384 px webp poster
+  previews through `ffmpeg`. If `ffmpeg` is missing, the preview records
+  `unsupported` instead of crashing the worker.
+- **PDF first-page previews.** PDF documents now generate a first-page
+  preview through `pdftoppm` from `poppler-utils`. Missing poppler
+  support is also recorded as `unsupported`.
+- **Upload Center history.** The Upload Center now has Active, Failed,
+  and Aborted tabs, a per-device filter, and error-copy affordances for
+  failed sessions.
+- **Failed upload cleanup.** The upload cleanup job now removes orphaned
+  `.uploads/*.part` files for failed sessions older than 24 hours, in
+  addition to stale open sessions.
+
+### Changed
+
+- **Docker runtime includes preview binaries.** The production image now
+  installs `ffmpeg` and `poppler-utils` so video and PDF previews work
+  out of the box on TrueNAS.
+- **TrueNAS compose defaults to the scheduler.** The example compose file
+  sets `NAS_CLOUD_PREVIEW_SCHEDULER=on` for single-container home NAS
+  installs.
+- **Preview status vocabulary is richer.** Preview rows can now be
+  `unsupported`, separate from `skipped`, so unsupported runtime tooling
+  is distinguishable from intentionally unsupported file families.
+
+### Migration notes
+
+- Existing deployments can opt into automatic preview processing by
+  adding `NAS_CLOUD_PREVIEW_SCHEDULER=on` and recreating the container.
+- If you prefer cron, leave the scheduler off and keep calling
+  `POST /api/maintenance/previews` with `NAS_CLOUD_MAINTENANCE_TOKEN`.
+- The Docker image is larger than v0.2.0 because it now includes
+  `ffmpeg` and `poppler-utils`.
+
 ## [0.2.0] - 2026-05-20
 
 The "Real Product Sprint" pass. v0.1.0 was technically demo-ready;
