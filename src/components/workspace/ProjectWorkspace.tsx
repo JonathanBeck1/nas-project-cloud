@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search } from "lucide-react";
+import { Download, Search } from "lucide-react";
 import { archiveFile } from "@/lib/client/fileActions";
 import type { Category, CloudFile, Project, Tag } from "@/lib/shared/types";
 import { BulkActionBar } from "./BulkActionBar";
@@ -23,6 +23,8 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
   const [error, setError] = useState("");
   const visibleFiles = files.filter((file) => matchesQuery(file, query));
   const selectedBulkFiles = files.filter((file) => selectedFileIds.includes(file.id));
+  const selectedBulkDownloadHref =
+    selectedFileIds.length > 0 ? bulkDownloadUrl(selectedFileIds) : undefined;
 
   const toggleSelectedFile = (fileId: string) => {
     setSelectedFileIds((currentSelectedIds) =>
@@ -62,20 +64,29 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
               </h1>
               {project.description ? <p className="mt-2 text-sm leading-6 text-muted">{project.description}</p> : null}
             </div>
-            <dl className="grid grid-cols-3 gap-3 text-right text-xs text-muted">
-              <div>
-                <dt className="font-semibold uppercase tracking-[0.08em]">Files</dt>
-                <dd className="mt-1 text-sm font-semibold text-ink">{files.length}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold uppercase tracking-[0.08em]">Categories</dt>
-                <dd className="mt-1 text-sm font-semibold text-ink">{categories.length}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold uppercase tracking-[0.08em]">Tags</dt>
-                <dd className="mt-1 text-sm font-semibold text-ink">{tags.length}</dd>
-              </div>
-            </dl>
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end md:flex-col md:items-end">
+              <dl className="grid grid-cols-3 gap-3 text-right text-xs text-muted">
+                <div>
+                  <dt className="font-semibold uppercase tracking-[0.08em]">Files</dt>
+                  <dd className="mt-1 text-sm font-semibold text-ink">{files.length}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold uppercase tracking-[0.08em]">Categories</dt>
+                  <dd className="mt-1 text-sm font-semibold text-ink">{categories.length}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold uppercase tracking-[0.08em]">Tags</dt>
+                  <dd className="mt-1 text-sm font-semibold text-ink">{tags.length}</dd>
+                </div>
+              </dl>
+              <a
+                href={`/api/projects/${encodeURIComponent(project.id)}/download`}
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-line bg-surface px-3 text-sm font-semibold text-ink transition hover:border-muted"
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                Download project ZIP
+              </a>
+            </div>
           </div>
 
           <div className="space-y-4 px-4 py-5">
@@ -104,6 +115,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
 
             <BulkActionBar
               selectedCount={selectedFileIds.length}
+              downloadHref={selectedBulkDownloadHref}
               onArchive={archiveSelectedFiles}
               onClearSelection={() => setSelectedFileIds([])}
             />
@@ -118,6 +130,14 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
           </div>
     </section>
   );
+}
+
+function bulkDownloadUrl(fileIds: string[]): string {
+  const params = new URLSearchParams();
+  for (const fileId of fileIds) {
+    params.append("fileIds", fileId);
+  }
+  return `/api/files/bulk/download?${params.toString()}`;
 }
 
 function matchesQuery(file: CloudFile, query: string): boolean {

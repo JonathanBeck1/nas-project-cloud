@@ -14,6 +14,9 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   on-disk filename in sync with rollback protection if metadata writes fail.
 - **Bulk ZIP download.** Selected files can be downloaded as a streaming
   ZIP archive from the workspace bulk action bar.
+- **Project ZIP export.** Project workspaces now expose a direct project
+  ZIP download, and selected files in a project can be exported without
+  returning to the main inbox.
 
 ### Changed
 

@@ -1,5 +1,6 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { ProjectWorkspace } from "@/components/workspace/ProjectWorkspace";
 import type { CloudFile, Project } from "@/lib/shared/types";
@@ -42,5 +43,26 @@ describe("ProjectWorkspace", () => {
     expect(screen.getByText("Parts")).toBeVisible();
     expect(screen.getByText("bracket.stl")).toBeVisible();
     expect(screen.getByRole("searchbox", { name: "Search project files" })).toBeVisible();
+  });
+
+  it("links to a project zip export", () => {
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+
+    expect(screen.getByRole("link", { name: "Download project ZIP" })).toHaveAttribute(
+      "href",
+      "/api/projects/proj_1/download"
+    );
+  });
+
+  it("exposes a selected-file zip link for checked project files", async () => {
+    const user = userEvent.setup();
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select bracket.stl" }));
+
+    expect(screen.getByRole("link", { name: "Download ZIP" })).toHaveAttribute(
+      "href",
+      "/api/files/bulk/download?fileIds=file_1"
+    );
   });
 });

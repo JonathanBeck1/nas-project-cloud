@@ -1,9 +1,9 @@
-# Phase 9: File Rename and Bulk ZIP
+# Phase 9: File Rename and ZIP Export
 
 Date: 2026-05-28
 
-This phase adds two workspace operations needed before using the app as a
-daily NAS file manager.
+This phase adds workspace operations needed before using the app as a daily
+NAS file manager.
 
 ## File Rename
 
@@ -21,8 +21,16 @@ daily NAS file manager.
 - The endpoint verifies every requested file is active and present on disk
   before starting the response stream.
 - ZIP entry names are basename-sanitized and de-duplicated.
-- The workspace bulk action bar shows `Download ZIP` whenever files are
-  selected.
+- The workspace and project bulk action bars show `Download ZIP` whenever
+  files are selected.
+
+## Project ZIP Export
+
+- `GET /api/projects/:id/download` streams a ZIP of every active file in a
+  project.
+- The route requires an owner session, returns `404` for unknown projects, and
+  validates every on-disk file before opening the response stream.
+- Project workspaces expose a `Download project ZIP` action in the header.
 
 ## Verification
 

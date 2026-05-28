@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -5,8 +8,12 @@ const mocks = vi.hoisted(() => ({
   repo: {
     getProjectById: vi.fn(),
     getCategoryById: vi.fn(),
+    listFiles: vi.fn(),
     updateProject: vi.fn(),
     deleteProject: vi.fn()
+  },
+  storage: {
+    absolutePathFor: vi.fn()
   },
   requireApiSession: vi.fn()
 }));
@@ -20,6 +27,9 @@ vi.mock("@/lib/server/metadata", async (importOriginal) => {
   };
 });
 vi.mock("@/lib/server/auth/guards", () => ({ requireApiSession: mocks.requireApiSession }));
+vi.mock("@/lib/server/storage", () => ({
+  createStorageService: vi.fn(() => mocks.storage)
+}));
 
 const project = {
   id: "proj_garage",
@@ -41,6 +51,9 @@ describe("projects API", () => {
       sessionId: "session_1",
       deviceId: "device_1"
     });
+    mocks.repo.getProjectById.mockReturnValue(null);
+    mocks.repo.listFiles.mockReturnValue([]);
+    mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(os.tmpdir(), relativePath));
   });
 
   it("updates the name and description of an existing project", async () => {
@@ -148,6 +161,45 @@ describe("projects API", () => {
     );
 
     expect(response.status).toBe(404);
+  });
+
+  it("streams an active project's files as a zip archive", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-project-api-"));
+    try {
+      fs.mkdirSync(path.join(dir, "Projects", "garage-build", "Inbox"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "Projects", "garage-build", "Inbox", "bracket.stl"), "model");
+      fs.writeFileSync(path.join(dir, "Projects", "garage-build", "Inbox", "notes.txt"), "notes");
+      mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(dir, relativePath));
+      mocks.repo.getProjectById.mockReturnValue(project);
+      mocks.repo.listFiles.mockReturnValue([
+        {
+          id: "file_1",
+          name: "bracket.stl",
+          status: "active",
+          storagePath: "Projects/garage-build/Inbox/bracket.stl"
+        },
+        {
+          id: "file_2",
+          name: "notes.txt",
+          status: "active",
+          storagePath: "Projects/garage-build/Inbox/notes.txt"
+        }
+      ]);
+      const { GET } = await import("@/app/api/projects/[id]/download/route");
+
+      const response = await GET(new Request("http://localhost/api/projects/proj_garage/download"), {
+        params: Promise.resolve({ id: "proj_garage" })
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("application/zip");
+      expect(response.headers.get("content-disposition")).toContain('filename="garage-build.zip"');
+      expect(mocks.repo.listFiles).toHaveBeenCalledWith({ projectId: "proj_garage" });
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      expect(String.fromCharCode(...bytes.slice(0, 2))).toBe("PK");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

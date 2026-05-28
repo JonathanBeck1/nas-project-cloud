@@ -24,6 +24,10 @@ test("project workspace route renders", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: payload.project.name })).toBeVisible();
   await expect(page.getByRole("searchbox", { name: "Search project files" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Download project ZIP" })).toHaveAttribute(
+    "href",
+    `/api/projects/${payload.project.id}/download`
+  );
 });
 
 async function authenticate(page: import("@playwright/test").Page) {
