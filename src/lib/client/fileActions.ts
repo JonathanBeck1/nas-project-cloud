@@ -51,6 +51,16 @@ export async function updateFileAssignment(fileId: string, input: FileAssignment
   );
 }
 
+export async function renameFile(fileId: string, name: string): Promise<CloudFile> {
+  return fileFromResponse(
+    await fetch(`/api/files/${encodeURIComponent(fileId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...csrfHeaders() },
+      body: JSON.stringify({ name })
+    })
+  );
+}
+
 export async function setFileTags(fileId: string, tagIds: string[]): Promise<CloudFile> {
   return fileFromResponse(
     await fetch(`/api/files/${encodeURIComponent(fileId)}`, {

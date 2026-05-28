@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Info, X } from "lucide-react";
 import type { CloudFile, Project, Tag } from "@/lib/shared/types";
@@ -10,6 +10,7 @@ type DetailDrawerProps = {
   availableTags?: Tag[];
   isBusy?: boolean;
   onArchive?: (file: CloudFile) => void;
+  onRename?: (file: CloudFile, name: string) => void;
   onAssignProject?: (file: CloudFile, projectId: string) => void;
   onAssignTags?: (file: CloudFile, tagIds: string[]) => void;
 };
@@ -20,9 +21,16 @@ export function DetailDrawer({
   availableTags = [],
   isBusy = false,
   onArchive,
+  onRename,
   onAssignProject,
   onAssignTags
 }: DetailDrawerProps) {
+  const [draftName, setDraftName] = useState("");
+
+  useEffect(() => {
+    setDraftName(file?.name ?? "");
+  }, [file?.id, file?.name]);
+
   if (!file) {
     return (
       <aside className="h-full rounded-md border border-line bg-panel p-4 shadow-panel" aria-label="File details">
@@ -38,6 +46,8 @@ export function DetailDrawer({
   }
 
   const previewUrl = readyPreviewUrl(file);
+  const trimmedDraftName = draftName.trim();
+  const canRename = Boolean(onRename) && trimmedDraftName.length > 0 && trimmedDraftName !== file.name;
 
   return (
     <aside className="h-full rounded-md border border-line bg-panel p-4 shadow-panel" aria-label="File details">
@@ -80,6 +90,36 @@ export function DetailDrawer({
           Copy path
         </button>
       </div>
+
+      {onRename ? (
+        <form
+          className="mt-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!canRename) {
+              return;
+            }
+            onRename(file, trimmedDraftName);
+          }}
+        >
+          <label className="block text-sm font-semibold text-ink">
+            File name
+            <input
+              className="mt-2 h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink"
+              value={draftName}
+              onChange={(event) => setDraftName(event.target.value)}
+              disabled={isBusy}
+            />
+          </label>
+          <button
+            type="submit"
+            className="mt-2 inline-flex h-9 items-center justify-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isBusy || !canRename}
+          >
+            Rename
+          </button>
+        </form>
+      ) : null}
 
       <label className="mt-4 block text-sm font-semibold text-ink">
         Project

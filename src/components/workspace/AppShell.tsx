@@ -11,7 +11,12 @@ import { MobileNavTrigger } from "./MobileNavTrigger";
 import { ProjectDialog } from "./ProjectDialog";
 import { Sidebar } from "./Sidebar";
 import { UploadCenter } from "./UploadCenter";
-import { archiveFile, setFileTags as setFileTagsRequest, updateFileAssignment } from "@/lib/client/fileActions";
+import {
+  archiveFile,
+  renameFile,
+  setFileTags as setFileTagsRequest,
+  updateFileAssignment
+} from "@/lib/client/fileActions";
 import { csrfHeaders } from "@/lib/client/csrf";
 import type { Category, CloudFile, Project, Tag } from "@/lib/shared/types";
 import type { WorkspaceData } from "@/lib/server/workspaceData";
@@ -136,6 +141,13 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const searchErrorMessage = isQueryActive && searchStatus === "error" ? searchError : null;
   const selectedFile = visibleFiles.find((file) => file.id === selectedFileId) ?? null;
   const selectedBulkFiles = files.filter((file) => selectedFileIds.includes(file.id));
+  const selectedBulkDownloadHref =
+    selectedFileIds.length > 0 ? bulkDownloadUrl(selectedFileIds) : undefined;
+
+  const replaceFile = (updated: CloudFile) => {
+    setFiles((currentFiles) => currentFiles.map((candidate) => (candidate.id === updated.id ? updated : candidate)));
+    setSearchResults((currentFiles) => currentFiles.map((candidate) => (candidate.id === updated.id ? updated : candidate)));
+  };
 
   const handleCreateProject = async (project: ProjectDialogInput) => {
     const response = await fetch("/api/projects", {
@@ -229,6 +241,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
       const updatedFilesById = new Map(updatedFiles.map((file) => [file.id, file]));
 
       setFiles((currentFiles) => currentFiles.map((file) => updatedFilesById.get(file.id) ?? file));
+      setSearchResults((currentFiles) => currentFiles.map((file) => updatedFilesById.get(file.id) ?? file));
       setSelectedFileIds([]);
       setFileActionMessage(`Updated ${updatedFiles.length} ${updatedFiles.length === 1 ? "file" : "files"}`);
     } catch (error) {
@@ -244,11 +257,26 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     setFileActionError("");
     try {
       const updated = await updateFileAssignment(file.id, { projectId: projectId || null });
-      setFiles((currentFiles) => currentFiles.map((candidate) => (candidate.id === updated.id ? updated : candidate)));
+      replaceFile(updated);
       setSelectedFileId((currentSelectedId) => (currentSelectedId === file.id ? updated.id : currentSelectedId));
       setFileActionMessage(`Updated ${updated.name}`);
     } catch (error) {
       setFileActionError(error instanceof Error ? error.message : "Could not update file");
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
+  const handleRenameFile = async (file: CloudFile, name: string) => {
+    setIsFileActionBusy(true);
+    setFileActionMessage("");
+    setFileActionError("");
+    try {
+      const updated = await renameFile(file.id, name);
+      replaceFile(updated);
+      setFileActionMessage(`Renamed ${updated.name}`);
+    } catch (error) {
+      setFileActionError(error instanceof Error ? error.message : "Could not rename file");
     } finally {
       setIsFileActionBusy(false);
     }
@@ -260,7 +288,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     setFileActionError("");
     try {
       const updated = await setFileTagsRequest(file.id, tagIds);
-      setFiles((currentFiles) => currentFiles.map((candidate) => (candidate.id === updated.id ? updated : candidate)));
+      replaceFile(updated);
       setFileActionMessage(`Updated tags on ${updated.name}`);
     } catch (error) {
       setFileActionError(error instanceof Error ? error.message : "Could not update tags");
@@ -379,6 +407,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                       projects={projects}
                       categories={categories}
                       isBusy={isFileActionBusy}
+                      downloadHref={selectedBulkDownloadHref}
                       onArchive={handleArchiveSelectedFiles}
                       onApplyOrganization={handleAssignSelectedFiles}
                       onClearSelection={() => setSelectedFileIds([])}
@@ -403,6 +432,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                   availableTags={tags}
                   isBusy={isFileActionBusy}
                   onArchive={handleArchiveFile}
+                  onRename={handleRenameFile}
                   onAssignProject={handleAssignProject}
                   onAssignTags={handleAssignTags}
                 />
@@ -415,3 +445,10 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   );
 }
 
+function bulkDownloadUrl(fileIds: string[]): string {
+  const params = new URLSearchParams();
+  for (const fileId of fileIds) {
+    params.append("fileIds", fileId);
+  }
+  return `/api/files/bulk/download?${params.toString()}`;
+}

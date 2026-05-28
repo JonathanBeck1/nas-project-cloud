@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Archive, Check, X } from "lucide-react";
+import { Archive, Check, Download, X } from "lucide-react";
 import type { Category, Project } from "@/lib/shared/types";
 
 type BulkActionBarProps = {
@@ -7,6 +7,7 @@ type BulkActionBarProps = {
   projects?: Project[];
   categories?: Category[];
   isBusy?: boolean;
+  downloadHref?: string;
   onArchive: () => void;
   onApplyOrganization?: (input: { projectId: string | null; categoryId: string | null }) => void;
   onClearSelection: () => void;
@@ -17,6 +18,7 @@ export function BulkActionBar({
   projects = [],
   categories = [],
   isBusy = false,
+  downloadHref,
   onArchive,
   onApplyOrganization,
   onClearSelection
@@ -73,6 +75,15 @@ export function BulkActionBar({
           <Check aria-hidden="true" className="h-4 w-4" />
           Apply organization
         </button>
+        {downloadHref ? (
+          <a
+            href={downloadHref}
+            className="inline-flex h-8 items-center gap-2 self-end rounded-md border border-line bg-surface px-3 text-sm font-semibold text-ink transition hover:border-muted"
+          >
+            <Download aria-hidden="true" className="h-4 w-4" />
+            Download ZIP
+          </a>
+        ) : null}
         <button
           type="button"
           onClick={onArchive}

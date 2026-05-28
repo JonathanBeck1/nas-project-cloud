@@ -228,6 +228,9 @@ export type SearchFilesResult = {
 };
 
 type UpdateFileInput = {
+  name?: string;
+  extension?: string;
+  family?: FileFamily;
   projectId?: string | null;
   categoryId?: string | null;
   storagePath?: string;
@@ -600,6 +603,9 @@ export function createMetadataRepository(db: AppDatabase) {
 
       const next = {
         id,
+        name: input.name ?? existing.name,
+        extension: input.extension ?? existing.extension,
+        family: input.family ?? existing.family,
         projectId: input.projectId !== undefined ? input.projectId : existing.projectId,
         categoryId: input.categoryId !== undefined ? input.categoryId : existing.categoryId,
         storagePath: input.storagePath ?? existing.storagePath,
@@ -620,7 +626,10 @@ export function createMetadataRepository(db: AppDatabase) {
 
       const result = db.prepare(`
         update files
-        set project_id = @projectId,
+        set name = @name,
+            extension = @extension,
+            family = @family,
+            project_id = @projectId,
             category_id = @categoryId,
             storage_path = @storagePath,
             status = @status,

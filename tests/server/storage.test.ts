@@ -181,6 +181,31 @@ describe("storage service", () => {
     expect(fs.existsSync(originalSourcePath)).toBe(false);
   });
 
+  it("renames a file in place without overwriting an existing destination", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const existingPath = path.join(dir, "Inbox", "Browser", "bracket-final.stl");
+    fs.mkdirSync(path.dirname(existingPath), { recursive: true });
+    fs.writeFileSync(existingPath, "existing");
+    const stored = await storage.writeUpload({
+      target: { kind: "inbox", sourceDevice: "Browser" },
+      filename: "bracket.stl",
+      mimeType: "model/stl",
+      bytes: Buffer.from("incoming")
+    });
+
+    const renamed = await storage.renameFile({
+      currentRelativePath: stored.relativePath,
+      filename: "bracket-final.stl"
+    });
+
+    expect(renamed.relativePath).toBe("Inbox/Browser/bracket-final-2.stl");
+    expect(fs.readFileSync(existingPath, "utf8")).toBe("existing");
+    expect(fs.readFileSync(path.join(dir, renamed.relativePath), "utf8")).toBe("incoming");
+    expect(fs.existsSync(path.join(dir, stored.relativePath))).toBe(false);
+  });
+
   it("restores a moved file to its original relative path", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
     createdDirs.push(dir);

@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     streamUpload: vi.fn(),
     absolutePathFor: vi.fn(),
     moveToProject: vi.fn(),
+    renameFile: vi.fn(),
     archiveFile: vi.fn(),
     restoreFile: vi.fn(),
     deleteFile: vi.fn()
@@ -111,6 +112,10 @@ describe("files API module", () => {
     mocks.storage.moveToProject.mockResolvedValue({
       absolutePath: "/storage/Projects/project/Inbox/part.stl",
       relativePath: "Projects/project/Inbox/part.stl"
+    });
+    mocks.storage.renameFile.mockResolvedValue({
+      absolutePath: "/storage/Inbox/Mac/part-final.stl",
+      relativePath: "Inbox/Mac/part-final.stl"
     });
     mocks.storage.archiveFile.mockResolvedValue({
       absolutePath: "/storage/Archive/2026/04/part.stl",
@@ -333,6 +338,59 @@ describe("files API module", () => {
       { storagePath: "Inbox/Browser/bracket.stl", status: "active" }
     );
     expect(mocks.repo.setFileTags).toHaveBeenCalledWith("file_123", ["tag_1"]);
+  });
+
+  it("renames a file on patch and updates derived file metadata", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      storagePath: "Inbox/Browser/bracket.stl",
+      status: "active"
+    });
+    mocks.classifyFile.mockReturnValue({
+      extension: "3mf",
+      family: "cad" as FileFamily
+    });
+    mocks.storage.renameFile.mockResolvedValue({
+      absolutePath: "/tmp/Inbox/Browser/bracket-final.3mf",
+      relativePath: "Inbox/Browser/bracket-final.3mf"
+    });
+    mocks.repo.updateFile.mockReturnValue({
+      id: "file_123",
+      name: "bracket-final.3mf",
+      extension: "3mf",
+      family: "cad",
+      storagePath: "Inbox/Browser/bracket-final.3mf"
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ name: "  bracket-final.3mf  " })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.storage.renameFile).toHaveBeenCalledWith({
+      currentRelativePath: "Inbox/Browser/bracket.stl",
+      filename: "bracket-final.3mf"
+    });
+    expect(mocks.classifyFile).toHaveBeenCalledWith("bracket-final.3mf");
+    expect(mocks.repo.updateFile).toHaveBeenCalledWith(
+      "file_123",
+      {
+        name: "bracket-final.3mf",
+        extension: "3mf",
+        family: "cad",
+        storagePath: "Inbox/Browser/bracket-final.3mf"
+      },
+      {
+        storagePath: "Inbox/Browser/bracket.stl",
+        status: "active"
+      }
+    );
   });
 
   it("bulk assigns files to a project and category", async () => {
@@ -912,6 +970,49 @@ describe("files API module", () => {
     expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; sandbox");
     expect(mocks.storage.absolutePathFor).toHaveBeenCalledWith("Inbox/Browser/manual.pdf");
     await expect(response.text()).resolves.toBe("manual");
+  });
+
+  it("streams selected active files as a zip archive", async () => {
+    const { GET } = await import("@/app/api/files/bulk/download/route");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-api-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Inbox", "Browser", "manual.pdf"), "manual");
+    fs.writeFileSync(path.join(dir, "Inbox", "Browser", "notes.txt"), "notes");
+    mocks.appConfig.storageRoot = dir;
+    mocks.repo.getFileById.mockImplementation((id: string) => {
+      if (id === "file_manual") {
+        return {
+          id,
+          name: "manual.pdf",
+          mimeType: "application/pdf",
+          status: "active",
+          storagePath: "Inbox/Browser/manual.pdf"
+        };
+      }
+      if (id === "file_notes") {
+        return {
+          id,
+          name: "notes.txt",
+          mimeType: "text/plain",
+          status: "active",
+          storagePath: "Inbox/Browser/notes.txt"
+        };
+      }
+      return null;
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/files/bulk/download?fileIds=file_manual&fileIds=file_notes")
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/zip");
+    expect(response.headers.get("content-disposition")).toContain('filename="nas-project-cloud-files.zip"');
+    expect(mocks.storage.absolutePathFor).toHaveBeenCalledWith("Inbox/Browser/manual.pdf");
+    expect(mocks.storage.absolutePathFor).toHaveBeenCalledWith("Inbox/Browser/notes.txt");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect(String.fromCharCode(...bytes.slice(0, 2))).toBe("PK");
   });
 
   it("streams a ready file preview", async () => {

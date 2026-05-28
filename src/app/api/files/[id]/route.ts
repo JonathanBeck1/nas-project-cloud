@@ -4,16 +4,24 @@ import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
+import { classifyFile } from "@/lib/shared/fileTypes";
 import type { CloudFile } from "@/lib/shared/types";
 
 const updateFileSchema = z
   .object({
     projectId: z.string().min(1).nullable().optional(),
     categoryId: z.string().min(1).nullable().optional(),
+    name: z.string().max(255).optional(),
     tagIds: z.array(z.string().min(1)).optional()
   })
   .strict()
-  .refine((data) => data.projectId !== undefined || data.categoryId !== undefined || data.tagIds !== undefined);
+  .refine(
+    (data) =>
+      data.projectId !== undefined ||
+      data.categoryId !== undefined ||
+      data.name !== undefined ||
+      data.tagIds !== undefined
+  );
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireApiSession(request);
@@ -58,8 +66,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const storage = createStorageService();
-  const update: { projectId?: string | null; categoryId?: string | null; storagePath?: string } = {};
+  const update: {
+    name?: string;
+    extension?: string;
+    family?: CloudFile["family"];
+    projectId?: string | null;
+    categoryId?: string | null;
+    storagePath?: string;
+  } = {};
   let moved: { relativePath: string } | null = null;
+  const requestedName = parsed.data.name?.trim();
+
+  if (parsed.data.name !== undefined && !requestedName) {
+    return NextResponse.json({ error: "invalid file update" }, { status: 400 });
+  }
 
   if (parsed.data.categoryId !== undefined) {
     update.categoryId = parsed.data.categoryId;
@@ -81,7 +101,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       moved = await storage.moveToProject({
         currentRelativePath: file.storagePath,
         projectSlug: project.slug,
-        filename: file.name
+        filename: requestedName ?? file.name
+      });
+      update.storagePath = moved.relativePath;
+    }
+  }
+
+  if (requestedName && requestedName !== file.name) {
+    const classification = classifyFile(requestedName);
+    update.name = requestedName;
+    update.extension = classification.extension;
+    update.family = classification.family;
+
+    if (!moved) {
+      moved = await storage.renameFile({
+        currentRelativePath: file.storagePath,
+        filename: requestedName
       });
       update.storagePath = moved.relativePath;
     }

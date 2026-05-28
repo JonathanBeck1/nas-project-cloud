@@ -5,6 +5,21 @@ All notable changes to NAS Project Cloud are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **File rename flow.** Active files can now be renamed from the detail
+  drawer. The API keeps the metadata row, derived extension/family, and
+  on-disk filename in sync with rollback protection if metadata writes fail.
+- **Bulk ZIP download.** Selected files can be downloaded as a streaming
+  ZIP archive from the workspace bulk action bar.
+
+### Changed
+
+- **Dependency security refresh.** Next.js is resolved to `15.5.18`, and
+  PostCSS is overridden to `8.5.12` so production dependency audit passes.
+
 ## [0.3.0] - 2026-05-28
 
 The preview pipeline release. v0.2.0 made the app safer and more usable

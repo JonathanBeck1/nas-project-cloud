@@ -108,11 +108,35 @@ describe("DetailDrawer", () => {
     expect(onAssignProject).toHaveBeenCalledWith(fixture, "proj_123");
   });
 
+  it("calls rename action with a trimmed filename", async () => {
+    const user = userEvent.setup();
+    const onRename = vi.fn();
+
+    render(<DetailDrawer file={fixture} onRename={onRename} />);
+
+    const input = screen.getByLabelText("File name");
+    await user.clear(input);
+    await user.type(input, " assembly-final.pdf ");
+    await user.click(screen.getByRole("button", { name: "Rename" }));
+
+    expect(onRename).toHaveBeenCalledWith(fixture, "assembly-final.pdf");
+  });
+
   it("disables server-mutating actions while busy", () => {
-    render(<DetailDrawer file={fixture} projects={[project]} isBusy onArchive={vi.fn()} onAssignProject={vi.fn()} />);
+    render(
+      <DetailDrawer
+        file={fixture}
+        projects={[project]}
+        isBusy
+        onArchive={vi.fn()}
+        onAssignProject={vi.fn()}
+        onRename={vi.fn()}
+      />
+    );
 
     expect(screen.getByRole("button", { name: "Archive" })).toBeDisabled();
     expect(screen.getByLabelText("Project")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Rename" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Copy path" })).toBeEnabled();
   });
 

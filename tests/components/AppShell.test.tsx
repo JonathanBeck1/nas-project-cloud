@@ -374,6 +374,20 @@ describe("AppShell", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Archived 2 files");
   });
 
+  it("exposes a zip download link for selected files", async () => {
+    const user = userEvent.setup();
+
+    render(<AppShell initialData={{ files: [uploadedFile, notesFile], projects: [], categories: [], tags: [] }} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select manual.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select notes.txt" }));
+
+    expect(screen.getByRole("link", { name: "Download ZIP" })).toHaveAttribute(
+      "href",
+      "/api/files/bulk/download?fileIds=file_manual&fileIds=file_notes"
+    );
+  });
+
   it("bulk assigns selected files to a project and category", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn<typeof fetch>((input, init) => {

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { archiveFile, deleteFilePermanently, restoreFile, updateFileAssignment } from "@/lib/client/fileActions";
+import {
+  archiveFile,
+  deleteFilePermanently,
+  renameFile,
+  restoreFile,
+  updateFileAssignment
+} from "@/lib/client/fileActions";
 
 describe("fileActions", () => {
   afterEach(() => {
@@ -36,6 +42,24 @@ describe("fileActions", () => {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: "proj_123", categoryId: "cat_cad" })
+      })
+    );
+  });
+
+  it("renames files through patch", async () => {
+    const file = { id: "file_123", name: "bracket-final.stl" };
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ file }), { status: 200 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(renameFile("file_123", "bracket-final.stl")).resolves.toEqual(file);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_123",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "bracket-final.stl" })
       })
     );
   });

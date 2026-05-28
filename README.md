@@ -16,7 +16,7 @@ Tools like Nextcloud and OpenCloud are general-purpose. Tools like LocalSend are
 
 ## Features
 
-- **Project-first workspace** — Inbox, projects (with rename, status, delete), custom categories with color, taggable files, server-side search with composable filters, grid + list views, mobile sidebar drawer, dark mode, smart views, archive, and a 6-digit-code device pairing flow.
+- **Project-first workspace** — Inbox, projects (with rename, status, delete), custom categories with color, taggable files, per-file rename, selected-file ZIP downloads, server-side search with composable filters, grid + list views, mobile sidebar drawer, dark mode, smart views, archive, and a 6-digit-code device pairing flow.
 - **Direct filesystem storage** — files live as real files under `Inbox/`, `Projects/<slug>/Inbox/`, `Library/`, and `Archive/<year>/<month>/`. SMB and Finder still work.
 - **SQLite metadata** — fast, single-file, journal-mode WAL. Indexed on project, category, family, and uploaded_at.
 - **Resumable large uploads** — chunked sessions with 8 MiB chunks, offset checking, abort, and stale-session cleanup. Default upload cap 2 GiB.
@@ -196,10 +196,10 @@ A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers
 
 `v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). `v0.3.0` shipped the preview pipeline and Upload Center reliability pass. Near-term, in priority order:
 
-1. **File rename in UI** with metadata and filesystem moves kept in sync.
-2. **Bulk download / zip stream** for selected files and project folders.
-3. **Upload resume.** Either a desktop helper that retains the file handle or an explicit drag-back UX. Queued for `v0.4`.
-4. **Move-files-back-on-project-delete** so the storage tree never has orphan project folders.
+1. **Project-folder ZIP download** so an entire project can be exported without selecting every file manually.
+2. **Upload resume.** Either a desktop helper that retains the file handle or an explicit drag-back UX. Queued for `v0.4`.
+3. **Move-files-back-on-project-delete** so the storage tree never has orphan project folders.
+4. **CAD preview strategy** for STL, STEP, and 3MF files.
 5. **CAD preview strategy decision** (STL/STEP) and a renderer-choice spike.
 6. **Share / temp-link surface** for controlled local sharing.
 7. **SQLite FTS5 migration** once the corpus exposes a hot path on the `LIKE`-backed search.

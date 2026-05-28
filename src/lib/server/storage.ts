@@ -31,6 +31,11 @@ export type MoveToProjectInput = {
   filename: string;
 };
 
+export type RenameFileInput = {
+  currentRelativePath: string;
+  filename: string;
+};
+
 export type ArchiveFileInput = {
   currentRelativePath: string;
   filename: string;
@@ -226,6 +231,26 @@ export function createStorageService(root = appConfig.storageRoot) {
         from,
         directory,
         filename: input.filename
+      });
+    },
+
+    async renameFile(
+      input: RenameFileInput
+    ): Promise<{ absolutePath: string; relativePath: string }> {
+      const from = absolutePathFor(input.currentRelativePath);
+      const filename = sanitizeFilename(input.filename);
+      if (path.basename(from) === filename) {
+        return {
+          absolutePath: from,
+          relativePath: path.relative(storageRoot, from).split(path.sep).join("/")
+        };
+      }
+
+      return moveIntoDirectory({
+        storageRoot,
+        from,
+        directory: path.dirname(from),
+        filename
       });
     },
 
