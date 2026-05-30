@@ -41,7 +41,8 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   without leaving the project page.
 - **Local share links.** Owners can create short-lived bearer-token download
   links from the file detail drawer, and recipients can download the file
-  without an owner session.
+  without an owner session. Existing links can be listed and revoked from the
+  same drawer.
 
 ### Changed
 

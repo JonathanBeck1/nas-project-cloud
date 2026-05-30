@@ -3,7 +3,9 @@ import {
   archiveFile,
   createFileShareLink,
   deleteFilePermanently,
+  listFileShareLinks,
   renameFile,
+  revokeFileShareLink,
   restoreFile,
   updateFileAssignment
 } from "@/lib/client/fileActions";
@@ -95,6 +97,57 @@ describe("fileActions", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ expiresInHours: 24 })
       })
+    );
+  });
+
+  it("lists file share links through the share endpoint", async () => {
+    const shares = [
+      {
+        id: "share_123",
+        fileId: "file_123",
+        label: null,
+        expiresAt: "2026-05-31T00:00:00.000Z",
+        maxDownloads: null,
+        downloadCount: 0,
+        revokedAt: null,
+        createdByUserId: "user_1",
+        createdAt: "2026-05-30T00:00:00.000Z",
+        updatedAt: "2026-05-30T00:00:00.000Z",
+        lastAccessedAt: null
+      }
+    ];
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ shares }), { status: 200 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listFileShareLinks("file_123")).resolves.toEqual(shares);
+    expect(fetchMock).toHaveBeenCalledWith("/api/files/file_123/shares");
+  });
+
+  it("revokes file share links through the share endpoint", async () => {
+    const share = {
+      id: "share_123",
+      fileId: "file_123",
+      label: null,
+      expiresAt: "2026-05-31T00:00:00.000Z",
+      maxDownloads: null,
+      downloadCount: 0,
+      revokedAt: "2026-05-30T01:00:00.000Z",
+      createdByUserId: "user_1",
+      createdAt: "2026-05-30T00:00:00.000Z",
+      updatedAt: "2026-05-30T01:00:00.000Z",
+      lastAccessedAt: null
+    };
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ share }), { status: 200 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(revokeFileShareLink("file_123", "share_123")).resolves.toEqual(share);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_123/shares/share_123",
+      expect.objectContaining({ method: "DELETE" })
     );
   });
 

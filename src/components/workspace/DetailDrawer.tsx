@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Info, X } from "lucide-react";
-import type { CloudFile, Project, Tag } from "@/lib/shared/types";
+import type { CloudFile, FileShareLink, Project, Tag } from "@/lib/shared/types";
 import { formatBytes } from "./FileGrid";
 
 type DetailDrawerProps = {
@@ -13,7 +13,14 @@ type DetailDrawerProps = {
   onRename?: (file: CloudFile, name: string) => void;
   onAssignProject?: (file: CloudFile, projectId: string) => void;
   onAssignTags?: (file: CloudFile, tagIds: string[]) => void;
-  onCreateShareLink?: (file: CloudFile) => Promise<string> | string;
+  onCreateShareLink?: (file: CloudFile) => Promise<CreateShareLinkResult> | CreateShareLinkResult;
+  onListShareLinks?: (file: CloudFile) => Promise<FileShareLink[]>;
+  onRevokeShareLink?: (file: CloudFile, share: FileShareLink) => Promise<FileShareLink>;
+};
+
+type CreateShareLinkResult = {
+  share: FileShareLink;
+  url: string;
 };
 
 export function DetailDrawer({
@@ -25,18 +32,52 @@ export function DetailDrawer({
   onRename,
   onAssignProject,
   onAssignTags,
-  onCreateShareLink
+  onCreateShareLink,
+  onListShareLinks,
+  onRevokeShareLink
 }: DetailDrawerProps) {
   const [draftName, setDraftName] = useState("");
   const [shareUrl, setShareUrl] = useState("");
   const [shareError, setShareError] = useState("");
+  const [shareLinks, setShareLinks] = useState<FileShareLink[]>([]);
   const [isCreatingShare, setIsCreatingShare] = useState(false);
+  const [isLoadingShares, setIsLoadingShares] = useState(false);
+  const [revokingShareId, setRevokingShareId] = useState<string | null>(null);
 
   useEffect(() => {
     setDraftName(file?.name ?? "");
     setShareUrl("");
     setShareError("");
-  }, [file?.id, file?.name]);
+    setShareLinks([]);
+    setRevokingShareId(null);
+
+    if (!file || !onListShareLinks) {
+      return;
+    }
+
+    let isCurrent = true;
+    setIsLoadingShares(true);
+    void onListShareLinks(file)
+      .then((links) => {
+        if (isCurrent) {
+          setShareLinks(activeShareLinks(links));
+        }
+      })
+      .catch((error: unknown) => {
+        if (isCurrent) {
+          setShareError(error instanceof Error ? error.message : "Could not load share links");
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsLoadingShares(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [file, file?.id, file?.name, onListShareLinks]);
 
   if (!file) {
     return (
@@ -109,8 +150,9 @@ export function DetailDrawer({
               setIsCreatingShare(true);
               setShareError("");
               try {
-                const nextUrl = await onCreateShareLink(file);
-                setShareUrl(nextUrl);
+                const result = await onCreateShareLink(file);
+                setShareUrl(result.url);
+                setShareLinks((current) => [result.share, ...current.filter((share) => share.id !== result.share.id)]);
               } catch (error) {
                 setShareError(error instanceof Error ? error.message : "Could not create share link");
               } finally {
@@ -129,6 +171,47 @@ export function DetailDrawer({
                 value={shareUrl}
               />
             </label>
+          ) : null}
+          {isLoadingShares ? <p className="mt-3 text-xs text-muted">Loading share links...</p> : null}
+          {shareLinks.length > 0 ? (
+            <div className="mt-3 space-y-2" aria-label="Existing share links">
+              {shareLinks.map((share) => (
+                <div key={share.id} className="rounded-md border border-line bg-panel px-3 py-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-ink">
+                        {share.downloadCount} {share.downloadCount === 1 ? "download" : "downloads"}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-muted">
+                        Expires {share.expiresAt ? new Date(share.expiresAt).toLocaleString() : "never"}
+                      </p>
+                    </div>
+                    {onRevokeShareLink ? (
+                      <button
+                        type="button"
+                        aria-label="Revoke share link"
+                        disabled={isBusy || revokingShareId === share.id}
+                        className="inline-flex h-8 shrink-0 items-center rounded-md border border-line bg-surface px-2 text-xs font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={async () => {
+                          setRevokingShareId(share.id);
+                          setShareError("");
+                          try {
+                            await onRevokeShareLink(file, share);
+                            setShareLinks((current) => current.filter((candidate) => candidate.id !== share.id));
+                          } catch (error) {
+                            setShareError(error instanceof Error ? error.message : "Could not revoke share link");
+                          } finally {
+                            setRevokingShareId(null);
+                          }
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : null}
           {shareError ? <p className="mt-2 text-sm font-medium text-red-700">{shareError}</p> : null}
         </div>
@@ -219,6 +302,22 @@ function previewDetailValue(file: CloudFile): string {
 
 function copyPath(path: string) {
   void navigator.clipboard?.writeText(path).catch(() => undefined);
+}
+
+function activeShareLinks(links: FileShareLink[]): FileShareLink[] {
+  const now = Date.now();
+  return links.filter((link) => {
+    if (link.revokedAt) {
+      return false;
+    }
+    if (link.expiresAt && Date.parse(link.expiresAt) <= now) {
+      return false;
+    }
+    if (link.maxDownloads !== null && link.downloadCount >= link.maxDownloads) {
+      return false;
+    }
+    return true;
+  });
 }
 
 function DetailRow({ label, value, wrap = false }: { label: string; value: string; wrap?: boolean }) {

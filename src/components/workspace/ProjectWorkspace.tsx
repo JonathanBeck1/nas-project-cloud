@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Download, Search, UploadCloud } from "lucide-react";
 import {
   archiveFile,
   createFileShareLink,
+  listFileShareLinks,
   renameFile,
+  revokeFileShareLink,
   setFileTags as setFileTagsRequest,
   updateFileAssignment
 } from "@/lib/client/fileActions";
-import type { Category, CloudFile, Project, Tag } from "@/lib/shared/types";
+import type { Category, CloudFile, FileShareLink, Project, Tag } from "@/lib/shared/types";
 import { BulkActionBar } from "./BulkActionBar";
 import { DetailDrawer } from "./DetailDrawer";
 import { DropZone } from "./DropZone";
@@ -143,7 +145,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
     }
   };
 
-  const createShare = async (file: CloudFile) => {
+  const createShare = useCallback(async (file: CloudFile) => {
     setIsFileActionBusy(true);
     setMessage("");
     setError("");
@@ -151,7 +153,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
     try {
       const result = await createFileShareLink(file.id);
       setMessage(`Created share link for ${file.name}`);
-      return absoluteShareUrl(result.url);
+      return { ...result, url: absoluteShareUrl(result.url) };
     } catch (shareError) {
       const message = shareError instanceof Error ? shareError.message : "Could not create share link";
       setError(message);
@@ -159,7 +161,27 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
     } finally {
       setIsFileActionBusy(false);
     }
-  };
+  }, []);
+
+  const listShares = useCallback(async (file: CloudFile) => listFileShareLinks(file.id), []);
+
+  const revokeShare = useCallback(async (file: CloudFile, share: FileShareLink) => {
+    setIsFileActionBusy(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const revoked = await revokeFileShareLink(file.id, share.id);
+      setMessage(`Revoked share link for ${file.name}`);
+      return revoked;
+    } catch (shareError) {
+      const message = shareError instanceof Error ? shareError.message : "Could not revoke share link";
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  }, []);
 
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -292,6 +314,8 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
           onAssignProject={assignProject}
           onAssignTags={assignTags}
           onCreateShareLink={createShare}
+          onListShareLinks={listShares}
+          onRevokeShareLink={revokeShare}
         />
       </div>
     </div>

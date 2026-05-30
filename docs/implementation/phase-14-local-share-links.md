@@ -16,14 +16,18 @@ LAN without signing that device into the owner account.
   download count and last-access tracking.
 - Detail drawer action that creates a 24-hour share link and displays a
   copyable URL.
+- Detail drawer management for existing active links, including download count,
+  expiration display, and revocation.
+- Authenticated share-link list and revoke endpoints:
+  `GET /api/files/:id/shares` and `DELETE /api/files/:id/shares/:shareId`.
 
 ## Current Boundary
 
 - Links are bearer tokens: anyone with the URL can download until it expires or
   hits its max-download cap.
-- The backend supports revocation metadata, but the UI for listing and revoking
-  active links is not built yet.
 - Links are file-level only. Project and folder sharing remain future work.
+- Password prompts, richer audit views, and editable download caps remain
+  future work.
 
 ## Verification
 

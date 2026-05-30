@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Inbox, UploadCloud } from "lucide-react";
 import { CommandBar } from "./CommandBar";
 import { BulkActionBar } from "./BulkActionBar";
@@ -14,12 +14,14 @@ import { UploadCenter } from "./UploadCenter";
 import {
   archiveFile,
   createFileShareLink,
+  listFileShareLinks,
   renameFile,
+  revokeFileShareLink,
   setFileTags as setFileTagsRequest,
   updateFileAssignment
 } from "@/lib/client/fileActions";
 import { csrfHeaders } from "@/lib/client/csrf";
-import type { Category, CloudFile, Project, Tag } from "@/lib/shared/types";
+import type { Category, CloudFile, FileShareLink, Project, Tag } from "@/lib/shared/types";
 import type { WorkspaceData } from "@/lib/server/workspaceData";
 import type { ProjectDialogInput } from "./ProjectDialog";
 import type { FileGridMode } from "./FileGrid";
@@ -298,14 +300,14 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     }
   };
 
-  const handleCreateShareLink = async (file: CloudFile) => {
+  const handleCreateShareLink = useCallback(async (file: CloudFile) => {
     setIsFileActionBusy(true);
     setFileActionMessage("");
     setFileActionError("");
     try {
       const result = await createFileShareLink(file.id);
       setFileActionMessage(`Created share link for ${file.name}`);
-      return absoluteShareUrl(result.url);
+      return { ...result, url: absoluteShareUrl(result.url) };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not create share link";
       setFileActionError(message);
@@ -313,7 +315,26 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     } finally {
       setIsFileActionBusy(false);
     }
-  };
+  }, []);
+
+  const handleListShareLinks = useCallback(async (file: CloudFile) => listFileShareLinks(file.id), []);
+
+  const handleRevokeShareLink = useCallback(async (file: CloudFile, share: FileShareLink) => {
+    setIsFileActionBusy(true);
+    setFileActionMessage("");
+    setFileActionError("");
+    try {
+      const revoked = await revokeFileShareLink(file.id, share.id);
+      setFileActionMessage(`Revoked share link for ${file.name}`);
+      return revoked;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not revoke share link";
+      setFileActionError(message);
+      throw new Error(message);
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-surface text-ink">
@@ -474,6 +495,8 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                   onAssignProject={handleAssignProject}
                   onAssignTags={handleAssignTags}
                   onCreateShareLink={handleCreateShareLink}
+                  onListShareLinks={handleListShareLinks}
+                  onRevokeShareLink={handleRevokeShareLink}
                 />
               </div>
             </div>

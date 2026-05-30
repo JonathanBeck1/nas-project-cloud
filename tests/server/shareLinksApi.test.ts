@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => {
     createFileShareLink: vi.fn(),
     getFileById: vi.fn(),
     getFileShareLinkByTokenHash: vi.fn(),
+    listFileShareLinks: vi.fn(),
+    revokeFileShareLink: vi.fn(),
     recordFileShareDownload: vi.fn()
   };
   const storage = {
@@ -71,6 +73,8 @@ describe("share links API", () => {
       lastAccessedAt: null
     }));
     mocks.repo.getFileShareLinkByTokenHash.mockReturnValue(null);
+    mocks.repo.listFileShareLinks.mockReturnValue([]);
+    mocks.repo.revokeFileShareLink.mockReturnValue(null);
     mocks.repo.recordFileShareDownload.mockReturnValue(null);
     mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(os.tmpdir(), relativePath));
   });
@@ -129,6 +133,58 @@ describe("share links API", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({ error: "file not found" });
     expect(mocks.repo.createFileShareLink).not.toHaveBeenCalled();
+  });
+
+  it("lists share links for an active file", async () => {
+    const { GET } = await import("@/app/api/files/[id]/shares/route");
+    const share = {
+      id: "share_123",
+      fileId: "file_123",
+      label: null,
+      expiresAt: "2026-05-31T00:00:00.000Z",
+      maxDownloads: null,
+      downloadCount: 2,
+      revokedAt: null,
+      createdByUserId: "user_1",
+      createdAt: "2026-05-30T00:00:00.000Z",
+      updatedAt: "2026-05-30T00:00:00.000Z",
+      lastAccessedAt: "2026-05-30T01:00:00.000Z"
+    };
+    mocks.repo.listFileShareLinks.mockReturnValue([share]);
+
+    const response = await GET(new Request("http://localhost/api/files/file_123/shares"), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ shares: [share] });
+    expect(mocks.repo.listFileShareLinks).toHaveBeenCalledWith("file_123");
+  });
+
+  it("revokes a share link for an active file", async () => {
+    const { DELETE } = await import("@/app/api/files/[id]/shares/[shareId]/route");
+    const share = {
+      id: "share_123",
+      fileId: "file_123",
+      label: null,
+      expiresAt: "2026-05-31T00:00:00.000Z",
+      maxDownloads: null,
+      downloadCount: 2,
+      revokedAt: "2026-05-30T01:00:00.000Z",
+      createdByUserId: "user_1",
+      createdAt: "2026-05-30T00:00:00.000Z",
+      updatedAt: "2026-05-30T01:00:00.000Z",
+      lastAccessedAt: null
+    };
+    mocks.repo.revokeFileShareLink.mockReturnValue(share);
+
+    const response = await DELETE(new Request("http://localhost/api/files/file_123/shares/share_123"), {
+      params: Promise.resolve({ id: "file_123", shareId: "share_123" })
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ share });
+    expect(mocks.repo.revokeFileShareLink).toHaveBeenCalledWith("file_123", "share_123");
   });
 
   it("streams a shared file without an owner session", async () => {

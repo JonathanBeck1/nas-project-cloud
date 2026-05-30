@@ -1,9 +1,9 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DetailDrawer } from "@/components/workspace/DetailDrawer";
-import type { CloudFile, Project, Tag } from "@/lib/shared/types";
+import type { CloudFile, FileShareLink, Project, Tag } from "@/lib/shared/types";
 
 const fixture: CloudFile = {
   id: "file_manual",
@@ -54,6 +54,20 @@ const previewFixture: CloudFile = {
     createdAt: "2026-05-02T00:00:00.000Z",
     updatedAt: "2026-05-02T00:00:00.000Z"
   }
+};
+
+const shareFixture: FileShareLink = {
+  id: "share_123",
+  fileId: "file_manual",
+  label: null,
+  expiresAt: "2026-05-31T00:00:00.000Z",
+  maxDownloads: null,
+  downloadCount: 2,
+  revokedAt: null,
+  createdByUserId: "user_1",
+  createdAt: "2026-05-30T00:00:00.000Z",
+  updatedAt: "2026-05-30T00:00:00.000Z",
+  lastAccessedAt: "2026-05-30T01:00:00.000Z"
 };
 
 describe("DetailDrawer", () => {
@@ -124,7 +138,10 @@ describe("DetailDrawer", () => {
 
   it("creates and displays a share link for the selected file", async () => {
     const user = userEvent.setup();
-    const onCreateShareLink = vi.fn(async () => "/api/shares/share-token/download");
+    const onCreateShareLink = vi.fn(async () => ({
+      share: shareFixture,
+      url: "/api/shares/share-token/download"
+    }));
 
     render(<DetailDrawer file={fixture} onCreateShareLink={onCreateShareLink} />);
 
@@ -132,6 +149,29 @@ describe("DetailDrawer", () => {
 
     expect(onCreateShareLink).toHaveBeenCalledWith(fixture);
     expect(await screen.findByLabelText("Share link")).toHaveValue("/api/shares/share-token/download");
+    expect(screen.getByText("2 downloads")).toBeVisible();
+  });
+
+  it("loads and revokes existing share links", async () => {
+    const user = userEvent.setup();
+    const onListShareLinks = vi.fn(async () => [shareFixture]);
+    const onRevokeShareLink = vi.fn(async () => ({ ...shareFixture, revokedAt: "2026-05-30T02:00:00.000Z" }));
+
+    render(
+      <DetailDrawer
+        file={fixture}
+        onCreateShareLink={vi.fn()}
+        onListShareLinks={onListShareLinks}
+        onRevokeShareLink={onRevokeShareLink}
+      />
+    );
+
+    expect(await screen.findByText("2 downloads")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Revoke share link" }));
+
+    expect(onRevokeShareLink).toHaveBeenCalledWith(fixture, shareFixture);
+    await waitFor(() => expect(screen.queryByText("2 downloads")).not.toBeInTheDocument());
   });
 
   it("disables server-mutating actions while busy", () => {

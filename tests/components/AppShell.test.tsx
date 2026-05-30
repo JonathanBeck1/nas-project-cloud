@@ -479,7 +479,13 @@ describe("AppShell", () => {
     const user = userEvent.setup();
     const archivedFile = { ...uploadedFile, status: "archived" as const, archivedAt: "2026-04-30T00:00:00.000Z" };
     const archiveResponse = deferred<Response>();
-    const fetchMock = vi.fn<typeof fetch>(() => archiveResponse.promise);
+    const fetchMock = vi.fn<typeof fetch>((input) => {
+      const url = String(input);
+      if (url.endsWith("/shares")) {
+        return Promise.resolve(new Response(JSON.stringify({ shares: [] }), { status: 200 }));
+      }
+      return archiveResponse.promise;
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<AppShell initialData={{ files: [uploadedFile, notesFile], projects: [], categories: [], tags: [] }} />);
