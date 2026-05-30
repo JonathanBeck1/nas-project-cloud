@@ -72,6 +72,7 @@ export type CompleteUploadSessionInput = {
   tempRelativePath: string;
   target: UploadTarget;
   filename: string;
+  relativePath?: string | null;
   mimeType: string;
 };
 
@@ -193,7 +194,7 @@ export function createStorageService(root = appConfig.storageRoot) {
     async completeUploadSession(input: CompleteUploadSessionInput): Promise<StoredFile> {
       const from = absolutePathFor(input.tempRelativePath);
       const relativeDirectory = targetDirectory(input.target);
-      const directory = path.join(storageRoot, relativeDirectory);
+      const directory = path.join(storageRoot, relativeDirectory, safeRelativeDirectory(input.relativePath ?? undefined));
       const absolutePath = await moveIntoDirectory({
         storageRoot,
         from,

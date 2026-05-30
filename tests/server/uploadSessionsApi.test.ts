@@ -62,6 +62,7 @@ vi.mock("@/lib/shared/fileTypes", () => ({
 const openSession: UploadSession = {
   id: "upload_1",
   filename: "movie.webm",
+  relativePath: null,
   mimeType: "video/webm",
   sizeBytes: 11,
   receivedBytes: 0,
@@ -172,6 +173,28 @@ describe("upload sessions API module", () => {
         deviceId: "device_1",
         categoryId: "cat_media",
         tempPath: ".uploads/upload_1.part"
+      })
+    );
+  });
+
+  it("stores folder-relative paths on upload sessions", async () => {
+    const { POST } = await import("@/app/api/upload-sessions/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/upload-sessions", {
+        filename: "movie.webm",
+        relativePath: "Shoot A/Exports/movie.webm",
+        mimeType: "video/webm",
+        sizeBytes: 11,
+        sourceDevice: "Browser"
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.repo.createUploadSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: "movie.webm",
+        relativePath: "Shoot A/Exports/movie.webm"
       })
     );
   });

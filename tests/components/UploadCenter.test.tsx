@@ -8,6 +8,7 @@ import type { UploadSession } from "@/lib/shared/types";
 const openSession: UploadSession = {
   id: "upload_1",
   filename: "movie.webm",
+  relativePath: null,
   mimeType: "video/webm",
   sizeBytes: 2048,
   receivedBytes: 1024,

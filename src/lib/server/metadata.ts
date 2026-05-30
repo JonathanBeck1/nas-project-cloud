@@ -90,6 +90,7 @@ type PendingPreviewJobRow = FilePreviewRow &
 type UploadSessionRow = {
   id: string;
   filename: string;
+  relative_path: string | null;
   mime_type: string;
   size_bytes: number;
   received_bytes: number;
@@ -262,6 +263,7 @@ type UpsertFilePreviewInput = {
 
 type CreateUploadSessionInput = {
   filename: string;
+  relativePath?: string | null;
   mimeType: string;
   sizeBytes: number;
   checksum?: string | null;
@@ -1172,6 +1174,7 @@ export function createMetadataRepository(db: AppDatabase) {
       const session: UploadSession = {
         id: `upload_${nanoid(12)}`,
         filename: input.filename,
+        relativePath: input.relativePath ?? null,
         mimeType: input.mimeType,
         sizeBytes: input.sizeBytes,
         receivedBytes: 0,
@@ -1194,12 +1197,12 @@ export function createMetadataRepository(db: AppDatabase) {
 
       db.prepare(`
         insert into upload_sessions (
-          id, filename, mime_type, size_bytes, received_bytes, checksum, user_id, device_id, target_kind,
+          id, filename, relative_path, mime_type, size_bytes, received_bytes, checksum, user_id, device_id, target_kind,
           source_device, project_id, project_slug, category_id, status, temp_path,
           storage_path, error, created_at, updated_at, completed_at
         )
         values (
-          @id, @filename, @mimeType, @sizeBytes, @receivedBytes, @checksum, @userId, @deviceId, @targetKind,
+          @id, @filename, @relativePath, @mimeType, @sizeBytes, @receivedBytes, @checksum, @userId, @deviceId, @targetKind,
           @sourceDevice, @projectId, @projectSlug, @categoryId, @status, @tempPath,
           @storagePath, @error, @createdAt, @updatedAt, @completedAt
         )
@@ -1543,6 +1546,7 @@ function uploadSessionFromRow(row: UploadSessionRow): UploadSession {
   return {
     id: row.id,
     filename: row.filename,
+    relativePath: row.relative_path,
     mimeType: row.mime_type,
     sizeBytes: row.size_bytes,
     receivedBytes: row.received_bytes,

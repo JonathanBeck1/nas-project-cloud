@@ -49,6 +49,7 @@ export async function POST(request: Request) {
   }
 
   const filename = stringValue(body.filename) || "upload.bin";
+  const relativePath = nullableStringValue(body.relativePath);
   const mimeType = stringValue(body.mimeType) || "application/octet-stream";
   const sizeBytes = numberValue(body.sizeBytes);
   if (!Number.isInteger(sizeBytes) || sizeBytes <= 0) {
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
   try {
     const session = repo.createUploadSession({
       filename,
+      relativePath,
       mimeType,
       sizeBytes,
       checksum: nullableStringValue(body.checksum),

@@ -38,6 +38,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     tempRelativePath: session.tempPath,
     target,
     filename: session.filename,
+    relativePath: session.relativePath,
     mimeType: session.mimeType
   });
 

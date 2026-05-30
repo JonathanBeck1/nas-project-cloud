@@ -21,8 +21,9 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `ffmpeg`, and `pdftoppm` readiness from `/api/health`.
 - **Safer project deletion.** Deleting a project can now move active files
   back into the device inbox before removing the project record.
-- **Folder path preservation groundwork.** Direct browser uploads now carry
-  folder-relative paths through the API and storage layer.
+- **Folder path preservation.** Direct and chunked browser uploads now carry
+  folder-relative paths through the API, upload-session metadata, and storage
+  layer.
 
 ### Changed
 

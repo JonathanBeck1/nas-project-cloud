@@ -140,6 +140,7 @@ function migrate(db: AppDatabase) {
     create table if not exists upload_sessions (
       id text primary key,
       filename text not null,
+      relative_path text,
       mime_type text not null,
       size_bytes integer not null,
       received_bytes integer not null default 0,
@@ -178,6 +179,7 @@ function migrate(db: AppDatabase) {
   addColumnIfMissing(db, "files", "archived_at", "text");
   addColumnIfMissing(db, "upload_sessions", "user_id", "text not null default ''");
   addColumnIfMissing(db, "upload_sessions", "device_id", "text");
+  addColumnIfMissing(db, "upload_sessions", "relative_path", "text");
   addColumnIfMissing(db, "upload_sessions", "temp_path_cleaned_at", "text");
 }
 

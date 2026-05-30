@@ -359,6 +359,25 @@ describe("storage service", () => {
     expect(fs.readFileSync(path.join(root, stored.relativePath), "utf8")).toBe("image");
   });
 
+  it("completeUploadSession preserves sanitized folder-relative directories", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(root);
+    const storage = createStorageService(root);
+    const temp = await storage.createUploadTempPath("upload_folder_path");
+    fs.writeFileSync(temp.absolutePath, "movie");
+
+    const stored = await storage.completeUploadSession({
+      tempRelativePath: temp.relativePath,
+      target: { kind: "project", projectSlug: "Garden Shed" },
+      filename: "movie.webm",
+      relativePath: "Shoot A/../Exports/movie.webm",
+      mimeType: "video/webm"
+    });
+
+    expect(stored.relativePath).toBe("Projects/Garden Shed/Inbox/Shoot A/Exports/movie.webm");
+    expect(fs.readFileSync(path.join(root, stored.relativePath), "utf8")).toBe("movie");
+  });
+
   it("streamUpload aborts and cleans up when the body exceeds maxBytes", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
     createdDirs.push(root);

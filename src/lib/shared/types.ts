@@ -108,6 +108,7 @@ export type CloudFile = {
 export type UploadSession = {
   id: string;
   filename: string;
+  relativePath: string | null;
   mimeType: string;
   sizeBytes: number;
   receivedBytes: number;

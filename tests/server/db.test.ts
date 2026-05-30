@@ -66,6 +66,7 @@ describe("createDatabase", () => {
         expect.arrayContaining([
           "id",
           "filename",
+          "relative_path",
           "mime_type",
           "size_bytes",
           "received_bytes",

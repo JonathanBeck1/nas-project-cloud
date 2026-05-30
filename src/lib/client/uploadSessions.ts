@@ -37,6 +37,7 @@ export async function uploadFileInChunks({
     headers: { "Content-Type": "application/json", ...csrfHeaders() },
     body: JSON.stringify({
       filename: file.name || "upload.bin",
+      ...relativePathPayload(file),
       mimeType: file.type || "application/octet-stream",
       sizeBytes: file.size,
       sourceDevice
@@ -145,4 +146,11 @@ async function uploadErrorMessage(response: Response) {
   } catch {
     return "Upload failed";
   }
+}
+
+function relativePathPayload(file: File): { relativePath?: string } {
+  const withRelativePath = file as File & { webkitRelativePath?: string };
+  const relativePath =
+    typeof withRelativePath.webkitRelativePath === "string" ? withRelativePath.webkitRelativePath.trim() : "";
+  return relativePath ? { relativePath } : {};
 }
