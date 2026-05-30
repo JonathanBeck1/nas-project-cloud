@@ -187,6 +187,86 @@ describe("UploadCenter", () => {
     );
   });
 
+  it("retries a failed upload by starting a clean chunked session with the same target", async () => {
+    const onUploaded = vi.fn();
+    const failedProjectSession: UploadSession = {
+      ...failedSession,
+      relativePath: "Client A/report.pdf",
+      targetKind: "project",
+      projectId: "proj_1",
+      projectSlug: "garage-build",
+      categoryId: "cat_docs",
+      sizeBytes: 2048
+    };
+    const fetchMock = vi.fn<typeof fetch>((url, init) => {
+      const target = typeof url === "string" ? url : url.toString();
+      if (target.includes("status=failed")) {
+        return Promise.resolve(new Response(JSON.stringify({ sessions: [failedProjectSession] }), { status: 200 }));
+      }
+      if (target === "/api/upload-sessions") {
+        expect(init?.method).toBe("POST");
+        expect(init?.body).toBe(
+          JSON.stringify({
+            filename: "report.pdf",
+            relativePath: "Client A/report.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 2048,
+            sourceDevice: "Mac Studio",
+            projectId: "proj_1",
+            projectSlug: "garage-build",
+            categoryId: "cat_docs"
+          })
+        );
+        return Promise.resolve(new Response(JSON.stringify({ session: { id: "upload_retry" } }), { status: 201 }));
+      }
+      if (target === "/api/upload-sessions/upload_retry/chunk") {
+        return Promise.resolve(new Response(JSON.stringify({ session: { receivedBytes: 2048 } }), { status: 200 }));
+      }
+      if (target === "/api/upload-sessions/upload_retry/complete") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ file: { id: "file_report", name: "report.pdf" } }), { status: 201 })
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<UploadCenter onUploaded={onUploaded} />);
+
+    await userEvent.click(screen.getByRole("tab", { name: "Failed" }));
+    await screen.findByText("report.pdf");
+    await userEvent.upload(
+      screen.getByLabelText("Select file to retry report.pdf"),
+      new File([new Uint8Array(2048)], "report.pdf", { type: "application/pdf" })
+    );
+
+    await waitFor(() => expect(onUploaded).toHaveBeenCalledWith([{ id: "file_report", name: "report.pdf" }]));
+    expect(await screen.findByRole("status")).toHaveTextContent("Retried report.pdf");
+    expect(screen.queryByText("report.pdf")).not.toBeInTheDocument();
+  });
+
+  it("rejects failed retry attempts when the selected file does not match the session", async () => {
+    const fetchMock = vi.fn<typeof fetch>((url) => {
+      const target = typeof url === "string" ? url : url.toString();
+      if (target.includes("status=failed")) {
+        return Promise.resolve(new Response(JSON.stringify({ sessions: [failedSession] }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<UploadCenter />);
+
+    await userEvent.click(screen.getByRole("tab", { name: "Failed" }));
+    await screen.findByText("report.pdf");
+    await userEvent.upload(
+      screen.getByLabelText("Select file to retry report.pdf"),
+      new File([new Uint8Array(2048)], "wrong.pdf", { type: "application/pdf" })
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Select the same file to retry report.pdf");
+  });
+
   it("renders an explicit empty state per tab", async () => {
     const fetchMock = vi.fn<typeof fetch>(() =>
       Promise.resolve(new Response(JSON.stringify({ sessions: [] }), { status: 200 }))

@@ -2,9 +2,9 @@
 
 Date: 2026-05-30
 
-This phase adds a practical browser resume flow for open chunked upload
-sessions. Browsers cannot keep a `File` handle after refresh, so the user
-selects the same local file again from Upload Center.
+This phase adds practical browser recovery flows for chunked upload sessions.
+Browsers cannot keep a `File` handle after refresh, so the user selects the
+same local file again from Upload Center.
 
 ## Resume Flow
 
@@ -19,9 +19,9 @@ selects the same local file again from Upload Center.
 
 ## Current Boundary
 
-- This resumes open sessions only.
-- Failed-session retry still needs a separate server flow because failed
-  sessions are intentionally closed to further chunk writes.
+- Open sessions resume from the stored byte offset.
+- Failed sessions retry by creating a clean replacement session from byte zero,
+  preserving the failed session's stored folder, project, and category target.
 - A future desktop helper can remove the manual file-selection step by holding
   source file handles locally.
 

@@ -20,6 +20,7 @@ type ResumeUploadSessionInput = {
 type UploadFileInChunksInput = {
   file: File;
   sourceDevice: string;
+  relativePath?: string | null;
   projectId?: string | null;
   projectSlug?: string | null;
   categoryId?: string | null;
@@ -40,6 +41,7 @@ type UploadSessionResponse = {
 export async function uploadFileInChunks({
   file,
   sourceDevice,
+  relativePath = null,
   projectId = null,
   projectSlug = null,
   categoryId = null,
@@ -54,7 +56,7 @@ export async function uploadFileInChunks({
     headers: { "Content-Type": "application/json", ...csrfHeaders() },
     body: JSON.stringify({
       filename: file.name || "upload.bin",
-      ...relativePathPayload(file),
+      ...relativePathPayload(file, relativePath),
       mimeType: file.type || "application/octet-stream",
       sizeBytes: file.size,
       sourceDevice,
@@ -213,7 +215,11 @@ async function uploadErrorMessage(response: Response) {
   }
 }
 
-function relativePathPayload(file: File): { relativePath?: string } {
+function relativePathPayload(file: File, override?: string | null): { relativePath?: string } {
+  if (override?.trim()) {
+    return { relativePath: override.trim() };
+  }
+
   const withRelativePath = file as File & { webkitRelativePath?: string };
   const relativePath =
     typeof withRelativePath.webkitRelativePath === "string" ? withRelativePath.webkitRelativePath.trim() : "";

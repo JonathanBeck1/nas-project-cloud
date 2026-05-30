@@ -6,6 +6,7 @@ import {
   abortUploadSession,
   listUploadSessions,
   resumeUploadSession,
+  uploadFileInChunks,
   type UploadSessionStatusFilter
 } from "@/lib/client/uploadSessions";
 import type { CloudFile, UploadSession } from "@/lib/shared/types";
@@ -135,6 +136,39 @@ export function UploadCenter({ initialSessions, onUploaded }: UploadCenterProps)
     }
   }
 
+  async function retrySession(session: UploadSession, file: File | undefined) {
+    setMessage("");
+    setError("");
+
+    if (!file || !matchesSessionFile(session, file)) {
+      setError(`Select the same file to retry ${session.filename}`);
+      return;
+    }
+
+    setBusySessionId(session.id);
+
+    try {
+      const uploaded = await uploadFileInChunks({
+        file,
+        sourceDevice: session.sourceDevice,
+        relativePath: session.relativePath,
+        projectId: session.projectId,
+        projectSlug: session.projectSlug,
+        categoryId: session.categoryId,
+        chunkSizeBytes: DEFAULT_CHUNK_SIZE_BYTES,
+        onProgress: ({ loadedBytes, totalBytes }) =>
+          setMessage(`Retrying ${session.filename} ${formatBytes(loadedBytes)} / ${formatBytes(totalBytes)}`)
+      });
+      setSessions((currentSessions) => currentSessions.filter((candidate) => candidate.id !== session.id));
+      onUploaded?.([uploaded]);
+      setMessage(`Retried ${session.filename}`);
+    } catch (retryError) {
+      setError(retryError instanceof Error ? retryError.message : "Could not retry upload");
+    } finally {
+      setBusySessionId(null);
+    }
+  }
+
   async function copyError(session: UploadSession) {
     if (!session.error || typeof navigator === "undefined" || !navigator.clipboard) return;
     try {
@@ -254,6 +288,35 @@ export function UploadCenter({ initialSessions, onUploaded }: UploadCenterProps)
                   ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {activeTab === "failed" ? (
+                    <>
+                      <input
+                        id={`retry-upload-${session.id}`}
+                        aria-label={`Select file to retry ${session.filename}`}
+                        className="sr-only"
+                        type="file"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.target.value = "";
+                          void retrySession(session, file);
+                        }}
+                      />
+                      <label
+                        htmlFor={`retry-upload-${session.id}`}
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.currentTarget.control?.click();
+                          }
+                        }}
+                        className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-line bg-panel px-2.5 text-xs font-semibold text-ink transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                      >
+                        <RotateCw aria-hidden="true" className="h-3.5 w-3.5" />
+                        Retry
+                      </label>
+                    </>
+                  ) : null}
                   {session.error ? (
                     <button
                       type="button"

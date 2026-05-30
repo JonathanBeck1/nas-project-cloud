@@ -33,6 +33,9 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Browser upload resume.** Open chunked upload sessions can now be resumed
   from Upload Center by selecting the same local file again. The client
   continues from the server-stored byte offset and completes the session.
+- **Failed upload retry.** Failed chunked sessions can now be retried from
+  Upload Center by selecting the same file, starting a clean replacement
+  session with the stored folder/project/category target.
 
 ### Changed
 
