@@ -10,12 +10,13 @@ import {
   renameFile,
   revokeFileShareLink,
   setFileTags as setFileTagsRequest,
-  updateFileAssignment
+  updateFileAssignment,
+  updateFileShareLink
 } from "@/lib/client/fileActions";
 import type { Category, CloudFile, FileShareLink, Project, Tag } from "@/lib/shared/types";
 import { BulkActionBar } from "./BulkActionBar";
 import { DetailDrawer } from "./DetailDrawer";
-import type { CreateShareLinkOptions } from "./DetailDrawer";
+import type { CreateShareLinkOptions, UpdateShareLinkOptions } from "./DetailDrawer";
 import { DropZone } from "./DropZone";
 import { FileGrid } from "./FileGrid";
 
@@ -190,6 +191,30 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
     }
   }, []);
 
+  const updateShare = useCallback(async (file: CloudFile, share: FileShareLink, options: UpdateShareLinkOptions) => {
+    setIsFileActionBusy(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const updated = await updateFileShareLink(file.id, share.id, {
+        expiresInHours: options.expiresInHours,
+        maxDownloads: options.maxDownloads,
+        label: options.label,
+        ...(options.clearPassword ? { password: null } : {}),
+        ...(!options.clearPassword && options.password ? { password: options.password } : {})
+      });
+      setMessage(`Updated share link for ${file.name}`);
+      return updated;
+    } catch (shareError) {
+      const message = shareError instanceof Error ? shareError.message : "Could not update share link";
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  }, []);
+
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <section className="rounded-md border border-line bg-panel shadow-panel" aria-labelledby="project-heading">
@@ -323,6 +348,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
           onCreateShareLink={createShare}
           onListShareLinks={listShares}
           onListShareAccessEvents={listShareAccessEvents}
+          onUpdateShareLink={updateShare}
           onRevokeShareLink={revokeShare}
         />
       </div>

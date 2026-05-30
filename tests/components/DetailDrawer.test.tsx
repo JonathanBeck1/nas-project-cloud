@@ -206,6 +206,44 @@ describe("DetailDrawer", () => {
     await waitFor(() => expect(screen.queryByText("MacBook handoff")).not.toBeInTheDocument());
   });
 
+  it("updates existing share link controls", async () => {
+    const user = userEvent.setup();
+    const labeledShare = { ...shareFixture, label: "MacBook handoff", maxDownloads: 5, passwordProtected: true };
+    const updatedShare = { ...labeledShare, label: "Updated handoff", maxDownloads: 4 };
+    const onListShareLinks = vi.fn(async () => [labeledShare]);
+    const onUpdateShareLink = vi.fn(async () => updatedShare);
+
+    render(
+      <DetailDrawer
+        file={fixture}
+        onCreateShareLink={vi.fn()}
+        onListShareLinks={onListShareLinks}
+        onUpdateShareLink={onUpdateShareLink}
+      />
+    );
+
+    expect(await screen.findByText("MacBook handoff")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Edit share link" }));
+    await user.clear(screen.getByLabelText("Edit label"));
+    await user.type(screen.getByLabelText("Edit label"), "Updated handoff");
+    await user.selectOptions(screen.getByLabelText("Edit expires"), "168");
+    await user.clear(screen.getByLabelText("Edit max downloads"));
+    await user.type(screen.getByLabelText("Edit max downloads"), "4");
+    await user.type(screen.getByLabelText("New password"), "correct horse");
+    await user.click(screen.getByRole("button", { name: "Save share link" }));
+
+    expect(onUpdateShareLink).toHaveBeenCalledWith(fixture, labeledShare, {
+      label: "Updated handoff",
+      expiresInHours: 168,
+      maxDownloads: 4,
+      password: "correct horse",
+      clearPassword: false
+    });
+    expect(await screen.findByText("Updated handoff")).toBeVisible();
+    expect(screen.getByText("2 of 4 downloads")).toBeVisible();
+  });
+
   it("disables server-mutating actions while busy", () => {
     render(
       <DetailDrawer

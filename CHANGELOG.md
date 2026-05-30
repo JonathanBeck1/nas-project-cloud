@@ -46,7 +46,8 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   caps when creating new links. The drawer also surfaces each active link's
   label, download usage, expiry, creation time, last-used time, and recent
   access events with CSV export. New share links can be password protected,
-  and recipients get a local download page instead of a raw API URL.
+  existing links can be edited after creation, and recipients get a local
+  download page instead of a raw API URL.
 
 ### Changed
 

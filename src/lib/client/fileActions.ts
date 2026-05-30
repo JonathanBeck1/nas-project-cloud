@@ -13,6 +13,13 @@ export type CreateFileShareLinkInput = {
   password?: string | null;
 };
 
+export type UpdateFileShareLinkInput = {
+  expiresInHours?: number;
+  maxDownloads?: number | null;
+  label?: string | null;
+  password?: string | null;
+};
+
 export async function archiveFile(fileId: string): Promise<CloudFile> {
   return fileFromResponse(
     await fetch(`/api/files/${encodeURIComponent(fileId)}/archive`, {
@@ -167,6 +174,31 @@ export async function revokeFileShareLink(fileId: string, shareId: string): Prom
 
   if (!response.ok || !payload.share) {
     throw new Error(payload.error ?? "Could not revoke share link");
+  }
+
+  return payload.share;
+}
+
+export async function updateFileShareLink(
+  fileId: string,
+  shareId: string,
+  input: UpdateFileShareLinkInput
+): Promise<FileShareLink> {
+  const response = await fetch(`/api/files/${encodeURIComponent(fileId)}/shares/${encodeURIComponent(shareId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...csrfHeaders() },
+    body: JSON.stringify(input)
+  });
+
+  let payload: { share?: FileShareLink; error?: string };
+  try {
+    payload = (await response.json()) as { share?: FileShareLink; error?: string };
+  } catch {
+    payload = {};
+  }
+
+  if (!response.ok || !payload.share) {
+    throw new Error(payload.error ?? "Could not update share link");
   }
 
   return payload.share;

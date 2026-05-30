@@ -20,6 +20,11 @@ type DetailDrawerProps = {
   ) => Promise<CreateShareLinkResult> | CreateShareLinkResult;
   onListShareLinks?: (file: CloudFile) => Promise<FileShareLink[]>;
   onListShareAccessEvents?: (file: CloudFile, share: FileShareLink) => Promise<FileShareAccessEvent[]>;
+  onUpdateShareLink?: (
+    file: CloudFile,
+    share: FileShareLink,
+    options: UpdateShareLinkOptions
+  ) => Promise<FileShareLink> | FileShareLink;
   onRevokeShareLink?: (file: CloudFile, share: FileShareLink) => Promise<FileShareLink>;
 };
 
@@ -28,6 +33,14 @@ export type CreateShareLinkOptions = {
   maxDownloads: number | null;
   label: string | null;
   password: string | null;
+};
+
+export type UpdateShareLinkOptions = {
+  expiresInHours: number;
+  maxDownloads: number | null;
+  label: string | null;
+  password: string | null;
+  clearPassword: boolean;
 };
 
 type CreateShareLinkResult = {
@@ -47,6 +60,7 @@ export function DetailDrawer({
   onCreateShareLink,
   onListShareLinks,
   onListShareAccessEvents,
+  onUpdateShareLink,
   onRevokeShareLink
 }: DetailDrawerProps) {
   const [draftName, setDraftName] = useState("");
@@ -60,6 +74,13 @@ export function DetailDrawer({
   const [sharePassword, setSharePassword] = useState("");
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isLoadingShares, setIsLoadingShares] = useState(false);
+  const [editingShareId, setEditingShareId] = useState<string | null>(null);
+  const [editShareLabel, setEditShareLabel] = useState("");
+  const [editShareExpiresInHours, setEditShareExpiresInHours] = useState("24");
+  const [editShareMaxDownloads, setEditShareMaxDownloads] = useState("");
+  const [editSharePassword, setEditSharePassword] = useState("");
+  const [editShareClearPassword, setEditShareClearPassword] = useState(false);
+  const [updatingShareId, setUpdatingShareId] = useState<string | null>(null);
   const [revokingShareId, setRevokingShareId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,6 +93,13 @@ export function DetailDrawer({
     setShareExpiresInHours("24");
     setShareMaxDownloads("");
     setSharePassword("");
+    setEditingShareId(null);
+    setEditShareLabel("");
+    setEditShareExpiresInHours("24");
+    setEditShareMaxDownloads("");
+    setEditSharePassword("");
+    setEditShareClearPassword(false);
+    setUpdatingShareId(null);
     setRevokingShareId(null);
 
     if (!file || !onListShareLinks) {
@@ -132,6 +160,14 @@ export function DetailDrawer({
   const previewUrl = readyPreviewUrl(file);
   const trimmedDraftName = draftName.trim();
   const canRename = Boolean(onRename) && trimmedDraftName.length > 0 && trimmedDraftName !== file.name;
+  const startEditingShare = (share: FileShareLink) => {
+    setEditingShareId(share.id);
+    setEditShareLabel(share.label ?? "");
+    setEditShareExpiresInHours(shareDefaultExpiryHours(share));
+    setEditShareMaxDownloads(share.maxDownloads === null ? "" : String(share.maxDownloads));
+    setEditSharePassword("");
+    setEditShareClearPassword(false);
+  };
 
   return (
     <aside className="h-full rounded-md border border-line bg-panel p-4 shadow-panel" aria-label="File details">
@@ -315,29 +351,153 @@ export function DetailDrawer({
                         </div>
                       ) : null}
                     </div>
-                    {onRevokeShareLink ? (
-                      <button
-                        type="button"
-                        aria-label="Revoke share link"
-                        disabled={isBusy || revokingShareId === share.id}
-                        className="inline-flex h-8 shrink-0 items-center rounded-md border border-line bg-surface px-2 text-xs font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
-                        onClick={async () => {
-                          setRevokingShareId(share.id);
-                          setShareError("");
-                          try {
-                            await onRevokeShareLink(file, share);
-                            setShareLinks((current) => current.filter((candidate) => candidate.id !== share.id));
-                          } catch (error) {
-                            setShareError(error instanceof Error ? error.message : "Could not revoke share link");
-                          } finally {
-                            setRevokingShareId(null);
-                          }
-                        }}
-                      >
-                        Revoke
-                      </button>
-                    ) : null}
+                    <div className="flex shrink-0 flex-col gap-2">
+                      {onUpdateShareLink ? (
+                        <button
+                          type="button"
+                          aria-label="Edit share link"
+                          disabled={isBusy || updatingShareId === share.id}
+                          className="inline-flex h-8 items-center rounded-md border border-line bg-surface px-2 text-xs font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => startEditingShare(share)}
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                      {onRevokeShareLink ? (
+                        <button
+                          type="button"
+                          aria-label="Revoke share link"
+                          disabled={isBusy || revokingShareId === share.id}
+                          className="inline-flex h-8 items-center rounded-md border border-line bg-surface px-2 text-xs font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={async () => {
+                            setRevokingShareId(share.id);
+                            setShareError("");
+                            try {
+                              await onRevokeShareLink(file, share);
+                              setShareLinks((current) => current.filter((candidate) => candidate.id !== share.id));
+                            } catch (error) {
+                              setShareError(error instanceof Error ? error.message : "Could not revoke share link");
+                            } finally {
+                              setRevokingShareId(null);
+                            }
+                          }}
+                        >
+                          Revoke
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
+                  {editingShareId === share.id && onUpdateShareLink ? (
+                    <div className="mt-3 border-t border-line pt-3">
+                      <label className="block text-xs font-semibold text-muted">
+                        Edit label
+                        <input
+                          className="mt-1 h-9 w-full rounded-md border border-line bg-surface px-3 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                          value={editShareLabel}
+                          onChange={(event) => setEditShareLabel(event.target.value)}
+                          disabled={isBusy || updatingShareId === share.id}
+                          placeholder="Optional"
+                        />
+                      </label>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className="block text-xs font-semibold text-muted">
+                          Edit expires
+                          <select
+                            className="mt-1 h-9 w-full rounded-md border border-line bg-surface px-3 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                            value={editShareExpiresInHours}
+                            onChange={(event) => setEditShareExpiresInHours(event.target.value)}
+                            disabled={isBusy || updatingShareId === share.id}
+                          >
+                            <option value="1">1 hour</option>
+                            <option value="24">24 hours</option>
+                            <option value="168">7 days</option>
+                            <option value="720">30 days</option>
+                          </select>
+                        </label>
+                        <label className="block text-xs font-semibold text-muted">
+                          Edit max downloads
+                          <input
+                            className="mt-1 h-9 w-full rounded-md border border-line bg-surface px-3 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                            type="number"
+                            min="1"
+                            step="1"
+                            inputMode="numeric"
+                            value={editShareMaxDownloads}
+                            onChange={(event) => setEditShareMaxDownloads(event.target.value)}
+                            disabled={isBusy || updatingShareId === share.id}
+                            placeholder="Unlimited"
+                          />
+                        </label>
+                      </div>
+                      <label className="mt-3 block text-xs font-semibold text-muted">
+                        New password
+                        <input
+                          className="mt-1 h-9 w-full rounded-md border border-line bg-surface px-3 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                          type="password"
+                          value={editSharePassword}
+                          onChange={(event) => setEditSharePassword(event.target.value)}
+                          disabled={isBusy || updatingShareId === share.id || editShareClearPassword}
+                          placeholder="Leave blank to keep current password"
+                        />
+                      </label>
+                      {share.passwordProtected ? (
+                        <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-muted">
+                          <input
+                            type="checkbox"
+                            checked={editShareClearPassword}
+                            onChange={(event) => {
+                              setEditShareClearPassword(event.target.checked);
+                              if (event.target.checked) {
+                                setEditSharePassword("");
+                              }
+                            }}
+                            disabled={isBusy || updatingShareId === share.id}
+                          />
+                          Remove password
+                        </label>
+                      ) : null}
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center rounded-md border border-line bg-surface px-2 text-xs font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isBusy || updatingShareId === share.id}
+                          onClick={async () => {
+                            setUpdatingShareId(share.id);
+                            setShareError("");
+                            try {
+                              const updated = await onUpdateShareLink(file, share, {
+                                expiresInHours: Number.parseInt(editShareExpiresInHours, 10),
+                                maxDownloads: editShareMaxDownloads.trim()
+                                  ? Number.parseInt(editShareMaxDownloads, 10)
+                                  : null,
+                                label: editShareLabel.trim() || null,
+                                password: editSharePassword.trim() || null,
+                                clearPassword: editShareClearPassword
+                              });
+                              setShareLinks((current) =>
+                                current.map((candidate) => (candidate.id === updated.id ? updated : candidate))
+                              );
+                              setEditingShareId(null);
+                            } catch (error) {
+                              setShareError(error instanceof Error ? error.message : "Could not update share link");
+                            } finally {
+                              setUpdatingShareId(null);
+                            }
+                          }}
+                        >
+                          Save share link
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center rounded-md border border-line bg-surface px-2 text-xs font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isBusy || updatingShareId === share.id}
+                          onClick={() => setEditingShareId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -431,6 +591,23 @@ function previewDetailValue(file: CloudFile): string {
 
 function copyPath(path: string) {
   void navigator.clipboard?.writeText(path).catch(() => undefined);
+}
+
+function shareDefaultExpiryHours(share: FileShareLink): string {
+  if (!share.expiresAt) {
+    return "24";
+  }
+  const hoursRemaining = Math.max(1, Math.ceil((Date.parse(share.expiresAt) - Date.now()) / 3_600_000));
+  if (hoursRemaining <= 1) {
+    return "1";
+  }
+  if (hoursRemaining <= 24) {
+    return "24";
+  }
+  if (hoursRemaining <= 168) {
+    return "168";
+  }
+  return "720";
 }
 
 function activeShareLinks(links: FileShareLink[]): FileShareLink[] {

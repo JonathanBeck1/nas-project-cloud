@@ -9,6 +9,7 @@ import {
   revokeFileShareLink,
   shareAccessEventsExportUrl,
   restoreFile,
+  updateFileShareLink,
   updateFileAssignment
 } from "@/lib/client/fileActions";
 
@@ -191,6 +192,48 @@ describe("fileActions", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/files/file_123/shares/share_123",
       expect.objectContaining({ method: "DELETE" })
+    );
+  });
+
+  it("updates file share links through the share endpoint", async () => {
+    const share = {
+      id: "share_123",
+      fileId: "file_123",
+      label: "Updated handoff",
+      expiresAt: "2026-05-31T00:00:00.000Z",
+      maxDownloads: 5,
+      passwordProtected: true,
+      downloadCount: 0,
+      revokedAt: null,
+      createdByUserId: "user_1",
+      createdAt: "2026-05-30T00:00:00.000Z",
+      updatedAt: "2026-05-30T01:00:00.000Z",
+      lastAccessedAt: null
+    };
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ share }), { status: 200 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      updateFileShareLink("file_123", "share_123", {
+        label: "Updated handoff",
+        expiresInHours: 168,
+        maxDownloads: 5,
+        password: "correct horse"
+      })
+    ).resolves.toEqual(share);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_123/shares/share_123",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          label: "Updated handoff",
+          expiresInHours: 168,
+          maxDownloads: 5,
+          password: "correct horse"
+        })
+      })
     );
   });
 

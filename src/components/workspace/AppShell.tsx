@@ -19,12 +19,13 @@ import {
   renameFile,
   revokeFileShareLink,
   setFileTags as setFileTagsRequest,
-  updateFileAssignment
+  updateFileAssignment,
+  updateFileShareLink
 } from "@/lib/client/fileActions";
 import { csrfHeaders } from "@/lib/client/csrf";
 import type { Category, CloudFile, FileShareLink, Project, Tag } from "@/lib/shared/types";
 import type { WorkspaceData } from "@/lib/server/workspaceData";
-import type { CreateShareLinkOptions } from "./DetailDrawer";
+import type { CreateShareLinkOptions, UpdateShareLinkOptions } from "./DetailDrawer";
 import type { ProjectDialogInput } from "./ProjectDialog";
 import type { FileGridMode } from "./FileGrid";
 
@@ -343,6 +344,32 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     }
   }, []);
 
+  const handleUpdateShareLink = useCallback(
+    async (file: CloudFile, share: FileShareLink, options: UpdateShareLinkOptions) => {
+      setIsFileActionBusy(true);
+      setFileActionMessage("");
+      setFileActionError("");
+      try {
+        const updated = await updateFileShareLink(file.id, share.id, {
+          expiresInHours: options.expiresInHours,
+          maxDownloads: options.maxDownloads,
+          label: options.label,
+          ...(options.clearPassword ? { password: null } : {}),
+          ...(!options.clearPassword && options.password ? { password: options.password } : {})
+        });
+        setFileActionMessage(`Updated share link for ${file.name}`);
+        return updated;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not update share link";
+        setFileActionError(message);
+        throw new Error(message);
+      } finally {
+        setIsFileActionBusy(false);
+      }
+    },
+    []
+  );
+
   return (
     <div className="min-h-screen bg-surface text-ink">
       <div className="grid min-h-screen grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
@@ -504,6 +531,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                   onCreateShareLink={handleCreateShareLink}
                   onListShareLinks={handleListShareLinks}
                   onListShareAccessEvents={handleListShareAccessEvents}
+                  onUpdateShareLink={handleUpdateShareLink}
                   onRevokeShareLink={handleRevokeShareLink}
                 />
               </div>

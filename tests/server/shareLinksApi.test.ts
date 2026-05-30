@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     listFileShareAccessEvents: vi.fn(),
     listFileShareLinks: vi.fn(),
     revokeFileShareLink: vi.fn(),
+    updateFileShareLink: vi.fn(),
     recordFileShareDownload: vi.fn()
   };
   const storage = {
@@ -89,6 +90,7 @@ describe("share links API", () => {
     mocks.repo.listFileShareAccessEvents.mockReturnValue([]);
     mocks.repo.listFileShareLinks.mockReturnValue([]);
     mocks.repo.revokeFileShareLink.mockReturnValue(null);
+    mocks.repo.updateFileShareLink.mockReturnValue(null);
     mocks.repo.recordFileShareDownload.mockReturnValue(null);
     mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(os.tmpdir(), relativePath));
   });
@@ -223,6 +225,90 @@ describe("share links API", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ share });
     expect(mocks.repo.revokeFileShareLink).toHaveBeenCalledWith("file_123", "share_123");
+  });
+
+  it("updates editable share link controls for an active file", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/shares/[shareId]/route");
+    const updatedShare = {
+      id: "share_123",
+      fileId: "file_123",
+      label: "Updated handoff",
+      expiresAt: "2026-05-31T00:00:00.000Z",
+      maxDownloads: 5,
+      passwordProtected: true,
+      downloadCount: 1,
+      revokedAt: null,
+      createdByUserId: "user_1",
+      createdAt: "2026-05-30T00:00:00.000Z",
+      updatedAt: "2026-05-30T03:00:00.000Z",
+      lastAccessedAt: null
+    };
+    mocks.repo.updateFileShareLink.mockReturnValue(updatedShare);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123/shares/share_123", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          label: "Updated handoff",
+          expiresInHours: 168,
+          maxDownloads: 5,
+          password: "correct horse"
+        })
+      }),
+      { params: Promise.resolve({ id: "file_123", shareId: "share_123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ share: updatedShare });
+    expect(mocks.hashPassword).toHaveBeenCalledWith("correct horse");
+    expect(mocks.repo.updateFileShareLink).toHaveBeenCalledWith(
+      "file_123",
+      "share_123",
+      expect.objectContaining({
+        label: "Updated handoff",
+        expiresAt: expect.any(String),
+        maxDownloads: 5,
+        passwordHash: "scrypt:share-salt:share-hash"
+      })
+    );
+  });
+
+  it("clears a share link password without returning a hash", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/shares/[shareId]/route");
+    const updatedShare = {
+      id: "share_123",
+      fileId: "file_123",
+      label: null,
+      expiresAt: "2026-05-31T00:00:00.000Z",
+      maxDownloads: null,
+      passwordProtected: false,
+      downloadCount: 1,
+      revokedAt: null,
+      createdByUserId: "user_1",
+      createdAt: "2026-05-30T00:00:00.000Z",
+      updatedAt: "2026-05-30T03:00:00.000Z",
+      lastAccessedAt: null
+    };
+    mocks.repo.updateFileShareLink.mockReturnValue(updatedShare);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123/shares/share_123", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: null })
+      }),
+      { params: Promise.resolve({ id: "file_123", shareId: "share_123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ share: updatedShare });
+    expect(mocks.hashPassword).not.toHaveBeenCalled();
+    expect(mocks.repo.updateFileShareLink).toHaveBeenCalledWith(
+      "file_123",
+      "share_123",
+      expect.objectContaining({ passwordHash: null })
+    );
   });
 
   it("streams a shared file without an owner session", async () => {

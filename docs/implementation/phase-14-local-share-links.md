@@ -26,8 +26,13 @@ LAN without signing that device into the owner account.
 - Detail drawer management for existing active links, including download count,
   max-download usage, label, expiration display, created/last-used timestamps,
   recent access events, and revocation.
+- Detail drawer edit controls for existing active links, including label,
+  expiration reset, max-download cap changes, password replacement, and
+  password removal.
 - Authenticated share-link list and revoke endpoints:
   `GET /api/files/:id/shares` and `DELETE /api/files/:id/shares/:shareId`.
+- Authenticated share-link update endpoint:
+  `PATCH /api/files/:id/shares/:shareId`.
 - Authenticated share-link access-history endpoint:
   `GET /api/files/:id/shares/:shareId/events`.
 - CSV access-history export from the same endpoint with `?format=csv`.
@@ -37,7 +42,6 @@ LAN without signing that device into the owner account.
 - Links without passwords are bearer tokens: anyone with the URL can download
   until it expires or hits its max-download cap.
 - Links are file-level only. Project and folder sharing remain future work.
-- Post-creation edit flows remain future work.
 
 ## Verification
 
@@ -47,4 +51,5 @@ LAN without signing that device into the owner account.
 - `npm test -- tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx tests/server/db.test.ts tests/server/metadata.test.ts tests/server/shareLinksApi.test.ts`
 - `npm test -- tests/server/shareLinksApi.test.ts tests/components/ShareDownloadPage.test.tsx tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx`
 - `npm test -- tests/server/shareLinksApi.test.ts tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx`
+- `npm test -- tests/server/shareLinksApi.test.ts tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx tests/components/AppShell.test.tsx tests/components/ProjectWorkspace.test.tsx`
 - `npm run typecheck`

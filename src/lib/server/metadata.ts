@@ -233,6 +233,13 @@ type CreateFileShareLinkInput = {
   passwordHash?: string | null;
 };
 
+type UpdateFileShareLinkInput = {
+  expiresAt?: string | null;
+  maxDownloads?: number | null;
+  label?: string | null;
+  passwordHash?: string | null;
+};
+
 type RecordFileShareDownloadInput = {
   userAgent?: string | null;
   ipAddress?: string | null;
@@ -535,6 +542,39 @@ export function createMetadataRepository(db: AppDatabase) {
         )
         .get(id);
       return row?.password_hash ?? null;
+    },
+
+    updateFileShareLink(fileId: string, id: string, input: UpdateFileShareLinkInput): FileShareLink | null {
+      const existing = db
+        .prepare<[string, string], FileShareLinkRow>("select * from file_share_links where file_id = ? and id = ? limit 1")
+        .get(fileId, id);
+      if (!existing) {
+        return null;
+      }
+
+      const now = new Date().toISOString();
+      const next = {
+        id,
+        fileId,
+        label: input.label === undefined ? existing.label : input.label?.trim() || null,
+        expiresAt: input.expiresAt === undefined ? existing.expires_at : input.expiresAt,
+        maxDownloads: input.maxDownloads === undefined ? existing.max_downloads : input.maxDownloads,
+        passwordHash: input.passwordHash === undefined ? existing.password_hash : input.passwordHash,
+        updatedAt: now
+      };
+
+      db.prepare(`
+        update file_share_links
+        set label = @label,
+            expires_at = @expiresAt,
+            max_downloads = @maxDownloads,
+            password_hash = @passwordHash,
+            updated_at = @updatedAt
+        where file_id = @fileId and id = @id
+      `).run(next);
+
+      const row = db.prepare<[string], FileShareLinkRow>("select * from file_share_links where id = ? limit 1").get(id);
+      return row ? fileShareLinkFromRow(row) : null;
     },
 
     recordFileShareDownload(id: string, input: RecordFileShareDownloadInput = {}): FileShareLink | null {
