@@ -187,6 +187,7 @@ NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbe
 - **Previews: image, video, and single-page PDF today.** Video poster frames need `ffmpeg`; PDF first-page previews need `poppler-utils` (`pdftoppm`). Both are baked into the default Docker image; missing binaries are recorded as `unsupported` instead of crashing the worker. Other document families (docx, xlsx) and CAD families stay `skipped`. The Settings → Preview pipeline card shows live counts and `ffmpeg ready / unavailable` + `poppler ready / unavailable` badges.
 - **Preview worker is opt-in.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on` to run the in-process scheduler, or hit `POST /api/maintenance/previews` from cron. Defaults to off so dev environments don't fight the test runner.
 - **Upload Center has tabs for Active / Failed / Aborted sessions** with a per-device filter. The cleanup job tidies orphaned chunks for failed sessions older than 24 hours. Resume after a stale or failed session needs a desktop helper or explicit drag-back UX and is queued for v0.4.
+- **Folder path preservation is direct-upload only.** Small and normal browser uploads can preserve folder-relative paths. Chunked folder uploads need upload-session schema support and remain queued behind upload resume.
 - **Project delete is explicit about file handling.** You can detach metadata only or move active files back to `Inbox/<device>/` before deleting the project. Archived files are left in the archive tree.
 - **No share / temp-link surface.** Files are owner-only. Sharing requires the `nas_cloud_session` cookie or a paired device.
 
@@ -197,12 +198,13 @@ A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers
 `v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). `v0.3.0` shipped the preview pipeline and Upload Center reliability pass. Near-term, in priority order:
 
 1. **Upload resume.** Either a desktop helper that retains the file handle or an explicit drag-back UX. Queued for `v0.4`.
-2. **CAD preview strategy** for STL, STEP, and 3MF files.
-3. **CAD preview strategy decision** (STL/STEP) and a renderer-choice spike.
-4. **Share / temp-link surface** for controlled local sharing.
-5. **SQLite FTS5 migration** once the corpus exposes a hot path on the `LIKE`-backed search.
-6. **Benchmark checklist** for 1 GiB and 5 GiB transfers over 2.5 Gb LAN, recorded in the deployment guide.
-7. **Desktop helpers** (Tauri tray + clipboard sync + watch-folder ingest) once the web product is solid.
+2. **Chunked folder-path support** so large videos and CAD folders keep their relative paths through upload sessions.
+3. **CAD preview strategy** for STL, STEP, and 3MF files.
+4. **CAD preview strategy decision** (STL/STEP) and a renderer-choice spike.
+5. **Share / temp-link surface** for controlled local sharing.
+6. **SQLite FTS5 migration** once the corpus exposes a hot path on the `LIKE`-backed search.
+7. **Benchmark checklist** for 1 GiB and 5 GiB transfers over 2.5 Gb LAN, recorded in the deployment guide.
+8. **Desktop helpers** (Tauri tray + clipboard sync + watch-folder ingest) once the web product is solid.
 
 ## Project history
 

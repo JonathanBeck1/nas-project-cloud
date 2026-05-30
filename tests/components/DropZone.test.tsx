@@ -94,6 +94,34 @@ describe("DropZone", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Uploaded manual.pdf");
   });
 
+  it("passes browser folder-relative paths to direct uploads", async () => {
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ file: uploadedFile }), { status: 201 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <DropZone>
+        <div data-testid="drop-target">Drop target</div>
+      </DropZone>
+    );
+
+    const file = new File(["hello"], "manual.pdf", { type: "application/pdf" });
+    Object.defineProperty(file, "webkitRelativePath", {
+      value: "Client A/Manuals/manual.pdf"
+    });
+    fireEvent.drop(screen.getByTestId("drop-target"), {
+      dataTransfer: {
+        files: [file]
+      }
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url] = fetchMock.mock.calls[0];
+    const calledUrl = new URL(url as string, "http://localhost");
+    expect(calledUrl.searchParams.get("relativePath")).toBe("Client A/Manuals/manual.pdf");
+  });
+
   it("uploads large files through chunked upload sessions", async () => {
     const onUploaded = vi.fn();
     const fetchMock = vi.fn<typeof fetch>((url) => {

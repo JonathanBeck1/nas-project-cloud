@@ -341,6 +341,24 @@ describe("storage service", () => {
     expect(fs.readdirSync(path.join(root, ".uploads"))).toHaveLength(0);
   });
 
+  it("streamUpload preserves sanitized folder-relative directories", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(root);
+    const storage = createStorageService(root);
+
+    const stored = await storage.streamUpload({
+      target: { kind: "inbox", sourceDevice: "Mac" },
+      filename: "render.png",
+      relativePath: "Client A/../Textures/render.png",
+      mimeType: "image/png",
+      body: Readable.from(Buffer.from("image")),
+      maxBytes: 1024
+    });
+
+    expect(stored.relativePath).toBe("Inbox/Mac/Client A/Textures/render.png");
+    expect(fs.readFileSync(path.join(root, stored.relativePath), "utf8")).toBe("image");
+  });
+
   it("streamUpload aborts and cleans up when the body exceeds maxBytes", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
     createdDirs.push(root);

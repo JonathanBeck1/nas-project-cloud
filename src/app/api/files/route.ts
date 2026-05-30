@@ -35,6 +35,7 @@ export async function POST(request: Request) {
   const params = url.searchParams;
 
   const filename = stringValue(params.get("filename")) || "upload.bin";
+  const relativePath = stringValue(params.get("relativePath"));
   const sourceDevice = stringValue(params.get("sourceDevice")) || "Unknown Device";
   const projectId = nullableStringValue(params.get("projectId"));
   const projectSlug = stringValue(params.get("projectSlug"));
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
     stored = await storage.streamUpload({
       target,
       filename,
+      relativePath,
       mimeType,
       body: request.body,
       maxBytes: config.maxUploadBytes

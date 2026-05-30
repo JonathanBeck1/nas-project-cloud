@@ -186,6 +186,44 @@ describe("files API module", () => {
     });
   });
 
+  it("preserves a folder-relative path for direct uploads", async () => {
+    const { POST } = await import("@/app/api/files/route");
+    mocks.appConfig.maxUploadBytes = 1024;
+    mocks.classifyFile.mockReturnValue({
+      extension: "png",
+      family: "image" as FileFamily
+    });
+    mocks.storage.streamUpload.mockResolvedValue({
+      absolutePath: "/storage/Inbox/Mac/Garden Shed/Project Photos/render.png",
+      relativePath: "Inbox/Mac/Garden Shed/Project Photos/render.png",
+      sizeBytes: 5,
+      checksum: "checksum",
+      mimeType: "image/png"
+    });
+
+    const response = await POST(uploadRequest({
+      filename: "render.png",
+      relativePath: "Garden Shed/Project Photos/render.png",
+      sourceDevice: "Mac",
+      mimeType: "image/png",
+      body: "image"
+    }));
+
+    expect(response.status).toBe(201);
+    expect(mocks.storage.streamUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: "render.png",
+        relativePath: "Garden Shed/Project Photos/render.png"
+      })
+    );
+    expect(mocks.repo.createFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "render.png",
+        storagePath: "Inbox/Mac/Garden Shed/Project Photos/render.png"
+      })
+    );
+  });
+
   it("returns file detail by id", async () => {
     const { GET } = await import("@/app/api/files/[id]/route");
     const file = {
@@ -1437,6 +1475,7 @@ describe("files API module", () => {
 
 function uploadRequest(fields: {
   filename: string;
+  relativePath?: string;
   sourceDevice?: string;
   projectId?: string;
   projectSlug?: string;
@@ -1446,6 +1485,7 @@ function uploadRequest(fields: {
 }) {
   const params = new URLSearchParams();
   params.set("filename", fields.filename);
+  if (fields.relativePath !== undefined) params.set("relativePath", fields.relativePath);
   if (fields.sourceDevice !== undefined) params.set("sourceDevice", fields.sourceDevice);
   if (fields.projectId !== undefined) params.set("projectId", fields.projectId);
   if (fields.projectSlug !== undefined) params.set("projectSlug", fields.projectSlug);

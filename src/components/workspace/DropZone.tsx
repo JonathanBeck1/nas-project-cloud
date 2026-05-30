@@ -80,11 +80,15 @@ export function DropZone({
   }
 
   async function uploadSingle(file: File): Promise<CloudFile> {
+    const relativePath = browserRelativePath(file);
     const params = new URLSearchParams({
       filename: file.name || "upload.bin",
       sourceDevice,
       mimeType: file.type || "application/octet-stream"
     });
+    if (relativePath) {
+      params.set("relativePath", relativePath);
+    }
 
     const response = await fetch(`/api/files?${params.toString()}`, {
       method: "POST",
@@ -210,6 +214,11 @@ export function DropZone({
       ) : null}
     </div>
   );
+}
+
+function browserRelativePath(file: File): string {
+  const withRelativePath = file as File & { webkitRelativePath?: string };
+  return typeof withRelativePath.webkitRelativePath === "string" ? withRelativePath.webkitRelativePath.trim() : "";
 }
 
 async function uploadErrorMessage(response: Response) {

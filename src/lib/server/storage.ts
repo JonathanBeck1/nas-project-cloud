@@ -20,6 +20,7 @@ export type WriteUploadInput = {
 export type StreamUploadInput = {
   target: UploadTarget;
   filename: string;
+  relativePath?: string;
   mimeType: string;
   body: ReadableStream<Uint8Array> | NodeJS.ReadableStream;
   maxBytes: number;
@@ -148,7 +149,7 @@ export function createStorageService(root = appConfig.storageRoot) {
         const moved = await moveIntoDirectory({
           storageRoot,
           from: tempAbsolute,
-          directory: path.join(storageRoot, targetDirectory(input.target)),
+          directory: path.join(storageRoot, targetDirectory(input.target), safeRelativeDirectory(input.relativePath)),
           filename: input.filename
         });
         return {
@@ -330,6 +331,25 @@ function sanitizePathSegment(segment: string): string {
   return safeSegment === "" || safeSegment === "." || safeSegment === ".."
     ? "unknown-device"
     : safeSegment;
+}
+
+function safeRelativeDirectory(relativePath: string | undefined): string {
+  if (!relativePath) {
+    return "";
+  }
+
+  const rawDirectory = path.posix.dirname(relativePath.replace(/\\/g, "/"));
+  if (rawDirectory === "." || rawDirectory === "/") {
+    return "";
+  }
+
+  const safeSegments = rawDirectory
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0 && segment !== "." && segment !== "..")
+    .map((segment) => sanitizePathSegment(segment));
+
+  return safeSegments.join(path.sep);
 }
 
 async function nextAvailablePath(directory: string, filename: string): Promise<string> {
