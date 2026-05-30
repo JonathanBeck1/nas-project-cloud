@@ -27,6 +27,9 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Inbox folder picker.** The main workspace upload well now exposes separate
   file and folder controls, so folder-relative paths can be selected directly
   instead of relying only on drag/drop metadata.
+- **Project upload picker.** Project workspaces now expose file and folder
+  controls that upload directly into that project, including chunked large-file
+  sessions.
 
 ### Changed
 

@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { Download, Search } from "lucide-react";
+import { Download, Search, UploadCloud } from "lucide-react";
 import { archiveFile } from "@/lib/client/fileActions";
 import type { Category, CloudFile, Project, Tag } from "@/lib/shared/types";
 import { BulkActionBar } from "./BulkActionBar";
+import { DropZone } from "./DropZone";
 import { FileGrid } from "./FileGrid";
 
 type ProjectWorkspaceProps = {
@@ -21,6 +22,8 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const fileInputId = `project-file-upload-${project.id}`;
+  const folderInputId = `project-folder-upload-${project.id}`;
   const visibleFiles = files.filter((file) => matchesQuery(file, query));
   const selectedBulkFiles = files.filter((file) => selectedFileIds.includes(file.id));
   const selectedBulkDownloadHref =
@@ -90,17 +93,58 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
           </div>
 
           <div className="space-y-4 px-4 py-5">
-            <label className="relative block max-w-lg">
-              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <input
-                type="search"
-                aria-label="Search project files"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search project files"
-                className="h-10 w-full rounded-md border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
-              />
-            </label>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <label className="relative block w-full max-w-lg">
+                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                <input
+                  type="search"
+                  aria-label="Search project files"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search project files"
+                  className="h-10 w-full rounded-md border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+              </label>
+
+              <DropZone
+                inputId={fileInputId}
+                folderInputId={folderInputId}
+                projectId={project.id}
+                projectSlug={project.slug}
+                onUploaded={(uploadedFiles) => setFiles((currentFiles) => [...uploadedFiles, ...currentFiles])}
+              >
+                <div className="flex flex-wrap gap-2">
+                  <label
+                    htmlFor={fileInputId}
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.currentTarget.control?.click();
+                      }
+                    }}
+                    className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  >
+                    <UploadCloud aria-hidden="true" className="h-4 w-4" />
+                    Choose files
+                  </label>
+                  <label
+                    htmlFor={folderInputId}
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.currentTarget.control?.click();
+                      }
+                    }}
+                    className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  >
+                    <UploadCloud aria-hidden="true" className="h-4 w-4" />
+                    Choose folder
+                  </label>
+                </div>
+              </DropZone>
+            </div>
 
             {message ? (
               <p role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
@@ -124,6 +168,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
               selectedFileId={selectedFileId}
               selectedFileIds={selectedFileIds}
               selectionMode="multiple"
+              emptyMessage="Choose files or a folder to add project assets here."
               onSelectFile={(file) => setSelectedFileId(file.id)}
               onToggleSelected={toggleSelectedFile}
             />

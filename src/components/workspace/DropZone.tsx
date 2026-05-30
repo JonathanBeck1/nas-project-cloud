@@ -11,6 +11,9 @@ type DropZoneProps = {
   children: React.ReactNode;
   inputId?: string;
   folderInputId?: string;
+  projectId?: string | null;
+  projectSlug?: string | null;
+  categoryId?: string | null;
   onUploaded?: (files: CloudFile[]) => void;
   chunkedUploadThresholdBytes?: number;
   chunkSizeBytes?: number;
@@ -33,6 +36,9 @@ export function DropZone({
   children,
   inputId,
   folderInputId,
+  projectId = null,
+  projectSlug = null,
+  categoryId = null,
   onUploaded,
   chunkedUploadThresholdBytes = DEFAULT_CHUNKED_UPLOAD_THRESHOLD_BYTES,
   chunkSizeBytes = DEFAULT_CHUNK_SIZE_BYTES
@@ -91,6 +97,13 @@ export function DropZone({
     if (relativePath) {
       params.set("relativePath", relativePath);
     }
+    if (projectId && projectSlug) {
+      params.set("projectId", projectId);
+      params.set("projectSlug", projectSlug);
+    }
+    if (categoryId) {
+      params.set("categoryId", categoryId);
+    }
 
     const response = await fetch(`/api/files?${params.toString()}`, {
       method: "POST",
@@ -119,6 +132,9 @@ export function DropZone({
     return uploadFileInChunks({
       file,
       sourceDevice,
+      projectId,
+      projectSlug,
+      categoryId,
       chunkSizeBytes,
       signal: controller.signal,
       onSessionCreated: (sessionId) => setActiveUpload({ controller, sessionId }),

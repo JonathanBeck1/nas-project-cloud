@@ -12,6 +12,7 @@ type FileGridProps = {
   selectedFileIds?: string[];
   selectionMode?: "single" | "multiple";
   mode?: FileGridMode;
+  emptyMessage?: string;
   onSelectFile?: (file: CloudFile) => void;
   onToggleSelected?: (fileId: string) => void;
 };
@@ -68,14 +69,14 @@ function formatRelativeUpdated(value: string): string {
   return new Date(parsed).toISOString().slice(0, 10);
 }
 
-function emptyState() {
+function emptyState(message = "Drop files into Inbox to stage them for projects.") {
   return (
     <div className="flex min-h-[220px] flex-col items-center justify-center rounded-md border border-dashed border-line bg-surface/70 px-4 py-8 text-center">
       <div className="grid h-11 w-11 place-items-center rounded-md border border-line bg-panel text-accent">
         <File aria-hidden="true" className="h-5 w-5" />
       </div>
       <h2 className="mt-4 text-sm font-semibold text-ink">No files yet</h2>
-      <p className="mt-1 max-w-md text-sm leading-6 text-muted">Drop files into Inbox to stage them for projects.</p>
+      <p className="mt-1 max-w-md text-sm leading-6 text-muted">{message}</p>
     </div>
   );
 }
@@ -86,11 +87,12 @@ export function FileGrid({
   selectedFileIds = [],
   selectionMode = "single",
   mode = "grid",
+  emptyMessage,
   onSelectFile,
   onToggleSelected
 }: FileGridProps) {
   if (files.length === 0) {
-    return emptyState();
+    return emptyState(emptyMessage);
   }
 
   if (mode === "list") {

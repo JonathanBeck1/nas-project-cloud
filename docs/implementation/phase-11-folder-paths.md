@@ -29,12 +29,16 @@ paths through both direct and chunked upload paths.
   same direct/chunked upload pipeline.
 - Keyboard users can focus and activate the visible file and folder controls.
 
-## Deferred UI
+## Project Folder Picker
 
-- Project workspace upload wells still need the same explicit folder picker.
+- Project workspaces now expose the same separate file and folder controls.
+- Direct uploads include `projectId` and `projectSlug` query parameters.
+- Chunked uploads include the project target in the upload-session create
+  payload, so large file uploads land in the project filesystem tree too.
 
 ## Verification
 
 - `npm test -- tests/server/filesApi.test.ts tests/server/storage.test.ts tests/components/DropZone.test.tsx`
 - `npm test -- tests/server/db.test.ts tests/server/uploadSessionsApi.test.ts tests/components/uploadSessionsClient.test.tsx tests/server/storage.test.ts`
 - `npm test -- tests/components/DropZone.test.tsx tests/components/AppShell.test.tsx`
+- `npm test -- tests/components/ProjectWorkspace.test.tsx tests/components/uploadSessionsClient.test.tsx tests/components/DropZone.test.tsx`

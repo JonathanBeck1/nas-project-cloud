@@ -9,6 +9,9 @@ export type UploadProgress = {
 type UploadFileInChunksInput = {
   file: File;
   sourceDevice: string;
+  projectId?: string | null;
+  projectSlug?: string | null;
+  categoryId?: string | null;
   chunkSizeBytes: number;
   fetchImpl?: typeof fetch;
   signal?: AbortSignal;
@@ -26,6 +29,9 @@ type UploadSessionResponse = {
 export async function uploadFileInChunks({
   file,
   sourceDevice,
+  projectId = null,
+  projectSlug = null,
+  categoryId = null,
   chunkSizeBytes,
   fetchImpl = fetch,
   signal,
@@ -40,7 +46,8 @@ export async function uploadFileInChunks({
       ...relativePathPayload(file),
       mimeType: file.type || "application/octet-stream",
       sizeBytes: file.size,
-      sourceDevice
+      sourceDevice,
+      ...targetPayload({ projectId, projectSlug, categoryId })
     }),
     signal
   });
@@ -153,4 +160,20 @@ function relativePathPayload(file: File): { relativePath?: string } {
   const relativePath =
     typeof withRelativePath.webkitRelativePath === "string" ? withRelativePath.webkitRelativePath.trim() : "";
   return relativePath ? { relativePath } : {};
+}
+
+function targetPayload(input: {
+  projectId?: string | null;
+  projectSlug?: string | null;
+  categoryId?: string | null;
+}): { projectId?: string; projectSlug?: string; categoryId?: string } {
+  const payload: { projectId?: string; projectSlug?: string; categoryId?: string } = {};
+  if (input.projectId && input.projectSlug) {
+    payload.projectId = input.projectId;
+    payload.projectSlug = input.projectSlug;
+  }
+  if (input.categoryId) {
+    payload.categoryId = input.categoryId;
+  }
+  return payload;
 }
