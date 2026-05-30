@@ -101,6 +101,63 @@ describe("UploadCenter", () => {
     expect(screen.queryByText("movie.webm")).not.toBeInTheDocument();
   });
 
+  it("resumes an open upload session after selecting the same file", async () => {
+    const onUploaded = vi.fn();
+    const fetchMock = vi.fn<typeof fetch>((url, init) => {
+      const target = typeof url === "string" ? url : url.toString();
+      if (target.startsWith("/api/upload-sessions?")) {
+        return Promise.resolve(new Response(JSON.stringify({ sessions: [openSession] }), { status: 200 }));
+      }
+      if (target === "/api/upload-sessions/upload_1/chunk") {
+        expect(init?.method).toBe("POST");
+        expect(init?.headers).toEqual(expect.objectContaining({ "upload-offset": "1024" }));
+        return Promise.resolve(new Response(JSON.stringify({ session: { receivedBytes: 2048 } }), { status: 200 }));
+      }
+      if (target === "/api/upload-sessions/upload_1/complete") {
+        expect(init?.method).toBe("POST");
+        return Promise.resolve(
+          new Response(JSON.stringify({ file: { id: "file_movie", name: "movie.webm" } }), { status: 201 })
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<UploadCenter onUploaded={onUploaded} />);
+
+    await screen.findByText("movie.webm");
+    await userEvent.upload(
+      screen.getByLabelText("Select file to resume movie.webm"),
+      new File([new Uint8Array(2048)], "movie.webm", { type: "video/webm" })
+    );
+
+    await waitFor(() => expect(onUploaded).toHaveBeenCalledWith([{ id: "file_movie", name: "movie.webm" }]));
+    expect(await screen.findByRole("status")).toHaveTextContent("Resumed movie.webm");
+    expect(screen.queryByText("movie.webm")).not.toBeInTheDocument();
+  });
+
+  it("rejects resume attempts when the selected file does not match the session", async () => {
+    const fetchMock = vi.fn<typeof fetch>((url) => {
+      const target = typeof url === "string" ? url : url.toString();
+      if (target.startsWith("/api/upload-sessions?")) {
+        return Promise.resolve(new Response(JSON.stringify({ sessions: [openSession] }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<UploadCenter />);
+
+    await screen.findByText("movie.webm");
+    await userEvent.upload(
+      screen.getByLabelText("Select file to resume movie.webm"),
+      new File([new Uint8Array(2048)], "wrong.webm", { type: "video/webm" })
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Select the same file to resume movie.webm");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("switches to the Failed tab, shows the error, and persists the choice", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn<typeof fetch>((url) => {

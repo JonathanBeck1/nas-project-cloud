@@ -6,6 +6,17 @@ export type UploadProgress = {
   totalBytes: number;
 };
 
+type ResumeUploadSessionInput = {
+  sessionId: string;
+  file: File;
+  receivedBytes: number;
+  sizeBytes: number;
+  chunkSizeBytes: number;
+  fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
+  onProgress?: (progress: UploadProgress) => void;
+};
+
 type UploadFileInChunksInput = {
   file: File;
   sourceDevice: string;
@@ -109,6 +120,53 @@ export async function abortUploadSession(sessionId: string, fetchImpl: typeof fe
   if (!response.ok) {
     throw new Error(await uploadErrorMessage(response));
   }
+}
+
+export async function resumeUploadSession({
+  sessionId,
+  file,
+  receivedBytes,
+  sizeBytes,
+  chunkSizeBytes,
+  fetchImpl = fetch,
+  signal,
+  onProgress
+}: ResumeUploadSessionInput): Promise<CloudFile> {
+  for (let offset = receivedBytes; offset < sizeBytes; offset += chunkSizeBytes) {
+    const end = Math.min(offset + chunkSizeBytes, sizeBytes);
+    const chunkResponse = await fetchImpl(`/api/upload-sessions/${encodeURIComponent(sessionId)}/chunk`, {
+      method: "POST",
+      headers: { "upload-offset": String(offset), ...csrfHeaders() },
+      body: file.slice(offset, end),
+      signal
+    });
+
+    if (!chunkResponse.ok) {
+      throw new Error(await uploadErrorMessage(chunkResponse));
+    }
+
+    const chunkBody = (await chunkResponse.json()) as UploadSessionResponse;
+    onProgress?.({
+      loadedBytes: chunkBody.session?.receivedBytes ?? end,
+      totalBytes: sizeBytes
+    });
+  }
+
+  const completeResponse = await fetchImpl(`/api/upload-sessions/${encodeURIComponent(sessionId)}/complete`, {
+    method: "POST",
+    headers: { ...csrfHeaders() },
+    signal
+  });
+
+  if (!completeResponse.ok) {
+    throw new Error(await uploadErrorMessage(completeResponse));
+  }
+
+  const completeBody = (await completeResponse.json()) as { file?: CloudFile };
+  if (!completeBody.file) {
+    throw new Error("Upload failed");
+  }
+  return completeBody.file;
 }
 
 export type UploadSessionStatusFilter = "open" | "completed" | "failed" | "aborted" | "all";

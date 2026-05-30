@@ -5,13 +5,15 @@ import { ClipboardCopy, RotateCw, UploadCloud, XCircle } from "lucide-react";
 import {
   abortUploadSession,
   listUploadSessions,
+  resumeUploadSession,
   type UploadSessionStatusFilter
 } from "@/lib/client/uploadSessions";
-import type { UploadSession } from "@/lib/shared/types";
+import type { CloudFile, UploadSession } from "@/lib/shared/types";
 import { formatBytes } from "./FileGrid";
 
 const TAB_STORAGE_KEY = "nas-cloud:upload-center:tab";
 const DEVICE_STORAGE_KEY = "nas-cloud:upload-center:device";
+const DEFAULT_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
 const TABS: { id: UploadSessionStatusFilter; label: string }[] = [
   { id: "open", label: "Active" },
   { id: "failed", label: "Failed" },
@@ -20,9 +22,10 @@ const TABS: { id: UploadSessionStatusFilter; label: string }[] = [
 
 type UploadCenterProps = {
   initialSessions?: UploadSession[];
+  onUploaded?: (files: CloudFile[]) => void;
 };
 
-export function UploadCenter({ initialSessions }: UploadCenterProps) {
+export function UploadCenter({ initialSessions, onUploaded }: UploadCenterProps) {
   const [activeTab, setActiveTab] = useState<UploadSessionStatusFilter>("open");
   const [deviceFilter, setDeviceFilter] = useState<string>("all");
   const [sessions, setSessions] = useState<UploadSession[]>(initialSessions ?? []);
@@ -96,6 +99,37 @@ export function UploadCenter({ initialSessions }: UploadCenterProps) {
       setMessage(`Aborted ${session.filename}`);
     } catch (abortError) {
       setError(abortError instanceof Error ? abortError.message : "Could not abort upload");
+    } finally {
+      setBusySessionId(null);
+    }
+  }
+
+  async function resumeSession(session: UploadSession, file: File | undefined) {
+    setMessage("");
+    setError("");
+
+    if (!file || !matchesSessionFile(session, file)) {
+      setError(`Select the same file to resume ${session.filename}`);
+      return;
+    }
+
+    setBusySessionId(session.id);
+
+    try {
+      const uploaded = await resumeUploadSession({
+        sessionId: session.id,
+        file,
+        receivedBytes: session.receivedBytes,
+        sizeBytes: session.sizeBytes,
+        chunkSizeBytes: DEFAULT_CHUNK_SIZE_BYTES,
+        onProgress: ({ loadedBytes, totalBytes }) =>
+          setMessage(`Resuming ${session.filename} ${formatBytes(loadedBytes)} / ${formatBytes(totalBytes)}`)
+      });
+      setSessions((currentSessions) => currentSessions.filter((candidate) => candidate.id !== session.id));
+      onUploaded?.([uploaded]);
+      setMessage(`Resumed ${session.filename}`);
+    } catch (resumeError) {
+      setError(resumeError instanceof Error ? resumeError.message : "Could not resume upload");
     } finally {
       setBusySessionId(null);
     }
@@ -232,16 +266,43 @@ export function UploadCenter({ initialSessions }: UploadCenterProps) {
                     </button>
                   ) : null}
                   {activeTab === "open" ? (
-                    <button
-                      type="button"
-                      onClick={() => void abortSession(session)}
-                      disabled={busySessionId === session.id}
-                      aria-label={`Abort ${session.filename}`}
-                      className="inline-flex h-8 items-center gap-2 rounded-md border border-line bg-panel px-2.5 text-xs font-semibold text-ink transition hover:border-muted disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <XCircle aria-hidden="true" className="h-3.5 w-3.5" />
-                      Abort
-                    </button>
+                    <>
+                      <input
+                        id={`resume-upload-${session.id}`}
+                        aria-label={`Select file to resume ${session.filename}`}
+                        className="sr-only"
+                        type="file"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.target.value = "";
+                          void resumeSession(session, file);
+                        }}
+                      />
+                      <label
+                        htmlFor={`resume-upload-${session.id}`}
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.currentTarget.control?.click();
+                          }
+                        }}
+                        className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-line bg-panel px-2.5 text-xs font-semibold text-ink transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                      >
+                        <UploadCloud aria-hidden="true" className="h-3.5 w-3.5" />
+                        Resume
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => void abortSession(session)}
+                        disabled={busySessionId === session.id}
+                        aria-label={`Abort ${session.filename}`}
+                        className="inline-flex h-8 items-center gap-2 rounded-md border border-line bg-panel px-2.5 text-xs font-semibold text-ink transition hover:border-muted disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <XCircle aria-hidden="true" className="h-3.5 w-3.5" />
+                        Abort
+                      </button>
+                    </>
                   ) : null}
                 </div>
               </li>
@@ -266,6 +327,10 @@ function deriveDevices(sessions: UploadSession[]): string[] {
 function mergeDevices(existing: string[], incoming: string[]): string[] {
   const set = new Set<string>([...existing, ...incoming]);
   return Array.from(set).sort();
+}
+
+function matchesSessionFile(session: UploadSession, file: File): boolean {
+  return file.name === session.filename && file.size === session.sizeBytes;
 }
 
 function emptyStateForTab(tab: UploadSessionStatusFilter): { title: string; description: string } {

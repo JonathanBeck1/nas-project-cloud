@@ -383,7 +383,10 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                     </div>
                   </DropZone>
 
-                  <UploadCenter initialSessions={initialData?.openUploadSessions ?? []} />
+                  <UploadCenter
+                    initialSessions={initialData?.openUploadSessions ?? []}
+                    onUploaded={(uploadedFiles) => setFiles((currentFiles) => [...uploadedFiles, ...currentFiles])}
+                  />
 
                   {showTruncationBanner ? (
                     <p

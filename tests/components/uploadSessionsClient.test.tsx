@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   listOpenUploadSessions,
   listUploadSessions,
+  resumeUploadSession,
   uploadFileInChunks
 } from "@/lib/client/uploadSessions";
 
@@ -137,6 +138,56 @@ describe("uploadFileInChunks", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/upload-sessions?status=failed&deviceId=device_1",
       expect.objectContaining({ method: "GET" })
+    );
+  });
+});
+
+describe("resumeUploadSession", () => {
+  it("continues from the stored offset and completes the session", async () => {
+    const file = new File([new Uint8Array(10)], "movie.webm", { type: "video/webm" });
+    const fetchMock = vi.fn<typeof fetch>((url) => {
+      if (url === "/api/upload-sessions/upload_1/chunk") {
+        return Promise.resolve(new Response(JSON.stringify({ session: { receivedBytes: 10 } }), { status: 200 }));
+      }
+      if (url === "/api/upload-sessions/upload_1/complete") {
+        return Promise.resolve(new Response(JSON.stringify({ file: { id: "file_1", name: "movie.webm" } }), { status: 201 }));
+      }
+      return Promise.resolve(new Response("bad", { status: 500 }));
+    });
+
+    await expect(
+      resumeUploadSession({
+        sessionId: "upload_1",
+        file,
+        receivedBytes: 4,
+        sizeBytes: 10,
+        chunkSizeBytes: 4,
+        fetchImpl: fetchMock
+      })
+    ).resolves.toEqual({ id: "file_1", name: "movie.webm" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/upload-sessions/upload_1/chunk",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "upload-offset": "4" },
+        body: file.slice(4, 8)
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/upload-sessions/upload_1/chunk",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "upload-offset": "8" },
+        body: file.slice(8, 10)
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/upload-sessions/upload_1/complete",
+      expect.objectContaining({ method: "POST" })
     );
   });
 });
