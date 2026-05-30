@@ -43,7 +43,8 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   links from the file detail drawer, and recipients can download the file
   without an owner session. Existing links can be listed and revoked from the
   same drawer, with configurable expiry windows, labels, and optional download
-  caps when creating new links.
+  caps when creating new links. The drawer also surfaces each active link's
+  label, download usage, expiry, creation time, and last-used time.
 
 ### Changed
 

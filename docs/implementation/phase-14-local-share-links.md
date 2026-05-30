@@ -17,7 +17,8 @@ LAN without signing that device into the owner account.
 - Detail drawer action that creates a share link with owner-selected expiry,
   optional label, optional max-download cap, and a copyable URL.
 - Detail drawer management for existing active links, including download count,
-  expiration display, and revocation.
+  max-download usage, label, expiration display, created/last-used timestamps,
+  and revocation.
 - Authenticated share-link list and revoke endpoints:
   `GET /api/files/:id/shares` and `DELETE /api/files/:id/shares/:shareId`.
 
@@ -26,8 +27,8 @@ LAN without signing that device into the owner account.
 - Links are bearer tokens: anyone with the URL can download until it expires or
   hits its max-download cap.
 - Links are file-level only. Project and folder sharing remain future work.
-- Password prompts, richer audit views, and post-creation edit flows remain
-  future work.
+- Password prompts, per-download access history, and post-creation edit flows
+  remain future work.
 
 ## Verification
 

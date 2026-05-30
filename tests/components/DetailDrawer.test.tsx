@@ -161,8 +161,9 @@ describe("DetailDrawer", () => {
 
   it("loads and revokes existing share links", async () => {
     const user = userEvent.setup();
-    const onListShareLinks = vi.fn(async () => [shareFixture]);
-    const onRevokeShareLink = vi.fn(async () => ({ ...shareFixture, revokedAt: "2026-05-30T02:00:00.000Z" }));
+    const labeledShare = { ...shareFixture, label: "MacBook handoff", maxDownloads: 5 };
+    const onListShareLinks = vi.fn(async () => [labeledShare]);
+    const onRevokeShareLink = vi.fn(async () => ({ ...labeledShare, revokedAt: "2026-05-30T02:00:00.000Z" }));
 
     render(
       <DetailDrawer
@@ -173,12 +174,14 @@ describe("DetailDrawer", () => {
       />
     );
 
-    expect(await screen.findByText("2 downloads")).toBeVisible();
+    expect(await screen.findByText("MacBook handoff")).toBeVisible();
+    expect(screen.getByText("2 of 5 downloads")).toBeVisible();
+    expect(screen.getByText(/Last used/)).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Revoke share link" }));
 
-    expect(onRevokeShareLink).toHaveBeenCalledWith(fixture, shareFixture);
-    await waitFor(() => expect(screen.queryByText("2 downloads")).not.toBeInTheDocument());
+    expect(onRevokeShareLink).toHaveBeenCalledWith(fixture, labeledShare);
+    await waitFor(() => expect(screen.queryByText("MacBook handoff")).not.toBeInTheDocument());
   });
 
   it("disables server-mutating actions while busy", () => {
