@@ -156,6 +156,15 @@ export type FileShareLink = {
   lastAccessedAt: string | null;
 };
 
+export type FileShareAccessEvent = {
+  id: string;
+  shareId: string;
+  fileId: string;
+  accessedAt: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+};
+
 export type PreviewJob = {
   file: CloudFile;
   preview: FilePreview;

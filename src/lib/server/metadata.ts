@@ -5,6 +5,7 @@ import type {
   AuthSession,
   CloudFile,
   DevicePairingCode,
+  FileShareAccessEvent,
   FilePreview,
   FilePreviewKind,
   FilePreviewStatus,
@@ -95,6 +96,15 @@ type FileShareLinkRow = {
   created_at: string;
   updated_at: string;
   last_accessed_at: string | null;
+};
+
+type FileShareAccessEventRow = {
+  id: string;
+  share_id: string;
+  file_id: string;
+  accessed_at: string;
+  user_agent: string | null;
+  ip_address: string | null;
 };
 
 type PendingPreviewJobRow = FilePreviewRow &
@@ -219,6 +229,11 @@ type CreateFileShareLinkInput = {
   expiresAt?: string | null;
   maxDownloads?: number | null;
   label?: string | null;
+};
+
+type RecordFileShareDownloadInput = {
+  userAgent?: string | null;
+  ipAddress?: string | null;
 };
 
 type CreateTagInput = {
@@ -509,24 +524,59 @@ export function createMetadataRepository(db: AppDatabase) {
       return row ? fileShareLinkFromRow(row) : null;
     },
 
-    recordFileShareDownload(id: string): FileShareLink | null {
+    recordFileShareDownload(id: string, input: RecordFileShareDownloadInput = {}): FileShareLink | null {
       const now = new Date().toISOString();
-      const result = db
-        .prepare<[string, string, string]>(`
-          update file_share_links
-          set download_count = download_count + 1,
-              last_accessed_at = ?,
-              updated_at = ?
-          where id = ?
+      const record = db.transaction(() => {
+        const result = db
+          .prepare<[string, string, string]>(`
+            update file_share_links
+            set download_count = download_count + 1,
+                last_accessed_at = ?,
+                updated_at = ?
+            where id = ?
+          `)
+          .run(now, now, id);
+
+        if (result.changes === 0) {
+          return null;
+        }
+
+        const row = db.prepare<[string], FileShareLinkRow>("select * from file_share_links where id = ? limit 1").get(id);
+        if (!row) {
+          return null;
+        }
+
+        db.prepare(`
+          insert into file_share_access_events (
+            id, share_id, file_id, accessed_at, user_agent, ip_address
+          )
+          values (
+            @id, @shareId, @fileId, @accessedAt, @userAgent, @ipAddress
+          )
+        `).run({
+          id: `share_event_${nanoid(12)}`,
+          shareId: row.id,
+          fileId: row.file_id,
+          accessedAt: now,
+          userAgent: input.userAgent?.trim() || null,
+          ipAddress: input.ipAddress?.trim() || null
+        });
+
+        return fileShareLinkFromRow(row);
+      });
+
+      return record();
+    },
+
+    listFileShareAccessEvents(shareId: string): FileShareAccessEvent[] {
+      return db
+        .prepare<[string], FileShareAccessEventRow>(`
+          select * from file_share_access_events
+          where share_id = ?
+          order by accessed_at desc
         `)
-        .run(now, now, id);
-
-      if (result.changes === 0) {
-        return null;
-      }
-
-      const row = db.prepare<[string], FileShareLinkRow>("select * from file_share_links where id = ? limit 1").get(id);
-      return row ? fileShareLinkFromRow(row) : null;
+        .all(shareId)
+        .map(fileShareAccessEventFromRow);
     },
 
     revokeFileShareLink(fileId: string, id: string): FileShareLink | null {
@@ -1621,6 +1671,17 @@ function fileShareLinkFromRow(row: FileShareLinkRow): FileShareLink {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastAccessedAt: row.last_accessed_at
+  };
+}
+
+function fileShareAccessEventFromRow(row: FileShareAccessEventRow): FileShareAccessEvent {
+  return {
+    id: row.id,
+    shareId: row.share_id,
+    fileId: row.file_id,
+    accessedAt: row.accessed_at,
+    userAgent: row.user_agent,
+    ipAddress: row.ip_address
   };
 }
 

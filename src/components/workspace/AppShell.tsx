@@ -14,6 +14,7 @@ import { UploadCenter } from "./UploadCenter";
 import {
   archiveFile,
   createFileShareLink,
+  listFileShareAccessEvents,
   listFileShareLinks,
   renameFile,
   revokeFileShareLink,
@@ -320,6 +321,11 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
 
   const handleListShareLinks = useCallback(async (file: CloudFile) => listFileShareLinks(file.id), []);
 
+  const handleListShareAccessEvents = useCallback(
+    async (file: CloudFile, share: FileShareLink) => listFileShareAccessEvents(file.id, share.id),
+    []
+  );
+
   const handleRevokeShareLink = useCallback(async (file: CloudFile, share: FileShareLink) => {
     setIsFileActionBusy(true);
     setFileActionMessage("");
@@ -497,6 +503,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                   onAssignTags={handleAssignTags}
                   onCreateShareLink={handleCreateShareLink}
                   onListShareLinks={handleListShareLinks}
+                  onListShareAccessEvents={handleListShareAccessEvents}
                   onRevokeShareLink={handleRevokeShareLink}
                 />
               </div>

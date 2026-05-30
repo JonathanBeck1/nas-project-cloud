@@ -147,6 +147,28 @@ describe("createDatabase", () => {
     }
   });
 
+  it("creates file share access event columns", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-db-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const columns = db.prepare("pragma table_info(file_share_access_events)").all() as Array<{ name: string }>;
+
+      expect(columns.map((column) => column.name)).toEqual(
+        expect.arrayContaining([
+          "id",
+          "share_id",
+          "file_id",
+          "accessed_at",
+          "user_agent",
+          "ip_address"
+        ])
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it("creates auth and device trust tables", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-db-"));
     createdDirs.push(dir);

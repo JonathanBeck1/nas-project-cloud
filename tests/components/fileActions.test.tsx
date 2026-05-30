@@ -3,6 +3,7 @@ import {
   archiveFile,
   createFileShareLink,
   deleteFilePermanently,
+  listFileShareAccessEvents,
   listFileShareLinks,
   renameFile,
   revokeFileShareLink,
@@ -129,6 +130,26 @@ describe("fileActions", () => {
 
     await expect(listFileShareLinks("file_123")).resolves.toEqual(shares);
     expect(fetchMock).toHaveBeenCalledWith("/api/files/file_123/shares");
+  });
+
+  it("lists file share access events through the share events endpoint", async () => {
+    const events = [
+      {
+        id: "event_123",
+        shareId: "share_123",
+        fileId: "file_123",
+        accessedAt: "2026-05-30T02:00:00.000Z",
+        userAgent: "Safari on Mac",
+        ipAddress: "192.168.68.10"
+      }
+    ];
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ events }), { status: 200 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listFileShareAccessEvents("file_123", "share_123")).resolves.toEqual(events);
+    expect(fetchMock).toHaveBeenCalledWith("/api/files/file_123/shares/share_123/events");
   });
 
   it("revokes file share links through the share endpoint", async () => {

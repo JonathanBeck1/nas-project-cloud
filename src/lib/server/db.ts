@@ -105,6 +105,15 @@ function migrate(db: AppDatabase) {
       last_accessed_at text
     );
 
+    create table if not exists file_share_access_events (
+      id text primary key,
+      share_id text not null references file_share_links(id) on delete cascade,
+      file_id text not null references files(id) on delete cascade,
+      accessed_at text not null,
+      user_agent text,
+      ip_address text
+    );
+
     create table if not exists users (
       id text primary key,
       email text not null unique,
@@ -183,6 +192,8 @@ function migrate(db: AppDatabase) {
     create index if not exists file_previews_status_idx on file_previews(status, updated_at);
     create index if not exists file_share_links_file_id_idx on file_share_links(file_id);
     create index if not exists file_share_links_token_hash_idx on file_share_links(token_hash);
+    create index if not exists file_share_access_events_share_id_idx on file_share_access_events(share_id);
+    create index if not exists file_share_access_events_file_id_idx on file_share_access_events(file_id);
     create index if not exists sessions_token_hash_idx on sessions(token_hash);
     create index if not exists sessions_user_id_idx on sessions(user_id);
     create index if not exists devices_user_id_idx on devices(user_id);

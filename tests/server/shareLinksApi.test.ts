@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     createFileShareLink: vi.fn(),
     getFileById: vi.fn(),
     getFileShareLinkByTokenHash: vi.fn(),
+    listFileShareAccessEvents: vi.fn(),
     listFileShareLinks: vi.fn(),
     revokeFileShareLink: vi.fn(),
     recordFileShareDownload: vi.fn()
@@ -73,6 +74,7 @@ describe("share links API", () => {
       lastAccessedAt: null
     }));
     mocks.repo.getFileShareLinkByTokenHash.mockReturnValue(null);
+    mocks.repo.listFileShareAccessEvents.mockReturnValue([]);
     mocks.repo.listFileShareLinks.mockReturnValue([]);
     mocks.repo.revokeFileShareLink.mockReturnValue(null);
     mocks.repo.recordFileShareDownload.mockReturnValue(null);
@@ -208,14 +210,25 @@ describe("share links API", () => {
       lastAccessedAt: null
     });
 
-    const response = await GET(new Request("http://localhost/api/shares/share-token/download"), {
-      params: Promise.resolve({ token: "share-token" })
-    });
+    const response = await GET(
+      new Request("http://localhost/api/shares/share-token/download", {
+        headers: {
+          "user-agent": "Safari on Mac",
+          "x-forwarded-for": "192.168.68.10, 10.0.0.1"
+        }
+      }),
+      {
+        params: Promise.resolve({ token: "share-token" })
+      }
+    );
 
     expect(response.status).toBe(200);
     expect(mocks.requireApiSession).not.toHaveBeenCalled();
     expect(mocks.repo.getFileShareLinkByTokenHash).toHaveBeenCalledWith(hashShareToken("share-token"));
-    expect(mocks.repo.recordFileShareDownload).toHaveBeenCalledWith("share_123");
+    expect(mocks.repo.recordFileShareDownload).toHaveBeenCalledWith("share_123", {
+      userAgent: "Safari on Mac",
+      ipAddress: "192.168.68.10"
+    });
     expect(response.headers.get("content-disposition")).toContain('filename="manual.pdf"');
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.text()).resolves.toBe("manual");
@@ -240,5 +253,41 @@ describe("share links API", () => {
     await expect(response.json()).resolves.toEqual({ error: "share not found" });
     expect(mocks.storage.absolutePathFor).not.toHaveBeenCalled();
     expect(mocks.repo.recordFileShareDownload).not.toHaveBeenCalled();
+  });
+
+  it("lists access events for an owned share link", async () => {
+    const { GET } = await import("@/app/api/files/[id]/shares/[shareId]/events/route");
+    const event = {
+      id: "event_123",
+      shareId: "share_123",
+      fileId: "file_123",
+      accessedAt: "2026-05-30T02:00:00.000Z",
+      userAgent: "Safari on Mac",
+      ipAddress: "192.168.68.10"
+    };
+    mocks.repo.listFileShareLinks.mockReturnValue([
+      {
+        id: "share_123",
+        fileId: "file_123",
+        label: null,
+        expiresAt: "2026-05-31T00:00:00.000Z",
+        maxDownloads: null,
+        downloadCount: 1,
+        revokedAt: null,
+        createdByUserId: "user_1",
+        createdAt: "2026-05-30T00:00:00.000Z",
+        updatedAt: "2026-05-30T02:00:00.000Z",
+        lastAccessedAt: "2026-05-30T02:00:00.000Z"
+      }
+    ]);
+    mocks.repo.listFileShareAccessEvents.mockReturnValue([event]);
+
+    const response = await GET(new Request("http://localhost/api/files/file_123/shares/share_123/events"), {
+      params: Promise.resolve({ id: "file_123", shareId: "share_123" })
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ events: [event] });
+    expect(mocks.repo.listFileShareAccessEvents).toHaveBeenCalledWith("share_123");
   });
 });

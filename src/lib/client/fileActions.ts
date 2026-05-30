@@ -1,5 +1,5 @@
 import { csrfHeaders } from "@/lib/client/csrf";
-import type { CloudFile, FileShareLink } from "@/lib/shared/types";
+import type { CloudFile, FileShareAccessEvent, FileShareLink } from "@/lib/shared/types";
 
 export type FileAssignmentInput = {
   projectId?: string | null;
@@ -120,6 +120,25 @@ export async function listFileShareLinks(fileId: string): Promise<FileShareLink[
   }
 
   return payload.shares;
+}
+
+export async function listFileShareAccessEvents(fileId: string, shareId: string): Promise<FileShareAccessEvent[]> {
+  const response = await fetch(
+    `/api/files/${encodeURIComponent(fileId)}/shares/${encodeURIComponent(shareId)}/events`
+  );
+
+  let payload: { events?: FileShareAccessEvent[]; error?: string };
+  try {
+    payload = (await response.json()) as { events?: FileShareAccessEvent[]; error?: string };
+  } catch {
+    payload = {};
+  }
+
+  if (!response.ok || !payload.events) {
+    throw new Error(payload.error ?? "Could not load share access events");
+  }
+
+  return payload.events;
 }
 
 export async function revokeFileShareLink(fileId: string, shareId: string): Promise<FileShareLink> {

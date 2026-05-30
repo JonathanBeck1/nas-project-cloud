@@ -160,9 +160,21 @@ describe("metadata repository", () => {
       expect(repo.listFileShareLinks(file.id)).toEqual([share]);
       expect(repo.getFileShareLinkByTokenHash("hash_123")?.id).toBe(share.id);
 
-      const accessed = repo.recordFileShareDownload(share.id);
+      const accessed = repo.recordFileShareDownload(share.id, {
+        userAgent: "Safari on Mac",
+        ipAddress: "192.168.68.10"
+      });
       expect(accessed?.downloadCount).toBe(1);
       expect(accessed?.lastAccessedAt).toEqual(expect.any(String));
+      expect(repo.listFileShareAccessEvents(share.id)).toEqual([
+        expect.objectContaining({
+          shareId: share.id,
+          fileId: file.id,
+          userAgent: "Safari on Mac",
+          ipAddress: "192.168.68.10",
+          accessedAt: expect.any(String)
+        })
+      ]);
 
       const revoked = repo.revokeFileShareLink(file.id, share.id);
       expect(revoked?.revokedAt).toEqual(expect.any(String));

@@ -8,6 +8,7 @@ LAN without signing that device into the owner account.
 ## Shipped
 
 - `file_share_links` metadata table for per-file bearer links.
+- `file_share_access_events` metadata table for per-download access history.
 - Random 32-byte share tokens stored only as SHA-256 hashes.
 - Authenticated `POST /api/files/:id/shares` route for active files.
 - Unauthenticated `GET /api/shares/:token/download` route that streams the file
@@ -18,16 +19,18 @@ LAN without signing that device into the owner account.
   optional label, optional max-download cap, and a copyable URL.
 - Detail drawer management for existing active links, including download count,
   max-download usage, label, expiration display, created/last-used timestamps,
-  and revocation.
+  recent access events, and revocation.
 - Authenticated share-link list and revoke endpoints:
   `GET /api/files/:id/shares` and `DELETE /api/files/:id/shares/:shareId`.
+- Authenticated share-link access-history endpoint:
+  `GET /api/files/:id/shares/:shareId/events`.
 
 ## Current Boundary
 
 - Links are bearer tokens: anyone with the URL can download until it expires or
   hits its max-download cap.
 - Links are file-level only. Project and folder sharing remain future work.
-- Password prompts, per-download access history, and post-creation edit flows
+- Password prompts, exportable access history, and post-creation edit flows
   remain future work.
 
 ## Verification
@@ -35,4 +38,5 @@ LAN without signing that device into the owner account.
 - `npm test -- tests/server/db.test.ts tests/server/metadata.test.ts tests/server/shareLinksApi.test.ts tests/components/DetailDrawer.test.tsx`
 - `npm test -- tests/components/fileActions.test.tsx tests/server/shareLinksApi.test.ts tests/components/DetailDrawer.test.tsx`
 - `npm test -- tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx`
+- `npm test -- tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx tests/server/db.test.ts tests/server/metadata.test.ts tests/server/shareLinksApi.test.ts`
 - `npm run typecheck`

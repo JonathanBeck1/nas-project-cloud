@@ -6,7 +6,7 @@ import { hashShareToken } from "@/lib/server/shareLinks";
 import { createStorageService } from "@/lib/server/storage";
 import type { FileShareLink } from "@/lib/shared/types";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const repo = createMetadataRepository(getDatabase());
   const share = repo.getFileShareLinkByTokenHash(hashShareToken(token));
@@ -29,8 +29,20 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: "share not found" }, { status: 404 });
   }
 
-  repo.recordFileShareDownload(share.id);
+  repo.recordFileShareDownload(share.id, {
+    userAgent: request.headers.get("user-agent"),
+    ipAddress: clientIpFromRequest(request)
+  });
   return response;
+}
+
+function clientIpFromRequest(request: Request): string | null {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0]?.trim() || null;
+  }
+
+  return request.headers.get("x-real-ip");
 }
 
 function isShareUsable(share: FileShareLink): boolean {

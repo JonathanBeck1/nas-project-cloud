@@ -5,6 +5,7 @@ import { Download, Search, UploadCloud } from "lucide-react";
 import {
   archiveFile,
   createFileShareLink,
+  listFileShareAccessEvents,
   listFileShareLinks,
   renameFile,
   revokeFileShareLink,
@@ -166,6 +167,11 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
 
   const listShares = useCallback(async (file: CloudFile) => listFileShareLinks(file.id), []);
 
+  const listShareAccessEvents = useCallback(
+    async (file: CloudFile, share: FileShareLink) => listFileShareAccessEvents(file.id, share.id),
+    []
+  );
+
   const revokeShare = useCallback(async (file: CloudFile, share: FileShareLink) => {
     setIsFileActionBusy(true);
     setMessage("");
@@ -316,6 +322,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
           onAssignTags={assignTags}
           onCreateShareLink={createShare}
           onListShareLinks={listShares}
+          onListShareAccessEvents={listShareAccessEvents}
           onRevokeShareLink={revokeShare}
         />
       </div>

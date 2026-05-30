@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Info, X } from "lucide-react";
-import type { CloudFile, FileShareLink, Project, Tag } from "@/lib/shared/types";
+import type { CloudFile, FileShareAccessEvent, FileShareLink, Project, Tag } from "@/lib/shared/types";
 import { formatBytes } from "./FileGrid";
 
 type DetailDrawerProps = {
@@ -18,6 +18,7 @@ type DetailDrawerProps = {
     options: CreateShareLinkOptions
   ) => Promise<CreateShareLinkResult> | CreateShareLinkResult;
   onListShareLinks?: (file: CloudFile) => Promise<FileShareLink[]>;
+  onListShareAccessEvents?: (file: CloudFile, share: FileShareLink) => Promise<FileShareAccessEvent[]>;
   onRevokeShareLink?: (file: CloudFile, share: FileShareLink) => Promise<FileShareLink>;
 };
 
@@ -43,12 +44,14 @@ export function DetailDrawer({
   onAssignTags,
   onCreateShareLink,
   onListShareLinks,
+  onListShareAccessEvents,
   onRevokeShareLink
 }: DetailDrawerProps) {
   const [draftName, setDraftName] = useState("");
   const [shareUrl, setShareUrl] = useState("");
   const [shareError, setShareError] = useState("");
   const [shareLinks, setShareLinks] = useState<FileShareLink[]>([]);
+  const [shareAccessEvents, setShareAccessEvents] = useState<Record<string, FileShareAccessEvent[]>>({});
   const [shareLabel, setShareLabel] = useState("");
   const [shareExpiresInHours, setShareExpiresInHours] = useState("24");
   const [shareMaxDownloads, setShareMaxDownloads] = useState("");
@@ -61,6 +64,7 @@ export function DetailDrawer({
     setShareUrl("");
     setShareError("");
     setShareLinks([]);
+    setShareAccessEvents({});
     setShareLabel("");
     setShareExpiresInHours("24");
     setShareMaxDownloads("");
@@ -74,9 +78,22 @@ export function DetailDrawer({
     setIsLoadingShares(true);
     void onListShareLinks(file)
       .then((links) => {
+        const activeLinks = activeShareLinks(links);
         if (isCurrent) {
-          setShareLinks(activeShareLinks(links));
+          setShareLinks(activeLinks);
         }
+
+        if (!onListShareAccessEvents) {
+          return;
+        }
+
+        return Promise.all(
+          activeLinks.map(async (share) => [share.id, await onListShareAccessEvents(file, share)] as const)
+        ).then((entries) => {
+          if (isCurrent) {
+            setShareAccessEvents(Object.fromEntries(entries));
+          }
+        });
       })
       .catch((error: unknown) => {
         if (isCurrent) {
@@ -92,7 +109,7 @@ export function DetailDrawer({
     return () => {
       isCurrent = false;
     };
-  }, [file, file?.id, file?.name, onListShareLinks]);
+  }, [file, file?.id, file?.name, onListShareAccessEvents, onListShareLinks]);
 
   if (!file) {
     return (
@@ -212,6 +229,7 @@ export function DetailDrawer({
                 });
                 setShareUrl(result.url);
                 setShareLinks((current) => [result.share, ...current.filter((share) => share.id !== result.share.id)]);
+                setShareAccessEvents((current) => ({ ...current, [result.share.id]: [] }));
               } catch (error) {
                 setShareError(error instanceof Error ? error.message : "Could not create share link");
               } finally {
@@ -251,6 +269,26 @@ export function DetailDrawer({
                       <p className="mt-1 truncate text-xs text-muted">
                         Created {formatShareTimestamp(share.createdAt)}
                       </p>
+                      {shareAccessEvents[share.id]?.length ? (
+                        <div className="mt-2 border-t border-line pt-2">
+                          <p className="text-xs font-semibold text-ink">Recent access</p>
+                          <div className="mt-1 space-y-1">
+                            {shareAccessEvents[share.id].slice(0, 3).map((event) => (
+                              <div key={event.id}>
+                                <p className="truncate text-xs font-medium text-ink">
+                                  {event.userAgent ?? "Unknown device"}
+                                </p>
+                                {event.ipAddress ? (
+                                  <p className="truncate text-xs text-muted">{event.ipAddress}</p>
+                                ) : null}
+                                <p className="truncate text-xs text-muted">
+                                  {formatShareTimestamp(event.accessedAt)}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                     {onRevokeShareLink ? (
                       <button

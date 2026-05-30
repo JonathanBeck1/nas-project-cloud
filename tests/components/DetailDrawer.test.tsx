@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DetailDrawer } from "@/components/workspace/DetailDrawer";
-import type { CloudFile, FileShareLink, Project, Tag } from "@/lib/shared/types";
+import type { CloudFile, FileShareAccessEvent, FileShareLink, Project, Tag } from "@/lib/shared/types";
 
 const fixture: CloudFile = {
   id: "file_manual",
@@ -68,6 +68,15 @@ const shareFixture: FileShareLink = {
   createdAt: "2026-05-30T00:00:00.000Z",
   updatedAt: "2026-05-30T00:00:00.000Z",
   lastAccessedAt: "2026-05-30T01:00:00.000Z"
+};
+
+const shareEventFixture: FileShareAccessEvent = {
+  id: "event_123",
+  shareId: "share_123",
+  fileId: "file_manual",
+  accessedAt: "2026-05-30T02:00:00.000Z",
+  userAgent: "Safari on Mac",
+  ipAddress: "192.168.68.10"
 };
 
 describe("DetailDrawer", () => {
@@ -163,6 +172,7 @@ describe("DetailDrawer", () => {
     const user = userEvent.setup();
     const labeledShare = { ...shareFixture, label: "MacBook handoff", maxDownloads: 5 };
     const onListShareLinks = vi.fn(async () => [labeledShare]);
+    const onListShareAccessEvents = vi.fn(async () => [shareEventFixture]);
     const onRevokeShareLink = vi.fn(async () => ({ ...labeledShare, revokedAt: "2026-05-30T02:00:00.000Z" }));
 
     render(
@@ -170,6 +180,7 @@ describe("DetailDrawer", () => {
         file={fixture}
         onCreateShareLink={vi.fn()}
         onListShareLinks={onListShareLinks}
+        onListShareAccessEvents={onListShareAccessEvents}
         onRevokeShareLink={onRevokeShareLink}
       />
     );
@@ -177,9 +188,12 @@ describe("DetailDrawer", () => {
     expect(await screen.findByText("MacBook handoff")).toBeVisible();
     expect(screen.getByText("2 of 5 downloads")).toBeVisible();
     expect(screen.getByText(/Last used/)).toBeVisible();
+    expect(await screen.findByText("Safari on Mac")).toBeVisible();
+    expect(screen.getByText("192.168.68.10")).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Revoke share link" }));
 
+    expect(onListShareAccessEvents).toHaveBeenCalledWith(fixture, labeledShare);
     expect(onRevokeShareLink).toHaveBeenCalledWith(fixture, labeledShare);
     await waitFor(() => expect(screen.queryByText("MacBook handoff")).not.toBeInTheDocument());
   });
