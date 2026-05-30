@@ -13,6 +13,7 @@ import { Sidebar } from "./Sidebar";
 import { UploadCenter } from "./UploadCenter";
 import {
   archiveFile,
+  createFileShareLink,
   renameFile,
   setFileTags as setFileTagsRequest,
   updateFileAssignment
@@ -297,6 +298,23 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     }
   };
 
+  const handleCreateShareLink = async (file: CloudFile) => {
+    setIsFileActionBusy(true);
+    setFileActionMessage("");
+    setFileActionError("");
+    try {
+      const result = await createFileShareLink(file.id);
+      setFileActionMessage(`Created share link for ${file.name}`);
+      return absoluteShareUrl(result.url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not create share link";
+      setFileActionError(message);
+      throw new Error(message);
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-surface text-ink">
       <div className="grid min-h-screen grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
@@ -455,6 +473,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                   onRename={handleRenameFile}
                   onAssignProject={handleAssignProject}
                   onAssignTags={handleAssignTags}
+                  onCreateShareLink={handleCreateShareLink}
                 />
               </div>
             </div>
@@ -463,6 +482,13 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
       </div>
     </div>
   );
+}
+
+function absoluteShareUrl(url: string): string {
+  if (typeof window === "undefined") {
+    return url;
+  }
+  return new URL(url, window.location.origin).toString();
 }
 
 function bulkDownloadUrl(fileIds: string[]): string {

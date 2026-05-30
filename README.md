@@ -16,7 +16,7 @@ Tools like Nextcloud and OpenCloud are general-purpose. Tools like LocalSend are
 
 ## Features
 
-- **Project-first workspace** — Inbox, projects (with rename, status, delete, selected-file actions, and full-project ZIP export), custom categories with color, taggable files, per-file rename, selected-file ZIP downloads, folder-aware uploads, server-side search with composable filters, grid + list views, mobile sidebar drawer, dark mode, smart views, archive, and a 6-digit-code device pairing flow.
+- **Project-first workspace** — Inbox, projects (with rename, status, delete, selected-file actions, and full-project ZIP export), custom categories with color, taggable files, per-file rename, selected-file ZIP downloads, local share links, folder-aware uploads, server-side search with composable filters, grid + list views, mobile sidebar drawer, dark mode, smart views, archive, and a 6-digit-code device pairing flow.
 - **Direct filesystem storage** — files live as real files under `Inbox/`, `Projects/<slug>/Inbox/`, `Library/`, and `Archive/<year>/<month>/`. SMB and Finder still work.
 - **SQLite metadata** — fast, single-file, journal-mode WAL. Indexed on project, category, family, and uploaded_at.
 - **Resumable large uploads** — chunked sessions with 8 MiB chunks, offset checking, abort, and stale-session cleanup. Default upload cap 2 GiB.
@@ -189,7 +189,7 @@ NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbe
 - **Upload Center has tabs for Active / Failed / Aborted sessions** with a per-device filter. Active chunked uploads can be resumed by selecting the same local file again, and failed uploads can be retried as clean replacement sessions. The cleanup job tidies orphaned chunks for failed sessions older than 24 hours.
 - **Folder path preservation is workspace-ready.** Direct and chunked browser uploads preserve folder-relative paths when the browser provides them. Inbox and project workspaces both expose explicit file and folder pickers.
 - **Project delete is explicit about file handling.** You can detach metadata only or move active files back to `Inbox/<device>/` before deleting the project. Archived files are left in the archive tree.
-- **No share / temp-link surface.** Files are owner-only. Sharing requires the `nas_cloud_session` cookie or a paired device.
+- **Share links are file-level bearer links.** Owners can create short-lived file download links from the detail drawer. Project/folder share pages, revoke UI, password prompts, and audit views are still future work.
 
 A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers/plans/2026-05-03-product-completion-sprint.md`](./docs/superpowers/plans/2026-05-03-product-completion-sprint.md).
 
@@ -198,7 +198,7 @@ A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers
 `v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). `v0.3.0` shipped the preview pipeline and Upload Center reliability pass. Near-term, in priority order:
 
 1. **CAD preview strategy** for STL, STEP, 3MF, and renderer-choice decisions.
-2. **Share / temp-link surface** for controlled local sharing.
+2. **Share-link management** for listing, revoking, and auditing active links.
 3. **SQLite FTS5 migration** once the corpus exposes a hot path on the `LIKE`-backed search.
 4. **Benchmark checklist** for 1 GiB and 5 GiB transfers over 2.5 Gb LAN, recorded in the deployment guide.
 5. **Desktop helpers** (Tauri tray + clipboard sync + watch-folder ingest) once the web product is solid.

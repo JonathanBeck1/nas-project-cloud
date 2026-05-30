@@ -122,6 +122,18 @@ describe("DetailDrawer", () => {
     expect(onRename).toHaveBeenCalledWith(fixture, "assembly-final.pdf");
   });
 
+  it("creates and displays a share link for the selected file", async () => {
+    const user = userEvent.setup();
+    const onCreateShareLink = vi.fn(async () => "/api/shares/share-token/download");
+
+    render(<DetailDrawer file={fixture} onCreateShareLink={onCreateShareLink} />);
+
+    await user.click(screen.getByRole("button", { name: "Create share link" }));
+
+    expect(onCreateShareLink).toHaveBeenCalledWith(fixture);
+    expect(await screen.findByLabelText("Share link")).toHaveValue("/api/shares/share-token/download");
+  });
+
   it("disables server-mutating actions while busy", () => {
     render(
       <DetailDrawer
@@ -131,12 +143,14 @@ describe("DetailDrawer", () => {
         onArchive={vi.fn()}
         onAssignProject={vi.fn()}
         onRename={vi.fn()}
+        onCreateShareLink={vi.fn()}
       />
     );
 
     expect(screen.getByRole("button", { name: "Archive" })).toBeDisabled();
     expect(screen.getByLabelText("Project")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Rename" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create share link" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Copy path" })).toBeEnabled();
   });
 

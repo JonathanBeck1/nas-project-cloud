@@ -13,6 +13,7 @@ type DetailDrawerProps = {
   onRename?: (file: CloudFile, name: string) => void;
   onAssignProject?: (file: CloudFile, projectId: string) => void;
   onAssignTags?: (file: CloudFile, tagIds: string[]) => void;
+  onCreateShareLink?: (file: CloudFile) => Promise<string> | string;
 };
 
 export function DetailDrawer({
@@ -23,12 +24,18 @@ export function DetailDrawer({
   onArchive,
   onRename,
   onAssignProject,
-  onAssignTags
+  onAssignTags,
+  onCreateShareLink
 }: DetailDrawerProps) {
   const [draftName, setDraftName] = useState("");
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareError, setShareError] = useState("");
+  const [isCreatingShare, setIsCreatingShare] = useState(false);
 
   useEffect(() => {
     setDraftName(file?.name ?? "");
+    setShareUrl("");
+    setShareError("");
   }, [file?.id, file?.name]);
 
   if (!file) {
@@ -90,6 +97,42 @@ export function DetailDrawer({
           Copy path
         </button>
       </div>
+
+      {onCreateShareLink ? (
+        <div className="mt-4 rounded-md border border-line bg-surface p-3">
+          <p className="text-sm font-semibold text-ink">Share</p>
+          <button
+            type="button"
+            className="mt-2 inline-flex h-9 items-center justify-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isBusy || isCreatingShare}
+            onClick={async () => {
+              setIsCreatingShare(true);
+              setShareError("");
+              try {
+                const nextUrl = await onCreateShareLink(file);
+                setShareUrl(nextUrl);
+              } catch (error) {
+                setShareError(error instanceof Error ? error.message : "Could not create share link");
+              } finally {
+                setIsCreatingShare(false);
+              }
+            }}
+          >
+            Create share link
+          </button>
+          {shareUrl ? (
+            <label className="mt-3 block text-sm font-semibold text-ink">
+              Share link
+              <input
+                readOnly
+                className="mt-2 h-10 w-full rounded-md border border-line bg-panel px-3 text-sm text-ink"
+                value={shareUrl}
+              />
+            </label>
+          ) : null}
+          {shareError ? <p className="mt-2 text-sm font-medium text-red-700">{shareError}</p> : null}
+        </div>
+      ) : null}
 
       {onRename ? (
         <form

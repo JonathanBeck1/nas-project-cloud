@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Download, Search, UploadCloud } from "lucide-react";
 import {
   archiveFile,
+  createFileShareLink,
   renameFile,
   setFileTags as setFileTagsRequest,
   updateFileAssignment
@@ -142,6 +143,24 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
     }
   };
 
+  const createShare = async (file: CloudFile) => {
+    setIsFileActionBusy(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const result = await createFileShareLink(file.id);
+      setMessage(`Created share link for ${file.name}`);
+      return absoluteShareUrl(result.url);
+    } catch (shareError) {
+      const message = shareError instanceof Error ? shareError.message : "Could not create share link";
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <section className="rounded-md border border-line bg-panel shadow-panel" aria-labelledby="project-heading">
@@ -272,10 +291,18 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
           onRename={renameSingleFile}
           onAssignProject={assignProject}
           onAssignTags={assignTags}
+          onCreateShareLink={createShare}
         />
       </div>
     </div>
   );
+}
+
+function absoluteShareUrl(url: string): string {
+  if (typeof window === "undefined") {
+    return url;
+  }
+  return new URL(url, window.location.origin).toString();
 }
 
 function bulkDownloadUrl(fileIds: string[]): string {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   archiveFile,
+  createFileShareLink,
   deleteFilePermanently,
   renameFile,
   restoreFile,
@@ -60,6 +61,39 @@ describe("fileActions", () => {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: "bracket-final.stl" })
+      })
+    );
+  });
+
+  it("creates file share links through the share endpoint", async () => {
+    const payload = {
+      share: {
+        id: "share_123",
+        fileId: "file_123",
+        label: null,
+        expiresAt: "2026-05-31T00:00:00.000Z",
+        maxDownloads: null,
+        downloadCount: 0,
+        revokedAt: null,
+        createdByUserId: "user_1",
+        createdAt: "2026-05-30T00:00:00.000Z",
+        updatedAt: "2026-05-30T00:00:00.000Z",
+        lastAccessedAt: null
+      },
+      url: "/api/shares/share-token/download"
+    };
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify(payload), { status: 201 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createFileShareLink("file_123")).resolves.toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_123/shares",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expiresInHours: 24 })
       })
     );
   });

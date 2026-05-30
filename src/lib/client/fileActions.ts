@@ -1,5 +1,5 @@
 import { csrfHeaders } from "@/lib/client/csrf";
-import type { CloudFile } from "@/lib/shared/types";
+import type { CloudFile, FileShareLink } from "@/lib/shared/types";
 
 export type FileAssignmentInput = {
   projectId?: string | null;
@@ -69,6 +69,27 @@ export async function setFileTags(fileId: string, tagIds: string[]): Promise<Clo
       body: JSON.stringify({ tagIds })
     })
   );
+}
+
+export async function createFileShareLink(fileId: string): Promise<{ share: FileShareLink; url: string }> {
+  const response = await fetch(`/api/files/${encodeURIComponent(fileId)}/shares`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...csrfHeaders() },
+    body: JSON.stringify({ expiresInHours: 24 })
+  });
+
+  let payload: { share?: FileShareLink; url?: string; error?: string };
+  try {
+    payload = (await response.json()) as { share?: FileShareLink; url?: string; error?: string };
+  } catch {
+    payload = {};
+  }
+
+  if (!response.ok || !payload.share || !payload.url) {
+    throw new Error(payload.error ?? "Could not create share link");
+  }
+
+  return { share: payload.share, url: payload.url };
 }
 
 export function downloadUrl(fileId: string): string {

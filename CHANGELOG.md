@@ -39,6 +39,9 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Project detail drawer.** Project workspaces now expose the selected-file
   drawer with download, archive, rename, project reassignment, and tag actions
   without leaving the project page.
+- **Local share links.** Owners can create short-lived bearer-token download
+  links from the file detail drawer, and recipients can download the file
+  without an owner session.
 
 ### Changed
 

@@ -121,6 +121,57 @@ describe("metadata repository", () => {
     }
   });
 
+  it("creates, lists, records, and revokes file share links", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const file = repo.createFile({
+        name: "manual.pdf",
+        extension: "pdf",
+        family: "document",
+        mimeType: "application/pdf",
+        sizeBytes: 10,
+        checksum: "abc",
+        storagePath: "Inbox/Browser/manual.pdf",
+        sourceDevice: "Browser"
+      });
+
+      const share = repo.createFileShareLink({
+        fileId: file.id,
+        tokenHash: "hash_123",
+        createdByUserId: "user_1",
+        expiresAt: "2026-05-31T00:00:00.000Z",
+        maxDownloads: 3,
+        label: "Send to laptop"
+      });
+
+      expect(share).toMatchObject({
+        fileId: file.id,
+        label: "Send to laptop",
+        expiresAt: "2026-05-31T00:00:00.000Z",
+        maxDownloads: 3,
+        downloadCount: 0,
+        revokedAt: null,
+        createdByUserId: "user_1",
+        lastAccessedAt: null
+      });
+      expect(repo.listFileShareLinks(file.id)).toEqual([share]);
+      expect(repo.getFileShareLinkByTokenHash("hash_123")?.id).toBe(share.id);
+
+      const accessed = repo.recordFileShareDownload(share.id);
+      expect(accessed?.downloadCount).toBe(1);
+      expect(accessed?.lastAccessedAt).toEqual(expect.any(String));
+
+      const revoked = repo.revokeFileShareLink(file.id, share.id);
+      expect(revoked?.revokedAt).toEqual(expect.any(String));
+      expect(repo.revokeFileShareLink(file.id, "missing")).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
   it("updates file project, category, storage path, and archive state", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-metadata-"));
     createdDirs.push(dir);

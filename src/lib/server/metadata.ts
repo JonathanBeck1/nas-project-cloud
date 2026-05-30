@@ -8,6 +8,7 @@ import type {
   FilePreview,
   FilePreviewKind,
   FilePreviewStatus,
+  FileShareLink,
   FileFamily,
   FileStatus,
   PreviewJob,
@@ -79,6 +80,21 @@ type FilePreviewRow = {
   error: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type FileShareLinkRow = {
+  id: string;
+  file_id: string;
+  token_hash: string;
+  label: string | null;
+  expires_at: string | null;
+  max_downloads: number | null;
+  download_count: number;
+  revoked_at: string | null;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+  last_accessed_at: string | null;
 };
 
 type PendingPreviewJobRow = FilePreviewRow &
@@ -194,6 +210,15 @@ type CreateFileInput = {
   sourceDevice: string;
   status?: FileStatus;
   archivedAt?: string | null;
+};
+
+type CreateFileShareLinkInput = {
+  fileId: string;
+  tokenHash: string;
+  createdByUserId: string;
+  expiresAt?: string | null;
+  maxDownloads?: number | null;
+  label?: string | null;
 };
 
 type CreateTagInput = {
@@ -421,6 +446,106 @@ export function createMetadataRepository(db: AppDatabase) {
       `).run(file);
 
       return { ...file, tags: [] };
+    },
+
+    createFileShareLink(input: CreateFileShareLinkInput): FileShareLink {
+      const now = new Date().toISOString();
+      const share = {
+        id: `share_${nanoid(12)}`,
+        fileId: input.fileId,
+        tokenHash: input.tokenHash,
+        label: input.label?.trim() || null,
+        expiresAt: input.expiresAt ?? null,
+        maxDownloads: input.maxDownloads ?? null,
+        downloadCount: 0,
+        revokedAt: null,
+        createdByUserId: input.createdByUserId,
+        createdAt: now,
+        updatedAt: now,
+        lastAccessedAt: null
+      };
+
+      db.prepare(`
+        insert into file_share_links (
+          id, file_id, token_hash, label, expires_at, max_downloads, download_count,
+          revoked_at, created_by_user_id, created_at, updated_at, last_accessed_at
+        )
+        values (
+          @id, @fileId, @tokenHash, @label, @expiresAt, @maxDownloads, @downloadCount,
+          @revokedAt, @createdByUserId, @createdAt, @updatedAt, @lastAccessedAt
+        )
+      `).run(share);
+
+      return {
+        id: share.id,
+        fileId: share.fileId,
+        label: share.label,
+        expiresAt: share.expiresAt,
+        maxDownloads: share.maxDownloads,
+        downloadCount: share.downloadCount,
+        revokedAt: share.revokedAt,
+        createdByUserId: share.createdByUserId,
+        createdAt: share.createdAt,
+        updatedAt: share.updatedAt,
+        lastAccessedAt: share.lastAccessedAt
+      };
+    },
+
+    listFileShareLinks(fileId: string): FileShareLink[] {
+      return db
+        .prepare<[string], FileShareLinkRow>(`
+          select * from file_share_links
+          where file_id = ?
+          order by created_at desc
+        `)
+        .all(fileId)
+        .map(fileShareLinkFromRow);
+    },
+
+    getFileShareLinkByTokenHash(tokenHash: string): FileShareLink | null {
+      const row = db
+        .prepare<[string], FileShareLinkRow>("select * from file_share_links where token_hash = ? limit 1")
+        .get(tokenHash);
+      return row ? fileShareLinkFromRow(row) : null;
+    },
+
+    recordFileShareDownload(id: string): FileShareLink | null {
+      const now = new Date().toISOString();
+      const result = db
+        .prepare<[string, string, string]>(`
+          update file_share_links
+          set download_count = download_count + 1,
+              last_accessed_at = ?,
+              updated_at = ?
+          where id = ?
+        `)
+        .run(now, now, id);
+
+      if (result.changes === 0) {
+        return null;
+      }
+
+      const row = db.prepare<[string], FileShareLinkRow>("select * from file_share_links where id = ? limit 1").get(id);
+      return row ? fileShareLinkFromRow(row) : null;
+    },
+
+    revokeFileShareLink(fileId: string, id: string): FileShareLink | null {
+      const now = new Date().toISOString();
+      const result = db
+        .prepare<[string, string, string, string]>(`
+          update file_share_links
+          set revoked_at = coalesce(revoked_at, ?),
+              updated_at = ?
+          where file_id = ? and id = ?
+        `)
+        .run(now, now, fileId, id);
+
+      if (result.changes === 0) {
+        return null;
+      }
+
+      const row = db.prepare<[string], FileShareLinkRow>("select * from file_share_links where id = ? limit 1").get(id);
+      return row ? fileShareLinkFromRow(row) : null;
     },
 
     listCategories(): Category[] {
@@ -1480,6 +1605,22 @@ function filePreviewFromRow(row: FilePreviewRow): FilePreview {
     error: row.error,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+function fileShareLinkFromRow(row: FileShareLinkRow): FileShareLink {
+  return {
+    id: row.id,
+    fileId: row.file_id,
+    label: row.label,
+    expiresAt: row.expires_at,
+    maxDownloads: row.max_downloads,
+    downloadCount: row.download_count,
+    revokedAt: row.revoked_at,
+    createdByUserId: row.created_by_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastAccessedAt: row.last_accessed_at
   };
 }
 

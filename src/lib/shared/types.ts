@@ -142,6 +142,20 @@ export type FilePreview = {
   updatedAt: string;
 };
 
+export type FileShareLink = {
+  id: string;
+  fileId: string;
+  label: string | null;
+  expiresAt: string | null;
+  maxDownloads: number | null;
+  downloadCount: number;
+  revokedAt: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  lastAccessedAt: string | null;
+};
+
 export type PreviewJob = {
   file: CloudFile;
   preview: FilePreview;

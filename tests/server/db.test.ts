@@ -31,6 +31,7 @@ describe("createDatabase", () => {
       expect(tables).toContain("file_previews");
       expect(tables).toContain("tags");
       expect(tables).toContain("file_tags");
+      expect(tables).toContain("file_share_links");
 
       const categories = db.prepare("select slug from categories order by sort_order").all();
       expect(categories).toContainEqual({ slug: "3d-cad" });
@@ -111,6 +112,34 @@ describe("createDatabase", () => {
           "error",
           "created_at",
           "updated_at"
+        ])
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it("creates file share link columns", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-db-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const columns = db.prepare("pragma table_info(file_share_links)").all() as Array<{ name: string }>;
+
+      expect(columns.map((column) => column.name)).toEqual(
+        expect.arrayContaining([
+          "id",
+          "file_id",
+          "token_hash",
+          "label",
+          "expires_at",
+          "max_downloads",
+          "download_count",
+          "revoked_at",
+          "created_by_user_id",
+          "created_at",
+          "updated_at",
+          "last_accessed_at"
         ])
       );
     } finally {
