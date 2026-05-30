@@ -2,6 +2,7 @@ import React from "react";
 import { Settings } from "lucide-react";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
 import { DeviceLabelEditor } from "@/components/workspace/DeviceLabelEditor";
+import { DeploymentStatusCard } from "@/components/workspace/DeploymentStatusCard";
 import { PreviewStatusCard } from "@/components/workspace/PreviewStatusCard";
 import { appConfig } from "@/lib/server/config";
 import { requirePageSession } from "@/lib/server/pageSession";
@@ -47,6 +48,8 @@ export default async function SettingsPage() {
             </div>
           ))}
         </dl>
+
+        <DeploymentStatusCard />
 
         <PreviewStatusCard />
 

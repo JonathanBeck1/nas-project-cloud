@@ -31,6 +31,12 @@ export type MoveToProjectInput = {
   filename: string;
 };
 
+export type MoveToInboxInput = {
+  currentRelativePath: string;
+  sourceDevice: string;
+  filename: string;
+};
+
 export type RenameFileInput = {
   currentRelativePath: string;
   filename: string;
@@ -226,6 +232,19 @@ export function createStorageService(root = appConfig.storageRoot) {
         sanitizePathSegment(input.projectSlug),
         "Inbox"
       );
+      return moveIntoDirectory({
+        storageRoot,
+        from,
+        directory,
+        filename: input.filename
+      });
+    },
+
+    async moveToInbox(
+      input: MoveToInboxInput
+    ): Promise<{ absolutePath: string; relativePath: string }> {
+      const from = absolutePathFor(input.currentRelativePath);
+      const directory = path.join(storageRoot, "Inbox", sanitizePathSegment(input.sourceDevice));
       return moveIntoDirectory({
         storageRoot,
         from,

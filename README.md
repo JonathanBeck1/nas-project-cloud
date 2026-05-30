@@ -22,7 +22,7 @@ Tools like Nextcloud and OpenCloud are general-purpose. Tools like LocalSend are
 - **Resumable large uploads** — chunked sessions with 8 MiB chunks, offset checking, abort, and stale-session cleanup. Default upload cap 2 GiB.
 - **Preview pipeline** — automatic 384 px webp previews for images, video poster frames via `ffmpeg`, and first-page PDF previews via `poppler-utils`, streamed from authenticated routes.
 - **Trusted-device auth** — owner bootstrap on first run, scrypt password hashing, HTTP-only session cookie, route guards on every API and page, and pairing-code device trust.
-- **TrueNAS-ready** — Dockerfile, `docker-compose.truenas.yml`, deployment guide, and `/api/health` readiness check that exercises both the storage mount and the database.
+- **TrueNAS-ready** — Dockerfile, `docker-compose.truenas.yml`, deployment guide, and `/api/health` readiness check that exercises the storage mount, database, and preview binaries.
 - **CI/CD** — GitHub Actions builds and publishes `ghcr.io/jonathanbeck1/nas-project-cloud:latest` on every push to `main`, after running unit, type, lint, and build checks.
 
 ## Screenshots
@@ -187,7 +187,7 @@ NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbe
 - **Previews: image, video, and single-page PDF today.** Video poster frames need `ffmpeg`; PDF first-page previews need `poppler-utils` (`pdftoppm`). Both are baked into the default Docker image; missing binaries are recorded as `unsupported` instead of crashing the worker. Other document families (docx, xlsx) and CAD families stay `skipped`. The Settings → Preview pipeline card shows live counts and `ffmpeg ready / unavailable` + `poppler ready / unavailable` badges.
 - **Preview worker is opt-in.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on` to run the in-process scheduler, or hit `POST /api/maintenance/previews` from cron. Defaults to off so dev environments don't fight the test runner.
 - **Upload Center has tabs for Active / Failed / Aborted sessions** with a per-device filter. The cleanup job tidies orphaned chunks for failed sessions older than 24 hours. Resume after a stale or failed session needs a desktop helper or explicit drag-back UX and is queued for v0.4.
-- **Project delete leaves files on disk.** The metadata detaches them (project_id becomes null) but the bytes still live under `Projects/<slug>/Inbox/`. Move them via the bulk action bar in the inbox view if you want them out of that folder.
+- **Project delete is explicit about file handling.** You can detach metadata only or move active files back to `Inbox/<device>/` before deleting the project. Archived files are left in the archive tree.
 - **No share / temp-link surface.** Files are owner-only. Sharing requires the `nas_cloud_session` cookie or a paired device.
 
 A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers/plans/2026-05-03-product-completion-sprint.md`](./docs/superpowers/plans/2026-05-03-product-completion-sprint.md).
@@ -197,13 +197,12 @@ A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers
 `v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). `v0.3.0` shipped the preview pipeline and Upload Center reliability pass. Near-term, in priority order:
 
 1. **Upload resume.** Either a desktop helper that retains the file handle or an explicit drag-back UX. Queued for `v0.4`.
-2. **Move-files-back-on-project-delete** so the storage tree never has orphan project folders.
-3. **CAD preview strategy** for STL, STEP, and 3MF files.
-4. **CAD preview strategy decision** (STL/STEP) and a renderer-choice spike.
-5. **Share / temp-link surface** for controlled local sharing.
-6. **SQLite FTS5 migration** once the corpus exposes a hot path on the `LIKE`-backed search.
-7. **Benchmark checklist** for 1 GiB and 5 GiB transfers over 2.5 Gb LAN, recorded in the deployment guide.
-8. **Desktop helpers** (Tauri tray + clipboard sync + watch-folder ingest) once the web product is solid.
+2. **CAD preview strategy** for STL, STEP, and 3MF files.
+3. **CAD preview strategy decision** (STL/STEP) and a renderer-choice spike.
+4. **Share / temp-link surface** for controlled local sharing.
+5. **SQLite FTS5 migration** once the corpus exposes a hot path on the `LIKE`-backed search.
+6. **Benchmark checklist** for 1 GiB and 5 GiB transfers over 2.5 Gb LAN, recorded in the deployment guide.
+7. **Desktop helpers** (Tauri tray + clipboard sync + watch-folder ingest) once the web product is solid.
 
 ## Project history
 

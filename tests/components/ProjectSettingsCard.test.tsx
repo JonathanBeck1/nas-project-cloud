@@ -106,4 +106,28 @@ describe("ProjectSettingsCard", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(/Deleted Garage Build/);
     expect(router.push).toHaveBeenCalledWith("/projects");
   });
+
+  it("sends the selected file handling mode when deleting a project", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ ok: true, detachedFiles: 2, movedFiles: 2 }), { status: 200 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ProjectSettingsCard project={project} categories={[cad]} fileCount={2} />);
+
+    await user.click(screen.getByLabelText("Move files back to inbox"));
+    await user.type(screen.getByLabelText(/Type/), "Garage Build");
+    await user.click(screen.getByRole("button", { name: "Delete project" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/projects/proj_garage",
+        expect.objectContaining({
+          method: "DELETE",
+          body: JSON.stringify({ fileAction: "moveToInbox" })
+        })
+      )
+    );
+  });
 });

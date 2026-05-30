@@ -19,7 +19,11 @@ describe("health API", () => {
       ok: true,
       checks: {
         storage: { ok: true, path: "/mnt/nas-cloud" },
-        database: { ok: true, path: "/data/nas-cloud.sqlite" }
+        database: { ok: true, path: "/data/nas-cloud.sqlite" },
+        previewTools: {
+          ffmpeg: { ok: true, name: "ffmpeg", version: "6.1" },
+          poppler: { ok: true, name: "pdftoppm", version: "24.02.0" }
+        }
       }
     });
     const { GET } = await import("@/app/api/health/route");
@@ -31,7 +35,11 @@ describe("health API", () => {
       ok: true,
       checks: {
         storage: { ok: true },
-        database: { ok: true }
+        database: { ok: true },
+        previewTools: {
+          ffmpeg: { ok: true, version: "6.1" },
+          poppler: { ok: true, version: "24.02.0" }
+        }
       }
     });
   });
@@ -41,7 +49,11 @@ describe("health API", () => {
       ok: false,
       checks: {
         storage: { ok: false, path: "/mnt/nas-cloud", error: "EACCES: permission denied" },
-        database: { ok: true, path: "/data/nas-cloud.sqlite" }
+        database: { ok: true, path: "/data/nas-cloud.sqlite" },
+        previewTools: {
+          ffmpeg: { ok: true, name: "ffmpeg", version: "6.1" },
+          poppler: { ok: false, name: "pdftoppm", error: "spawn pdftoppm ENOENT" }
+        }
       }
     });
     const { GET } = await import("@/app/api/health/route");
@@ -53,7 +65,11 @@ describe("health API", () => {
       ok: false,
       checks: {
         storage: { ok: false, error: "EACCES: permission denied" },
-        database: { ok: true }
+        database: { ok: true },
+        previewTools: {
+          ffmpeg: { ok: true, version: "6.1" },
+          poppler: { ok: false, error: "spawn pdftoppm ENOENT" }
+        }
       }
     });
   });

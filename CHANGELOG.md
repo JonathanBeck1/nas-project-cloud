@@ -17,11 +17,17 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Project ZIP export.** Project workspaces now expose a direct project
   ZIP download, and selected files in a project can be exported without
   returning to the main inbox.
+- **TrueNAS deployment diagnostics.** Settings now shows storage, database,
+  `ffmpeg`, and `pdftoppm` readiness from `/api/health`.
+- **Safer project deletion.** Deleting a project can now move active files
+  back into the device inbox before removing the project record.
 
 ### Changed
 
 - **Dependency security refresh.** Next.js is resolved to `15.5.18`, and
   PostCSS is overridden to `8.5.12` so production dependency audit passes.
+- **Health check coverage.** `/api/health` now verifies preview binaries in
+  addition to storage and SQLite.
 
 ## [0.3.0] - 2026-05-28
 

@@ -10,10 +10,12 @@ const mocks = vi.hoisted(() => ({
     getCategoryById: vi.fn(),
     listFiles: vi.fn(),
     updateProject: vi.fn(),
+    updateFile: vi.fn(),
     deleteProject: vi.fn()
   },
   storage: {
-    absolutePathFor: vi.fn()
+    absolutePathFor: vi.fn(),
+    moveToInbox: vi.fn()
   },
   requireApiSession: vi.fn()
 }));
@@ -53,7 +55,9 @@ describe("projects API", () => {
     });
     mocks.repo.getProjectById.mockReturnValue(null);
     mocks.repo.listFiles.mockReturnValue([]);
+    mocks.repo.updateFile.mockReturnValue(null);
     mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(os.tmpdir(), relativePath));
+    mocks.storage.moveToInbox.mockResolvedValue({ absolutePath: "/tmp/file", relativePath: "Inbox/Browser/file.txt" });
   });
 
   it("updates the name and description of an existing project", async () => {
@@ -148,7 +152,50 @@ describe("projects API", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, detachedFiles: 3 });
+    await expect(response.json()).resolves.toEqual({ ok: true, detachedFiles: 3, movedFiles: 0 });
+    expect(mocks.repo.deleteProject).toHaveBeenCalledWith("proj_garage");
+  });
+
+  it("moves active project files back to inbox before deleting when requested", async () => {
+    mocks.repo.getProjectById.mockReturnValue(project);
+    mocks.repo.listFiles.mockReturnValue([
+      {
+        id: "file_1",
+        name: "bracket.stl",
+        status: "active",
+        storagePath: "Projects/garage-build/Inbox/bracket.stl",
+        sourceDevice: "Mac Studio"
+      }
+    ]);
+    mocks.storage.moveToInbox.mockResolvedValue({
+      absolutePath: "/tmp/Inbox/Mac Studio/bracket.stl",
+      relativePath: "Inbox/Mac Studio/bracket.stl"
+    });
+    mocks.repo.updateFile.mockReturnValue({ id: "file_1" });
+    mocks.repo.deleteProject.mockReturnValue({ removed: true, detachedFiles: 1 });
+    const { DELETE } = await import("@/app/api/projects/[id]/route");
+
+    const response = await DELETE(
+      new Request("http://localhost/api/projects/proj_garage", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileAction: "moveToInbox" })
+      }),
+      { params: Promise.resolve({ id: "proj_garage" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.storage.moveToInbox).toHaveBeenCalledWith({
+      currentRelativePath: "Projects/garage-build/Inbox/bracket.stl",
+      sourceDevice: "Mac Studio",
+      filename: "bracket.stl"
+    });
+    expect(mocks.repo.updateFile).toHaveBeenCalledWith(
+      "file_1",
+      { projectId: null, storagePath: "Inbox/Mac Studio/bracket.stl" },
+      { storagePath: "Projects/garage-build/Inbox/bracket.stl", status: "active" }
+    );
+    await expect(response.json()).resolves.toEqual({ ok: true, detachedFiles: 1, movedFiles: 1 });
   });
 
   it("returns 404 when deleting a missing project", async () => {

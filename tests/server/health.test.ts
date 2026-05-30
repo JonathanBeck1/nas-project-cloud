@@ -35,6 +35,30 @@ describe("health checks", () => {
     expect(result.checks.database.path).toBe(config.dbPath);
   });
 
+  it("includes preview tool readiness for TrueNAS deployment diagnostics", async () => {
+    const config = testConfig(tempRoot);
+    fs.mkdirSync(config.storageRoot, { recursive: true });
+    db = createDatabase(config.dbPath);
+    const { checkHealth } = await import("@/lib/server/health");
+
+    const result = await checkHealth({
+      config,
+      db,
+      probes: {
+        ffmpeg: async () => ({ available: true, version: "6.1" }),
+        poppler: async () => ({ available: false, error: "spawn pdftoppm ENOENT" })
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.checks.previewTools.ffmpeg).toEqual({ ok: true, name: "ffmpeg", version: "6.1" });
+    expect(result.checks.previewTools.poppler).toEqual({
+      ok: false,
+      name: "pdftoppm",
+      error: "spawn pdftoppm ENOENT"
+    });
+  });
+
   it("reports unhealthy when the storage mount cannot be written", async () => {
     const config = testConfig(tempRoot);
     fs.mkdirSync(path.dirname(config.storageRoot), { recursive: true });

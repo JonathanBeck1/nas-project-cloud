@@ -28,6 +28,7 @@ export function ProjectSettingsCard({ project: initialProject, categories, fileC
   const [status, setStatus] = useState<ProjectStatus>(initialProject.status);
   const [categoryId, setCategoryId] = useState<string>(initialProject.categoryId ?? "");
   const [confirmName, setConfirmName] = useState("");
+  const [deleteFileAction, setDeleteFileAction] = useState<"detach" | "moveToInbox">("detach");
   const [busyAction, setBusyAction] = useState<"save" | "delete" | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -98,11 +99,13 @@ export function ProjectSettingsCard({ project: initialProject, categories, fileC
     try {
       const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
         method: "DELETE",
-        headers: { ...csrfHeaders() }
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
+        body: JSON.stringify({ fileAction: deleteFileAction })
       });
       const payload = (await safeJson(response)) as {
         ok?: boolean;
         detachedFiles?: number;
+        movedFiles?: number;
         error?: string;
       };
 
@@ -111,7 +114,13 @@ export function ProjectSettingsCard({ project: initialProject, categories, fileC
       }
 
       const detached = payload.detachedFiles ?? 0;
-      const suffix = detached > 0 ? ` ${detached} ${detached === 1 ? "file" : "files"} returned to inbox.` : "";
+      const moved = payload.movedFiles ?? 0;
+      const suffix =
+        moved > 0
+          ? ` ${moved} ${moved === 1 ? "file" : "files"} moved to inbox.`
+          : detached > 0
+          ? ` ${detached} ${detached === 1 ? "file was" : "files were"} detached.`
+          : "";
       setMessage(`Deleted ${project.name}.${suffix} Redirecting...`);
       router.push("/projects");
       router.refresh();
@@ -265,10 +274,40 @@ export function ProjectSettingsCard({ project: initialProject, categories, fileC
         <div className="rounded-md border border-red-200 bg-red-50/50 px-3 py-3">
           <p className="text-sm font-semibold text-red-700">Delete project</p>
           <p className="mt-1 text-xs leading-5 text-red-700/80">
-            Deleting removes the project entry. Files keep living on disk under{" "}
-            <code className="rounded bg-red-100 px-1 py-0.5 font-mono">Projects/{project.slug}/Inbox/</code>; their
-            metadata gets detached and they show up in the inbox view.
+            Deleting removes the project entry. Choose whether files stay in the existing project folder or are moved
+            back into the device inbox first.
           </p>
+          <fieldset className="mt-3 space-y-2">
+            <legend className="text-xs font-semibold text-red-700">File handling</legend>
+            <label className="flex gap-2 rounded-md border border-red-100 bg-white/70 px-3 py-2 text-xs text-red-800">
+              <input
+                type="radio"
+                name="delete-file-action"
+                value="detach"
+                aria-label="Detach metadata only"
+                checked={deleteFileAction === "detach"}
+                onChange={() => setDeleteFileAction("detach")}
+              />
+              <span>
+                <span className="block font-semibold">Detach metadata only</span>
+                <span className="text-red-700/75">Leave files under Projects/{project.slug}/Inbox/ on disk.</span>
+              </span>
+            </label>
+            <label className="flex gap-2 rounded-md border border-red-100 bg-white/70 px-3 py-2 text-xs text-red-800">
+              <input
+                type="radio"
+                name="delete-file-action"
+                value="moveToInbox"
+                aria-label="Move files back to inbox"
+                checked={deleteFileAction === "moveToInbox"}
+                onChange={() => setDeleteFileAction("moveToInbox")}
+              />
+              <span>
+                <span className="block font-semibold">Move files back to inbox</span>
+                <span className="text-red-700/75">Move active files into Inbox/&lt;device&gt;/ before deletion.</span>
+              </span>
+            </label>
+          </fieldset>
           <label className="mt-3 block text-xs font-semibold text-red-700">
             Type <span className="font-mono">{project.name}</span> to confirm
             <input
