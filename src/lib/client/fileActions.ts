@@ -10,6 +10,7 @@ export type CreateFileShareLinkInput = {
   expiresInHours?: number;
   maxDownloads?: number | null;
   label?: string | null;
+  password?: string | null;
 };
 
 export async function archiveFile(fileId: string): Promise<CloudFile> {
@@ -87,7 +88,8 @@ export async function createFileShareLink(
     body: JSON.stringify({
       expiresInHours: input.expiresInHours ?? 24,
       ...(input.maxDownloads !== undefined ? { maxDownloads: input.maxDownloads } : {}),
-      ...(input.label !== undefined ? { label: input.label } : {})
+      ...(input.label !== undefined ? { label: input.label } : {}),
+      ...(input.password !== undefined ? { password: input.password } : {})
     })
   });
 

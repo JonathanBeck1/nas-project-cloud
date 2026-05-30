@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     createFileShareLink: vi.fn(),
     getFileById: vi.fn(),
     getFileShareLinkByTokenHash: vi.fn(),
+    getFileSharePasswordHash: vi.fn(),
     listFileShareAccessEvents: vi.fn(),
     listFileShareLinks: vi.fn(),
     revokeFileShareLink: vi.fn(),
@@ -23,12 +24,16 @@ const mocks = vi.hoisted(() => {
     sessionId: "session_1",
     deviceId: "device_1"
   }));
+  const hashPassword = vi.fn(async () => "scrypt:share-salt:share-hash");
+  const verifyPassword = vi.fn(async (password: string) => password === "correct horse");
 
   return {
     db: {},
     repo,
     storage,
-    requireApiSession
+    requireApiSession,
+    hashPassword,
+    verifyPassword
   };
 });
 
@@ -40,6 +45,11 @@ vi.mock("@/lib/server/db", () => ({
 
 vi.mock("@/lib/server/auth/guards", () => ({
   requireApiSession: mocks.requireApiSession
+}));
+
+vi.mock("@/lib/server/auth/passwords", () => ({
+  hashPassword: mocks.hashPassword,
+  verifyPassword: mocks.verifyPassword
 }));
 
 vi.mock("@/lib/server/metadata", () => ({
@@ -66,6 +76,7 @@ describe("share links API", () => {
       label: input.label,
       expiresAt: input.expiresAt,
       maxDownloads: input.maxDownloads,
+      passwordProtected: Boolean(input.passwordHash),
       downloadCount: 0,
       revokedAt: null,
       createdByUserId: input.createdByUserId,
@@ -74,6 +85,7 @@ describe("share links API", () => {
       lastAccessedAt: null
     }));
     mocks.repo.getFileShareLinkByTokenHash.mockReturnValue(null);
+    mocks.repo.getFileSharePasswordHash.mockReturnValue(null);
     mocks.repo.listFileShareAccessEvents.mockReturnValue([]);
     mocks.repo.listFileShareLinks.mockReturnValue([]);
     mocks.repo.revokeFileShareLink.mockReturnValue(null);
@@ -107,7 +119,7 @@ describe("share links API", () => {
       label: "Send to MacBook",
       downloadCount: 0
     });
-    expect(payload.url).toMatch(/^\/api\/shares\/[A-Za-z0-9_-]+\/download$/);
+    expect(payload.url).toMatch(/^\/shares\/[A-Za-z0-9_-]+$/);
     expect(mocks.repo.createFileShareLink).toHaveBeenCalledWith(
       expect.objectContaining({
         fileId: "file_123",
@@ -115,6 +127,30 @@ describe("share links API", () => {
         label: "Send to MacBook",
         maxDownloads: null,
         tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/)
+      })
+    );
+  });
+
+  it("creates a password-protected share link without returning the hash", async () => {
+    const { POST } = await import("@/app/api/files/[id]/shares/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/files/file_123/shares", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ expiresInHours: 24, password: "correct horse" })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(201);
+    const payload = await response.json();
+    expect(payload.share.passwordProtected).toBe(true);
+    expect(payload.share.passwordHash).toBeUndefined();
+    expect(mocks.hashPassword).toHaveBeenCalledWith("correct horse");
+    expect(mocks.repo.createFileShareLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        passwordHash: "scrypt:share-salt:share-hash"
       })
     );
   });
@@ -202,6 +238,7 @@ describe("share links API", () => {
       label: null,
       expiresAt: "2099-01-01T00:00:00.000Z",
       maxDownloads: 5,
+      passwordProtected: false,
       downloadCount: 0,
       revokedAt: null,
       createdByUserId: "user_1",
@@ -232,6 +269,64 @@ describe("share links API", () => {
     expect(response.headers.get("content-disposition")).toContain('filename="manual.pdf"');
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.text()).resolves.toBe("manual");
+  });
+
+  it("requires the password before streaming a protected shared file", async () => {
+    const { GET, POST } = await import("@/app/api/shares/[token]/download/route");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-share-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Inbox", "Browser", "manual.pdf"), "manual");
+    mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(dir, relativePath));
+    mocks.repo.getFileShareLinkByTokenHash.mockReturnValue({
+      id: "share_123",
+      fileId: "file_123",
+      label: null,
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      maxDownloads: null,
+      passwordProtected: true,
+      downloadCount: 0,
+      revokedAt: null,
+      createdByUserId: "user_1",
+      createdAt: "2026-05-30T00:00:00.000Z",
+      updatedAt: "2026-05-30T00:00:00.000Z",
+      lastAccessedAt: null
+    });
+    mocks.repo.getFileSharePasswordHash.mockReturnValue("scrypt:share-salt:share-hash");
+
+    const unauthenticated = await GET(new Request("http://localhost/api/shares/share-token/download"), {
+      params: Promise.resolve({ token: "share-token" })
+    });
+    expect(unauthenticated.status).toBe(401);
+    await expect(unauthenticated.json()).resolves.toEqual({ error: "password required" });
+
+    const wrong = await POST(
+      new Request("http://localhost/api/shares/share-token/download", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: "wrong" })
+      }),
+      { params: Promise.resolve({ token: "share-token" }) }
+    );
+    expect(wrong.status).toBe(401);
+    expect(mocks.repo.recordFileShareDownload).not.toHaveBeenCalled();
+
+    const correct = await POST(
+      new Request("http://localhost/api/shares/share-token/download", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: "correct horse" })
+      }),
+      { params: Promise.resolve({ token: "share-token" }) }
+    );
+
+    expect(correct.status).toBe(200);
+    expect(mocks.verifyPassword).toHaveBeenCalledWith("correct horse", "scrypt:share-salt:share-hash");
+    expect(mocks.repo.recordFileShareDownload).toHaveBeenCalledWith("share_123", {
+      userAgent: null,
+      ipAddress: null
+    });
+    await expect(correct.text()).resolves.toBe("manual");
   });
 
   it("returns 404 for expired share links", async () => {

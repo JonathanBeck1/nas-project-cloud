@@ -135,6 +135,7 @@ describe("createDatabase", () => {
           "expires_at",
           "max_downloads",
           "download_count",
+          "password_hash",
           "revoked_at",
           "created_by_user_id",
           "created_at",

@@ -76,6 +76,7 @@ describe("fileActions", () => {
         label: null,
         expiresAt: "2026-05-31T00:00:00.000Z",
         maxDownloads: null,
+        passwordProtected: true,
         downloadCount: 0,
         revokedAt: null,
         createdByUserId: "user_1",
@@ -94,7 +95,8 @@ describe("fileActions", () => {
       createFileShareLink("file_123", {
         expiresInHours: 168,
         maxDownloads: 3,
-        label: "MacBook handoff"
+        label: "MacBook handoff",
+        password: "correct horse"
       })
     ).resolves.toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -102,7 +104,12 @@ describe("fileActions", () => {
       expect.objectContaining({
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expiresInHours: 168, maxDownloads: 3, label: "MacBook handoff" })
+        body: JSON.stringify({
+          expiresInHours: 168,
+          maxDownloads: 3,
+          label: "MacBook handoff",
+          password: "correct horse"
+        })
       })
     );
   });
@@ -115,6 +122,7 @@ describe("fileActions", () => {
         label: null,
         expiresAt: "2026-05-31T00:00:00.000Z",
         maxDownloads: null,
+        passwordProtected: false,
         downloadCount: 0,
         revokedAt: null,
         createdByUserId: "user_1",
@@ -159,6 +167,7 @@ describe("fileActions", () => {
       label: null,
       expiresAt: "2026-05-31T00:00:00.000Z",
       maxDownloads: null,
+      passwordProtected: false,
       downloadCount: 0,
       revokedAt: "2026-05-30T01:00:00.000Z",
       createdByUserId: "user_1",

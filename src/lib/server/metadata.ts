@@ -91,6 +91,7 @@ type FileShareLinkRow = {
   expires_at: string | null;
   max_downloads: number | null;
   download_count: number;
+  password_hash: string | null;
   revoked_at: string | null;
   created_by_user_id: string;
   created_at: string;
@@ -229,6 +230,7 @@ type CreateFileShareLinkInput = {
   expiresAt?: string | null;
   maxDownloads?: number | null;
   label?: string | null;
+  passwordHash?: string | null;
 };
 
 type RecordFileShareDownloadInput = {
@@ -472,6 +474,7 @@ export function createMetadataRepository(db: AppDatabase) {
         label: input.label?.trim() || null,
         expiresAt: input.expiresAt ?? null,
         maxDownloads: input.maxDownloads ?? null,
+        passwordHash: input.passwordHash ?? null,
         downloadCount: 0,
         revokedAt: null,
         createdByUserId: input.createdByUserId,
@@ -482,11 +485,11 @@ export function createMetadataRepository(db: AppDatabase) {
 
       db.prepare(`
         insert into file_share_links (
-          id, file_id, token_hash, label, expires_at, max_downloads, download_count,
+          id, file_id, token_hash, label, expires_at, max_downloads, download_count, password_hash,
           revoked_at, created_by_user_id, created_at, updated_at, last_accessed_at
         )
         values (
-          @id, @fileId, @tokenHash, @label, @expiresAt, @maxDownloads, @downloadCount,
+          @id, @fileId, @tokenHash, @label, @expiresAt, @maxDownloads, @downloadCount, @passwordHash,
           @revokedAt, @createdByUserId, @createdAt, @updatedAt, @lastAccessedAt
         )
       `).run(share);
@@ -497,6 +500,7 @@ export function createMetadataRepository(db: AppDatabase) {
         label: share.label,
         expiresAt: share.expiresAt,
         maxDownloads: share.maxDownloads,
+        passwordProtected: Boolean(share.passwordHash),
         downloadCount: share.downloadCount,
         revokedAt: share.revokedAt,
         createdByUserId: share.createdByUserId,
@@ -522,6 +526,15 @@ export function createMetadataRepository(db: AppDatabase) {
         .prepare<[string], FileShareLinkRow>("select * from file_share_links where token_hash = ? limit 1")
         .get(tokenHash);
       return row ? fileShareLinkFromRow(row) : null;
+    },
+
+    getFileSharePasswordHash(id: string): string | null {
+      const row = db
+        .prepare<[string], { password_hash: string | null }>(
+          "select password_hash from file_share_links where id = ? limit 1"
+        )
+        .get(id);
+      return row?.password_hash ?? null;
     },
 
     recordFileShareDownload(id: string, input: RecordFileShareDownloadInput = {}): FileShareLink | null {
@@ -1665,6 +1678,7 @@ function fileShareLinkFromRow(row: FileShareLinkRow): FileShareLink {
     label: row.label,
     expiresAt: row.expires_at,
     maxDownloads: row.max_downloads,
+    passwordProtected: Boolean(row.password_hash),
     downloadCount: row.download_count,
     revokedAt: row.revoked_at,
     createdByUserId: row.created_by_user_id,

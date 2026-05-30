@@ -148,6 +148,7 @@ export type FileShareLink = {
   label: string | null;
   expiresAt: string | null;
   maxDownloads: number | null;
+  passwordProtected: boolean;
   downloadCount: number;
   revokedAt: string | null;
   createdByUserId: string;

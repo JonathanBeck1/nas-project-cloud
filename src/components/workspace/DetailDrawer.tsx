@@ -26,6 +26,7 @@ export type CreateShareLinkOptions = {
   expiresInHours: number;
   maxDownloads: number | null;
   label: string | null;
+  password: string | null;
 };
 
 type CreateShareLinkResult = {
@@ -55,6 +56,7 @@ export function DetailDrawer({
   const [shareLabel, setShareLabel] = useState("");
   const [shareExpiresInHours, setShareExpiresInHours] = useState("24");
   const [shareMaxDownloads, setShareMaxDownloads] = useState("");
+  const [sharePassword, setSharePassword] = useState("");
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isLoadingShares, setIsLoadingShares] = useState(false);
   const [revokingShareId, setRevokingShareId] = useState<string | null>(null);
@@ -68,6 +70,7 @@ export function DetailDrawer({
     setShareLabel("");
     setShareExpiresInHours("24");
     setShareMaxDownloads("");
+    setSharePassword("");
     setRevokingShareId(null);
 
     if (!file || !onListShareLinks) {
@@ -214,6 +217,17 @@ export function DetailDrawer({
               />
             </label>
           </div>
+          <label className="mt-3 block text-xs font-semibold text-muted">
+            Password
+            <input
+              className="mt-1 h-9 w-full rounded-md border border-line bg-panel px-3 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:opacity-60"
+              type="password"
+              value={sharePassword}
+              onChange={(event) => setSharePassword(event.target.value)}
+              disabled={isBusy || isCreatingShare}
+              placeholder="Optional"
+            />
+          </label>
           <button
             type="button"
             className="mt-2 inline-flex h-9 items-center justify-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
@@ -225,7 +239,8 @@ export function DetailDrawer({
                 const result = await onCreateShareLink(file, {
                   expiresInHours: Number.parseInt(shareExpiresInHours, 10),
                   maxDownloads: shareMaxDownloads.trim() ? Number.parseInt(shareMaxDownloads, 10) : null,
-                  label: shareLabel.trim() || null
+                  label: shareLabel.trim() || null,
+                  password: sharePassword.trim() || null
                 });
                 setShareUrl(result.url);
                 setShareLinks((current) => [result.share, ...current.filter((share) => share.id !== result.share.id)]);
@@ -260,6 +275,9 @@ export function DetailDrawer({
                       <p className="text-xs font-semibold text-ink">
                         {shareDownloadCountLabel(share)}
                       </p>
+                      {share.passwordProtected ? (
+                        <p className="mt-1 text-xs font-semibold text-ink">Password protected</p>
+                      ) : null}
                       <p className="mt-1 truncate text-xs text-muted">
                         Expires {formatShareTimestamp(share.expiresAt)}
                       </p>

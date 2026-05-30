@@ -144,7 +144,8 @@ describe("metadata repository", () => {
         createdByUserId: "user_1",
         expiresAt: "2026-05-31T00:00:00.000Z",
         maxDownloads: 3,
-        label: "Send to laptop"
+        label: "Send to laptop",
+        passwordHash: "scrypt:salt:hash"
       });
 
       expect(share).toMatchObject({
@@ -152,6 +153,7 @@ describe("metadata repository", () => {
         label: "Send to laptop",
         expiresAt: "2026-05-31T00:00:00.000Z",
         maxDownloads: 3,
+        passwordProtected: true,
         downloadCount: 0,
         revokedAt: null,
         createdByUserId: "user_1",

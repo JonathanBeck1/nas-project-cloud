@@ -98,6 +98,7 @@ function migrate(db: AppDatabase) {
       expires_at text,
       max_downloads integer,
       download_count integer not null default 0,
+      password_hash text,
       revoked_at text,
       created_by_user_id text not null default '',
       created_at text not null,
@@ -208,6 +209,7 @@ function migrate(db: AppDatabase) {
   addColumnIfMissing(db, "upload_sessions", "user_id", "text not null default ''");
   addColumnIfMissing(db, "upload_sessions", "device_id", "text");
   addColumnIfMissing(db, "upload_sessions", "relative_path", "text");
+  addColumnIfMissing(db, "file_share_links", "password_hash", "text");
   addColumnIfMissing(db, "upload_sessions", "temp_path_cleaned_at", "text");
 }
 

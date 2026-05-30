@@ -62,6 +62,7 @@ const shareFixture: FileShareLink = {
   label: null,
   expiresAt: "2026-05-31T00:00:00.000Z",
   maxDownloads: null,
+  passwordProtected: false,
   downloadCount: 2,
   revokedAt: null,
   createdByUserId: "user_1",
@@ -157,12 +158,14 @@ describe("DetailDrawer", () => {
     await user.type(screen.getByLabelText("Label"), "MacBook handoff");
     await user.selectOptions(screen.getByLabelText("Expires"), "168");
     await user.type(screen.getByLabelText("Max downloads"), "3");
+    await user.type(screen.getByLabelText("Password"), "correct horse");
     await user.click(screen.getByRole("button", { name: "Create share link" }));
 
     expect(onCreateShareLink).toHaveBeenCalledWith(fixture, {
       expiresInHours: 168,
       maxDownloads: 3,
-      label: "MacBook handoff"
+      label: "MacBook handoff",
+      password: "correct horse"
     });
     expect(await screen.findByLabelText("Share link")).toHaveValue("/api/shares/share-token/download");
     expect(screen.getByText("2 downloads")).toBeVisible();
@@ -170,7 +173,7 @@ describe("DetailDrawer", () => {
 
   it("loads and revokes existing share links", async () => {
     const user = userEvent.setup();
-    const labeledShare = { ...shareFixture, label: "MacBook handoff", maxDownloads: 5 };
+    const labeledShare = { ...shareFixture, label: "MacBook handoff", maxDownloads: 5, passwordProtected: true };
     const onListShareLinks = vi.fn(async () => [labeledShare]);
     const onListShareAccessEvents = vi.fn(async () => [shareEventFixture]);
     const onRevokeShareLink = vi.fn(async () => ({ ...labeledShare, revokedAt: "2026-05-30T02:00:00.000Z" }));
@@ -187,6 +190,7 @@ describe("DetailDrawer", () => {
 
     expect(await screen.findByText("MacBook handoff")).toBeVisible();
     expect(screen.getByText("2 of 5 downloads")).toBeVisible();
+    expect(screen.getByText("Password protected")).toBeVisible();
     expect(screen.getByText(/Last used/)).toBeVisible();
     expect(await screen.findByText("Safari on Mac")).toBeVisible();
     expect(screen.getByText("192.168.68.10")).toBeVisible();
