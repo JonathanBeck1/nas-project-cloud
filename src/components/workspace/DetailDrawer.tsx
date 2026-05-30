@@ -13,9 +13,18 @@ type DetailDrawerProps = {
   onRename?: (file: CloudFile, name: string) => void;
   onAssignProject?: (file: CloudFile, projectId: string) => void;
   onAssignTags?: (file: CloudFile, tagIds: string[]) => void;
-  onCreateShareLink?: (file: CloudFile) => Promise<CreateShareLinkResult> | CreateShareLinkResult;
+  onCreateShareLink?: (
+    file: CloudFile,
+    options: CreateShareLinkOptions
+  ) => Promise<CreateShareLinkResult> | CreateShareLinkResult;
   onListShareLinks?: (file: CloudFile) => Promise<FileShareLink[]>;
   onRevokeShareLink?: (file: CloudFile, share: FileShareLink) => Promise<FileShareLink>;
+};
+
+export type CreateShareLinkOptions = {
+  expiresInHours: number;
+  maxDownloads: number | null;
+  label: string | null;
 };
 
 type CreateShareLinkResult = {
@@ -40,6 +49,9 @@ export function DetailDrawer({
   const [shareUrl, setShareUrl] = useState("");
   const [shareError, setShareError] = useState("");
   const [shareLinks, setShareLinks] = useState<FileShareLink[]>([]);
+  const [shareLabel, setShareLabel] = useState("");
+  const [shareExpiresInHours, setShareExpiresInHours] = useState("24");
+  const [shareMaxDownloads, setShareMaxDownloads] = useState("");
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isLoadingShares, setIsLoadingShares] = useState(false);
   const [revokingShareId, setRevokingShareId] = useState<string | null>(null);
@@ -49,6 +61,9 @@ export function DetailDrawer({
     setShareUrl("");
     setShareError("");
     setShareLinks([]);
+    setShareLabel("");
+    setShareExpiresInHours("24");
+    setShareMaxDownloads("");
     setRevokingShareId(null);
 
     if (!file || !onListShareLinks) {
@@ -142,6 +157,46 @@ export function DetailDrawer({
       {onCreateShareLink ? (
         <div className="mt-4 rounded-md border border-line bg-surface p-3">
           <p className="text-sm font-semibold text-ink">Share</p>
+          <label className="mt-3 block text-xs font-semibold text-muted">
+            Label
+            <input
+              className="mt-1 h-9 w-full rounded-md border border-line bg-panel px-3 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:opacity-60"
+              value={shareLabel}
+              onChange={(event) => setShareLabel(event.target.value)}
+              disabled={isBusy || isCreatingShare}
+              placeholder="Optional"
+            />
+          </label>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs font-semibold text-muted">
+              Expires
+              <select
+                className="mt-1 h-9 w-full rounded-md border border-line bg-panel px-3 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                value={shareExpiresInHours}
+                onChange={(event) => setShareExpiresInHours(event.target.value)}
+                disabled={isBusy || isCreatingShare}
+              >
+                <option value="1">1 hour</option>
+                <option value="24">24 hours</option>
+                <option value="168">7 days</option>
+                <option value="720">30 days</option>
+              </select>
+            </label>
+            <label className="block text-xs font-semibold text-muted">
+              Max downloads
+              <input
+                className="mt-1 h-9 w-full rounded-md border border-line bg-panel px-3 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                value={shareMaxDownloads}
+                onChange={(event) => setShareMaxDownloads(event.target.value)}
+                disabled={isBusy || isCreatingShare}
+                placeholder="Unlimited"
+              />
+            </label>
+          </div>
           <button
             type="button"
             className="mt-2 inline-flex h-9 items-center justify-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
@@ -150,7 +205,11 @@ export function DetailDrawer({
               setIsCreatingShare(true);
               setShareError("");
               try {
-                const result = await onCreateShareLink(file);
+                const result = await onCreateShareLink(file, {
+                  expiresInHours: Number.parseInt(shareExpiresInHours, 10),
+                  maxDownloads: shareMaxDownloads.trim() ? Number.parseInt(shareMaxDownloads, 10) : null,
+                  label: shareLabel.trim() || null
+                });
                 setShareUrl(result.url);
                 setShareLinks((current) => [result.share, ...current.filter((share) => share.id !== result.share.id)]);
               } catch (error) {

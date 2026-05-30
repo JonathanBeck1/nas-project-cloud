@@ -6,6 +6,12 @@ export type FileAssignmentInput = {
   categoryId?: string | null;
 };
 
+export type CreateFileShareLinkInput = {
+  expiresInHours?: number;
+  maxDownloads?: number | null;
+  label?: string | null;
+};
+
 export async function archiveFile(fileId: string): Promise<CloudFile> {
   return fileFromResponse(
     await fetch(`/api/files/${encodeURIComponent(fileId)}/archive`, {
@@ -71,11 +77,18 @@ export async function setFileTags(fileId: string, tagIds: string[]): Promise<Clo
   );
 }
 
-export async function createFileShareLink(fileId: string): Promise<{ share: FileShareLink; url: string }> {
+export async function createFileShareLink(
+  fileId: string,
+  input: CreateFileShareLinkInput = {}
+): Promise<{ share: FileShareLink; url: string }> {
   const response = await fetch(`/api/files/${encodeURIComponent(fileId)}/shares`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...csrfHeaders() },
-    body: JSON.stringify({ expiresInHours: 24 })
+    body: JSON.stringify({
+      expiresInHours: input.expiresInHours ?? 24,
+      ...(input.maxDownloads !== undefined ? { maxDownloads: input.maxDownloads } : {}),
+      ...(input.label !== undefined ? { label: input.label } : {})
+    })
   });
 
   let payload: { share?: FileShareLink; url?: string; error?: string };

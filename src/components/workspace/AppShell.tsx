@@ -23,6 +23,7 @@ import {
 import { csrfHeaders } from "@/lib/client/csrf";
 import type { Category, CloudFile, FileShareLink, Project, Tag } from "@/lib/shared/types";
 import type { WorkspaceData } from "@/lib/server/workspaceData";
+import type { CreateShareLinkOptions } from "./DetailDrawer";
 import type { ProjectDialogInput } from "./ProjectDialog";
 import type { FileGridMode } from "./FileGrid";
 
@@ -300,12 +301,12 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     }
   };
 
-  const handleCreateShareLink = useCallback(async (file: CloudFile) => {
+  const handleCreateShareLink = useCallback(async (file: CloudFile, options: CreateShareLinkOptions) => {
     setIsFileActionBusy(true);
     setFileActionMessage("");
     setFileActionError("");
     try {
-      const result = await createFileShareLink(file.id);
+      const result = await createFileShareLink(file.id, options);
       setFileActionMessage(`Created share link for ${file.name}`);
       return { ...result, url: absoluteShareUrl(result.url) };
     } catch (error) {

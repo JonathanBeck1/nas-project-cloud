@@ -14,8 +14,8 @@ LAN without signing that device into the owner account.
   with the same safe download headers as owner downloads.
 - Expiration, revoke, and max-download fields in the repository model, with
   download count and last-access tracking.
-- Detail drawer action that creates a 24-hour share link and displays a
-  copyable URL.
+- Detail drawer action that creates a share link with owner-selected expiry,
+  optional label, optional max-download cap, and a copyable URL.
 - Detail drawer management for existing active links, including download count,
   expiration display, and revocation.
 - Authenticated share-link list and revoke endpoints:
@@ -26,11 +26,12 @@ LAN without signing that device into the owner account.
 - Links are bearer tokens: anyone with the URL can download until it expires or
   hits its max-download cap.
 - Links are file-level only. Project and folder sharing remain future work.
-- Password prompts, richer audit views, and editable download caps remain
+- Password prompts, richer audit views, and post-creation edit flows remain
   future work.
 
 ## Verification
 
 - `npm test -- tests/server/db.test.ts tests/server/metadata.test.ts tests/server/shareLinksApi.test.ts tests/components/DetailDrawer.test.tsx`
 - `npm test -- tests/components/fileActions.test.tsx tests/server/shareLinksApi.test.ts tests/components/DetailDrawer.test.tsx`
+- `npm test -- tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx`
 - `npm run typecheck`

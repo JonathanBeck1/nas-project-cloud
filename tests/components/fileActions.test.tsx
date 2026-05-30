@@ -89,13 +89,19 @@ describe("fileActions", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(createFileShareLink("file_123")).resolves.toEqual(payload);
+    await expect(
+      createFileShareLink("file_123", {
+        expiresInHours: 168,
+        maxDownloads: 3,
+        label: "MacBook handoff"
+      })
+    ).resolves.toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/files/file_123/shares",
       expect.objectContaining({
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expiresInHours: 24 })
+        body: JSON.stringify({ expiresInHours: 168, maxDownloads: 3, label: "MacBook handoff" })
       })
     );
   });

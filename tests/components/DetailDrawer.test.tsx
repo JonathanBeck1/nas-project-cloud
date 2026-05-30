@@ -145,9 +145,16 @@ describe("DetailDrawer", () => {
 
     render(<DetailDrawer file={fixture} onCreateShareLink={onCreateShareLink} />);
 
+    await user.type(screen.getByLabelText("Label"), "MacBook handoff");
+    await user.selectOptions(screen.getByLabelText("Expires"), "168");
+    await user.type(screen.getByLabelText("Max downloads"), "3");
     await user.click(screen.getByRole("button", { name: "Create share link" }));
 
-    expect(onCreateShareLink).toHaveBeenCalledWith(fixture);
+    expect(onCreateShareLink).toHaveBeenCalledWith(fixture, {
+      expiresInHours: 168,
+      maxDownloads: 3,
+      label: "MacBook handoff"
+    });
     expect(await screen.findByLabelText("Share link")).toHaveValue("/api/shares/share-token/download");
     expect(screen.getByText("2 downloads")).toBeVisible();
   });

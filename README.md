@@ -189,7 +189,7 @@ NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbe
 - **Upload Center has tabs for Active / Failed / Aborted sessions** with a per-device filter. Active chunked uploads can be resumed by selecting the same local file again, and failed uploads can be retried as clean replacement sessions. The cleanup job tidies orphaned chunks for failed sessions older than 24 hours.
 - **Folder path preservation is workspace-ready.** Direct and chunked browser uploads preserve folder-relative paths when the browser provides them. Inbox and project workspaces both expose explicit file and folder pickers.
 - **Project delete is explicit about file handling.** You can detach metadata only or move active files back to `Inbox/<device>/` before deleting the project. Archived files are left in the archive tree.
-- **Share links are file-level bearer links.** Owners can create, list, and revoke short-lived file download links from the detail drawer. Project/folder share pages, password prompts, and audit views are still future work.
+- **Share links are file-level bearer links.** Owners can create, list, and revoke short-lived file download links from the detail drawer, including labels, expiry windows, and optional download caps. Project/folder share pages, password prompts, and audit views are still future work.
 
 A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers/plans/2026-05-03-product-completion-sprint.md`](./docs/superpowers/plans/2026-05-03-product-completion-sprint.md).
 
@@ -198,7 +198,7 @@ A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers
 `v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). `v0.3.0` shipped the preview pipeline and Upload Center reliability pass. Near-term, in priority order:
 
 1. **CAD preview strategy** for STL, STEP, 3MF, and renderer-choice decisions.
-2. **Share-link audit controls** for access history, password prompts, and optional download caps in the UI.
+2. **Share-link audit controls** for access history, password prompts, and richer activity views.
 3. **SQLite FTS5 migration** once the corpus exposes a hot path on the `LIKE`-backed search.
 4. **Benchmark checklist** for 1 GiB and 5 GiB transfers over 2.5 Gb LAN, recorded in the deployment guide.
 5. **Desktop helpers** (Tauri tray + clipboard sync + watch-folder ingest) once the web product is solid.

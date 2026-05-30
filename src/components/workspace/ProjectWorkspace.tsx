@@ -14,6 +14,7 @@ import {
 import type { Category, CloudFile, FileShareLink, Project, Tag } from "@/lib/shared/types";
 import { BulkActionBar } from "./BulkActionBar";
 import { DetailDrawer } from "./DetailDrawer";
+import type { CreateShareLinkOptions } from "./DetailDrawer";
 import { DropZone } from "./DropZone";
 import { FileGrid } from "./FileGrid";
 
@@ -145,13 +146,13 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
     }
   };
 
-  const createShare = useCallback(async (file: CloudFile) => {
+  const createShare = useCallback(async (file: CloudFile, options: CreateShareLinkOptions) => {
     setIsFileActionBusy(true);
     setMessage("");
     setError("");
 
     try {
-      const result = await createFileShareLink(file.id);
+      const result = await createFileShareLink(file.id, options);
       setMessage(`Created share link for ${file.name}`);
       return { ...result, url: absoluteShareUrl(result.url) };
     } catch (shareError) {
