@@ -192,6 +192,10 @@ describe("DetailDrawer", () => {
     expect(screen.getByText("2 of 5 downloads")).toBeVisible();
     expect(screen.getByText("Password protected")).toBeVisible();
     expect(screen.getByText(/Last used/)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Export CSV" })).toHaveAttribute(
+      "href",
+      "/api/files/file_manual/shares/share_123/events?format=csv"
+    );
     expect(await screen.findByText("Safari on Mac")).toBeVisible();
     expect(screen.getByText("192.168.68.10")).toBeVisible();
 

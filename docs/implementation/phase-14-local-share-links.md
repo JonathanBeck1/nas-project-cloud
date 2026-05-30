@@ -30,13 +30,14 @@ LAN without signing that device into the owner account.
   `GET /api/files/:id/shares` and `DELETE /api/files/:id/shares/:shareId`.
 - Authenticated share-link access-history endpoint:
   `GET /api/files/:id/shares/:shareId/events`.
+- CSV access-history export from the same endpoint with `?format=csv`.
 
 ## Current Boundary
 
 - Links without passwords are bearer tokens: anyone with the URL can download
   until it expires or hits its max-download cap.
 - Links are file-level only. Project and folder sharing remain future work.
-- Exportable access history and post-creation edit flows remain future work.
+- Post-creation edit flows remain future work.
 
 ## Verification
 
@@ -45,4 +46,5 @@ LAN without signing that device into the owner account.
 - `npm test -- tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx`
 - `npm test -- tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx tests/server/db.test.ts tests/server/metadata.test.ts tests/server/shareLinksApi.test.ts`
 - `npm test -- tests/server/shareLinksApi.test.ts tests/components/ShareDownloadPage.test.tsx tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx`
+- `npm test -- tests/server/shareLinksApi.test.ts tests/components/fileActions.test.tsx tests/components/DetailDrawer.test.tsx`
 - `npm run typecheck`

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Info, X } from "lucide-react";
+import { shareAccessEventsExportUrl } from "@/lib/client/fileActions";
 import type { CloudFile, FileShareAccessEvent, FileShareLink, Project, Tag } from "@/lib/shared/types";
 import { formatBytes } from "./FileGrid";
 
@@ -287,6 +288,12 @@ export function DetailDrawer({
                       <p className="mt-1 truncate text-xs text-muted">
                         Created {formatShareTimestamp(share.createdAt)}
                       </p>
+                      <a
+                        className="mt-2 inline-flex h-7 items-center rounded-md border border-line bg-surface px-2 text-xs font-semibold text-ink"
+                        href={shareAccessEventsExportUrl(file.id, share.id)}
+                      >
+                        Export CSV
+                      </a>
                       {shareAccessEvents[share.id]?.length ? (
                         <div className="mt-2 border-t border-line pt-2">
                           <p className="text-xs font-semibold text-ink">Recent access</p>

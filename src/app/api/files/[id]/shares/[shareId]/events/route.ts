@@ -24,5 +24,41 @@ export async function GET(
     return NextResponse.json({ error: "share not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ events: repo.listFileShareAccessEvents(shareId) });
+  const events = repo.listFileShareAccessEvents(shareId);
+  const format = new URL(request.url).searchParams.get("format");
+  if (format === "csv") {
+    return new Response(accessEventsCsv(events), {
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Disposition": `attachment; filename="${csvFilename(shareId)}"`,
+        "Content-Type": "text/csv; charset=utf-8"
+      }
+    });
+  }
+
+  return NextResponse.json({ events });
+}
+
+type ShareAccessEventCsvRow = {
+  accessedAt: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+};
+
+function accessEventsCsv(events: ShareAccessEventCsvRow[]): string {
+  const rows = events.map((event) =>
+    [event.accessedAt, event.ipAddress ?? "", event.userAgent ?? ""].map(csvCell).join(",")
+  );
+  return ["accessed_at,ip_address,user_agent", ...rows].join("\n") + "\n";
+}
+
+function csvCell(value: string): string {
+  if (!/[",\n\r]/.test(value)) {
+    return value;
+  }
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+function csvFilename(shareId: string): string {
+  return `share-${shareId.replaceAll(/[^A-Za-z0-9_-]/g, "_")}-access-events.csv`;
 }

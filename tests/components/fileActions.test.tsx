@@ -7,6 +7,7 @@ import {
   listFileShareLinks,
   renameFile,
   revokeFileShareLink,
+  shareAccessEventsExportUrl,
   restoreFile,
   updateFileAssignment
 } from "@/lib/client/fileActions";
@@ -158,6 +159,12 @@ describe("fileActions", () => {
 
     await expect(listFileShareAccessEvents("file_123", "share_123")).resolves.toEqual(events);
     expect(fetchMock).toHaveBeenCalledWith("/api/files/file_123/shares/share_123/events");
+  });
+
+  it("builds the share access events CSV export URL", () => {
+    expect(shareAccessEventsExportUrl("file 123", "share 123")).toBe(
+      "/api/files/file%20123/shares/share%20123/events?format=csv"
+    );
   });
 
   it("revokes file share links through the share endpoint", async () => {

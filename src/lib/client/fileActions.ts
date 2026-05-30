@@ -125,9 +125,7 @@ export async function listFileShareLinks(fileId: string): Promise<FileShareLink[
 }
 
 export async function listFileShareAccessEvents(fileId: string, shareId: string): Promise<FileShareAccessEvent[]> {
-  const response = await fetch(
-    `/api/files/${encodeURIComponent(fileId)}/shares/${encodeURIComponent(shareId)}/events`
-  );
+  const response = await fetch(shareAccessEventsUrl(fileId, shareId));
 
   let payload: { events?: FileShareAccessEvent[]; error?: string };
   try {
@@ -141,6 +139,14 @@ export async function listFileShareAccessEvents(fileId: string, shareId: string)
   }
 
   return payload.events;
+}
+
+export function shareAccessEventsExportUrl(fileId: string, shareId: string): string {
+  return `${shareAccessEventsUrl(fileId, shareId)}?format=csv`;
+}
+
+function shareAccessEventsUrl(fileId: string, shareId: string): string {
+  return `/api/files/${encodeURIComponent(fileId)}/shares/${encodeURIComponent(shareId)}/events`;
 }
 
 export async function revokeFileShareLink(fileId: string, shareId: string): Promise<FileShareLink> {

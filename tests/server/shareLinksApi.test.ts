@@ -385,4 +385,49 @@ describe("share links API", () => {
     await expect(response.json()).resolves.toEqual({ events: [event] });
     expect(mocks.repo.listFileShareAccessEvents).toHaveBeenCalledWith("share_123");
   });
+
+  it("exports access events for an owned share link as CSV", async () => {
+    const { GET } = await import("@/app/api/files/[id]/shares/[shareId]/events/route");
+    const event = {
+      id: "event_123",
+      shareId: "share_123",
+      fileId: "file_123",
+      accessedAt: "2026-05-30T02:00:00.000Z",
+      userAgent: "Safari, Mac",
+      ipAddress: "192.168.68.10"
+    };
+    mocks.repo.listFileShareLinks.mockReturnValue([
+      {
+        id: "share_123",
+        fileId: "file_123",
+        label: "MacBook handoff",
+        expiresAt: "2026-05-31T00:00:00.000Z",
+        maxDownloads: null,
+        passwordProtected: false,
+        downloadCount: 1,
+        revokedAt: null,
+        createdByUserId: "user_1",
+        createdAt: "2026-05-30T00:00:00.000Z",
+        updatedAt: "2026-05-30T02:00:00.000Z",
+        lastAccessedAt: "2026-05-30T02:00:00.000Z"
+      }
+    ]);
+    mocks.repo.listFileShareAccessEvents.mockReturnValue([event]);
+
+    const response = await GET(
+      new Request("http://localhost/api/files/file_123/shares/share_123/events?format=csv"),
+      {
+        params: Promise.resolve({ id: "file_123", shareId: "share_123" })
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+    expect(response.headers.get("content-disposition")).toBe(
+      'attachment; filename="share-share_123-access-events.csv"'
+    );
+    await expect(response.text()).resolves.toBe(
+      'accessed_at,ip_address,user_agent\n2026-05-30T02:00:00.000Z,192.168.68.10,"Safari, Mac"\n'
+    );
+  });
 });
