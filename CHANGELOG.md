@@ -36,6 +36,9 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Failed upload retry.** Failed chunked sessions can now be retried from
   Upload Center by selecting the same file, starting a clean replacement
   session with the stored folder/project/category target.
+- **Project detail drawer.** Project workspaces now expose the selected-file
+  drawer with download, archive, rename, project reassignment, and tag actions
+  without leaving the project page.
 
 ### Changed
 

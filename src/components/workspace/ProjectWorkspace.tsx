@@ -2,9 +2,15 @@
 
 import React, { useState } from "react";
 import { Download, Search, UploadCloud } from "lucide-react";
-import { archiveFile } from "@/lib/client/fileActions";
+import {
+  archiveFile,
+  renameFile,
+  setFileTags as setFileTagsRequest,
+  updateFileAssignment
+} from "@/lib/client/fileActions";
 import type { Category, CloudFile, Project, Tag } from "@/lib/shared/types";
 import { BulkActionBar } from "./BulkActionBar";
+import { DetailDrawer } from "./DetailDrawer";
 import { DropZone } from "./DropZone";
 import { FileGrid } from "./FileGrid";
 
@@ -22,9 +28,11 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [isFileActionBusy, setIsFileActionBusy] = useState(false);
   const fileInputId = `project-file-upload-${project.id}`;
   const folderInputId = `project-folder-upload-${project.id}`;
   const visibleFiles = files.filter((file) => matchesQuery(file, query));
+  const selectedFile = visibleFiles.find((file) => file.id === selectedFileId) ?? null;
   const selectedBulkFiles = files.filter((file) => selectedFileIds.includes(file.id));
   const selectedBulkDownloadHref =
     selectedFileIds.length > 0 ? bulkDownloadUrl(selectedFileIds) : undefined;
@@ -57,8 +65,86 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
     }
   };
 
+  const replaceOrRemoveFile = (updated: CloudFile) => {
+    if (updated.projectId !== project.id || updated.status !== "active") {
+      setFiles((currentFiles) => currentFiles.filter((file) => file.id !== updated.id));
+      setSelectedFileId((currentSelectedId) => (currentSelectedId === updated.id ? null : currentSelectedId));
+      setSelectedFileIds((currentSelectedIds) => currentSelectedIds.filter((fileId) => fileId !== updated.id));
+      return;
+    }
+
+    setFiles((currentFiles) => currentFiles.map((file) => (file.id === updated.id ? updated : file)));
+  };
+
+  const archiveSingleFile = async (file: CloudFile) => {
+    setIsFileActionBusy(true);
+    setMessage("");
+    setError("");
+
+    try {
+      await archiveFile(file.id);
+      setFiles((currentFiles) => currentFiles.filter((candidate) => candidate.id !== file.id));
+      setSelectedFileId((currentSelectedId) => (currentSelectedId === file.id ? null : currentSelectedId));
+      setSelectedFileIds((currentSelectedIds) => currentSelectedIds.filter((candidate) => candidate !== file.id));
+      setMessage(`Archived ${file.name}`);
+    } catch (archiveError) {
+      setError(archiveError instanceof Error ? archiveError.message : "Could not archive file");
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
+  const renameSingleFile = async (file: CloudFile, name: string) => {
+    setIsFileActionBusy(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const updated = await renameFile(file.id, name);
+      replaceOrRemoveFile(updated);
+      setMessage(`Renamed ${updated.name}`);
+    } catch (renameError) {
+      setError(renameError instanceof Error ? renameError.message : "Could not rename file");
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
+  const assignProject = async (file: CloudFile, projectId: string) => {
+    setIsFileActionBusy(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const updated = await updateFileAssignment(file.id, { projectId: projectId || null });
+      replaceOrRemoveFile(updated);
+      setMessage(`Updated ${updated.name}`);
+    } catch (assignError) {
+      setError(assignError instanceof Error ? assignError.message : "Could not update file");
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
+  const assignTags = async (file: CloudFile, tagIds: string[]) => {
+    setIsFileActionBusy(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const updated = await setFileTagsRequest(file.id, tagIds);
+      replaceOrRemoveFile(updated);
+      setMessage(`Updated tags on ${updated.name}`);
+    } catch (tagError) {
+      setError(tagError instanceof Error ? tagError.message : "Could not update tags");
+    } finally {
+      setIsFileActionBusy(false);
+    }
+  };
+
   return (
-    <section className="rounded-md border border-line bg-panel shadow-panel" aria-labelledby="project-heading">
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <section className="rounded-md border border-line bg-panel shadow-panel" aria-labelledby="project-heading">
           <div className="flex flex-col gap-4 border-b border-line px-4 py-4 md:flex-row md:items-end md:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">Project Workspace</p>
@@ -159,6 +245,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
 
             <BulkActionBar
               selectedCount={selectedFileIds.length}
+              isBusy={isFileActionBusy}
               downloadHref={selectedBulkDownloadHref}
               onArchive={archiveSelectedFiles}
               onClearSelection={() => setSelectedFileIds([])}
@@ -173,7 +260,21 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
               onToggleSelected={toggleSelectedFile}
             />
           </div>
-    </section>
+      </section>
+
+      <div className="min-w-0 xl:sticky xl:top-5 xl:h-[calc(100vh-6.5rem)]">
+        <DetailDrawer
+          file={selectedFile}
+          projects={[project]}
+          availableTags={tags}
+          isBusy={isFileActionBusy}
+          onArchive={archiveSingleFile}
+          onRename={renameSingleFile}
+          onAssignProject={assignProject}
+          onAssignTags={assignTags}
+        />
+      </div>
+    </div>
   );
 }
 

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectWorkspace } from "@/components/workspace/ProjectWorkspace";
@@ -110,5 +110,77 @@ describe("ProjectWorkspace", () => {
     const folderInput = screen.getByLabelText("Choose folder");
     expect(folderInput).toHaveAttribute("type", "file");
     expect(folderInput).toHaveAttribute("webkitdirectory");
+  });
+
+  it("shows detail drawer actions for the selected project file", async () => {
+    const user = userEvent.setup();
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+
+    await user.click(screen.getByRole("button", { name: "bracket.stl" }));
+
+    const details = screen.getByRole("complementary", { name: "File details" });
+    expect(within(details).getByRole("link", { name: "Download" })).toHaveAttribute(
+      "href",
+      "/api/files/file_1/download"
+    );
+    expect(within(details).getByDisplayValue("bracket.stl")).toBeVisible();
+  });
+
+  it("archives a selected project file from the detail drawer", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ file: { ...fileFixture, status: "archived", archivedAt: "2026-05-02T01:00:00.000Z" } }), {
+          status: 200
+        })
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+
+    await user.click(screen.getByRole("button", { name: "bracket.stl" }));
+    await user.click(screen.getByRole("button", { name: "Archive" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/files/file_1/archive",
+        expect.objectContaining({ method: "POST" })
+      )
+    );
+    expect(screen.queryByRole("button", { name: "bracket.stl" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent("Archived bracket.stl");
+  });
+
+  it("renames a selected project file from the detail drawer", async () => {
+    const user = userEvent.setup();
+    const renamedFile = {
+      ...fileFixture,
+      name: "bracket-v2.stl",
+      storagePath: "Projects/garage-build/Inbox/bracket-v2.stl"
+    };
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify({ file: renamedFile }), { status: 200 }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+
+    await user.click(screen.getByRole("button", { name: "bracket.stl" }));
+    await user.clear(screen.getByLabelText("File name"));
+    await user.type(screen.getByLabelText("File name"), "bracket-v2.stl");
+    await user.click(screen.getByRole("button", { name: "Rename" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/files/file_1",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ name: "bracket-v2.stl" })
+        })
+      )
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Renamed bracket-v2.stl");
+    expect(screen.getByRole("button", { name: "bracket-v2.stl" })).toBeVisible();
   });
 });
