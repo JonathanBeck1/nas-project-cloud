@@ -339,6 +339,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                 <div className="space-y-4 px-4 py-5">
                   <DropZone
                     inputId="workspace-file-upload"
+                    folderInputId="workspace-folder-upload"
                     onUploaded={(uploadedFiles) => setFiles((currentFiles) => [...uploadedFiles, ...currentFiles])}
                   >
                     <div className="flex min-h-[220px] flex-col items-center justify-center rounded-md border border-dashed border-line bg-surface/70 px-4 py-8 text-center">
@@ -349,20 +350,36 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                       <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
                         Drop files here to move them onto the NAS now and organize them into projects when ready.
                       </p>
-                      <label
-                        htmlFor="workspace-file-upload"
-                        tabIndex={0}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            event.currentTarget.control?.click();
-                          }
-                        }}
-                        className="mt-6 inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                      >
-                        <UploadCloud aria-hidden="true" className="h-4 w-4" />
-                        Drop files
-                      </label>
+                      <div className="mt-6 flex flex-wrap justify-center gap-2">
+                        <label
+                          htmlFor="workspace-file-upload"
+                          tabIndex={0}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              event.currentTarget.control?.click();
+                            }
+                          }}
+                          className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                        >
+                          <UploadCloud aria-hidden="true" className="h-4 w-4" />
+                          Choose files
+                        </label>
+                        <label
+                          htmlFor="workspace-folder-upload"
+                          tabIndex={0}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              event.currentTarget.control?.click();
+                            }
+                          }}
+                          className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                        >
+                          <UploadCloud aria-hidden="true" className="h-4 w-4" />
+                          Choose folder
+                        </label>
+                      </div>
                     </div>
                   </DropZone>
 

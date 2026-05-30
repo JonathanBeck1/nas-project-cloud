@@ -93,7 +93,7 @@ describe("AppShell", () => {
     render(<AppShell />);
 
     const file = new File(["hello"], "manual.pdf", { type: "application/pdf" });
-    fireEvent.drop(screen.getByText("Drop files"), {
+    fireEvent.drop(screen.getByText(/Drop files here/), {
       dataTransfer: {
         files: [file]
       }
@@ -115,7 +115,7 @@ describe("AppShell", () => {
 
     render(<AppShell />);
 
-    const uploadControl = screen.getByText("Drop files");
+    const uploadControl = screen.getByText("Choose files");
 
     uploadControl.focus();
     expect(uploadControl).toHaveFocus();

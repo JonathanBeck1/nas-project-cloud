@@ -27,7 +27,7 @@ test("uploads selects and downloads a file", async ({ page }, testInfo) => {
   const contents = "phase two";
   const filename = `phase-two-smoke-${Date.now()}.txt`;
   const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.getByText("Drop files", { exact: true }).click();
+  await page.getByText("Choose files", { exact: true }).click();
   const chooser = await fileChooserPromise;
   await chooser.setFiles({
     name: filename,
@@ -55,7 +55,7 @@ test("uploads selects and archives a file", async ({ page }) => {
 
   const filename = `archive-smoke-${Date.now()}.txt`;
   const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.getByText("Drop files", { exact: true }).click();
+  await page.getByText("Choose files", { exact: true }).click();
   const chooser = await fileChooserPromise;
   await chooser.setFiles({
     name: filename,

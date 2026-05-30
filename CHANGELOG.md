@@ -24,6 +24,9 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Folder path preservation.** Direct and chunked browser uploads now carry
   folder-relative paths through the API, upload-session metadata, and storage
   layer.
+- **Inbox folder picker.** The main workspace upload well now exposes separate
+  file and folder controls, so folder-relative paths can be selected directly
+  instead of relying only on drag/drop metadata.
 
 ### Changed
 

@@ -10,6 +10,7 @@ import type { CloudFile } from "@/lib/shared/types";
 type DropZoneProps = {
   children: React.ReactNode;
   inputId?: string;
+  folderInputId?: string;
   onUploaded?: (files: CloudFile[]) => void;
   chunkedUploadThresholdBytes?: number;
   chunkSizeBytes?: number;
@@ -31,6 +32,7 @@ const DEFAULT_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
 export function DropZone({
   children,
   inputId,
+  folderInputId,
   onUploaded,
   chunkedUploadThresholdBytes = DEFAULT_CHUNKED_UPLOAD_THRESHOLD_BYTES,
   chunkSizeBytes = DEFAULT_CHUNK_SIZE_BYTES
@@ -170,6 +172,20 @@ export function DropZone({
         className="sr-only"
         multiple
         type="file"
+        onChange={(event) => {
+          const selectedFiles = Array.from(event.target.files ?? []);
+          event.target.value = "";
+          void uploadFiles(selectedFiles);
+        }}
+      />
+
+      <input
+        id={folderInputId ?? (inputId ? `${inputId}-folder` : undefined)}
+        aria-label="Choose folder"
+        className="sr-only"
+        multiple
+        type="file"
+        {...{ webkitdirectory: "", directory: "" }}
         onChange={(event) => {
           const selectedFiles = Array.from(event.target.files ?? []);
           event.target.value = "";

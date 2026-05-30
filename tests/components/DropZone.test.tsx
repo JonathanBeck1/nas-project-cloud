@@ -122,6 +122,18 @@ describe("DropZone", () => {
     expect(calledUrl.searchParams.get("relativePath")).toBe("Client A/Manuals/manual.pdf");
   });
 
+  it("renders a dedicated folder picker input", async () => {
+    render(
+      <DropZone inputId="manual-upload">
+        <label htmlFor="manual-upload">Drop files</label>
+      </DropZone>
+    );
+
+    const folderInput = screen.getByLabelText("Choose folder");
+    expect(folderInput).toHaveAttribute("type", "file");
+    expect(folderInput).toHaveAttribute("webkitdirectory");
+  });
+
   it("uploads large files through chunked upload sessions", async () => {
     const onUploaded = vi.fn();
     const fetchMock = vi.fn<typeof fetch>((url) => {
