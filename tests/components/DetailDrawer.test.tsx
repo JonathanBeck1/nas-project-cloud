@@ -60,7 +60,7 @@ const shareFixture: FileShareLink = {
   id: "share_123",
   fileId: "file_manual",
   label: null,
-  expiresAt: "2026-05-31T00:00:00.000Z",
+  expiresAt: "2099-05-31T00:00:00.000Z",
   maxDownloads: null,
   passwordProtected: false,
   downloadCount: 2,

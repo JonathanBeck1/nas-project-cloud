@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appConfig } from "../config";
 import { SESSION_LIFETIME_DAYS, sessionCookieName } from "./sessions";
 import { clearCsrfCookie, createCsrfToken, withCsrfCookie } from "./csrf";
 
@@ -6,7 +7,7 @@ export function withSessionCookie(response: NextResponse, token: string): NextRe
   response.cookies.set(sessionCookieName, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: appConfig.secureCookies,
     path: "/",
     maxAge: 60 * 60 * 24 * SESSION_LIFETIME_DAYS
   });
@@ -17,7 +18,7 @@ export function clearSessionCookie(response: NextResponse): NextResponse {
   response.cookies.set(sessionCookieName, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: appConfig.secureCookies,
     path: "/",
     maxAge: 0
   });

@@ -57,12 +57,15 @@ NAS_CLOUD_MAX_UPLOAD_BYTES=2147483648
 
 ## Permissions
 
-The current Docker image runs as an unprivileged user with UID/GID `1001`. The two TrueNAS datasets must be writable by that user, or by a group that the container can use.
+The current Docker image runs as an unprivileged user with UID/GID `1001`. Both datasets must be writable by that user **before you start the app**. The bind mounts replace the image's own build-time ownership, so an unwritable dataset means the SQLite database and storage probes fail, `/api/health` never turns healthy, and you cannot create the owner account.
 
-If TrueNAS asks whether to set an ACL after creating a child dataset, either path is workable:
+Required, before the first start, from a TrueNAS shell (adjust the pool/dataset path if yours differs):
 
-- `Return to pool list`: fine for now if the app healthcheck later reports storage and database as healthy.
-- `Go to ACL Manager`: use this if the app cannot write to `files` or `appdata`, then grant read/write/execute to the container workload user or a shared apps group.
+```bash
+chown -R 1001:1001 /mnt/OfficeNAS/nas-project-cloud/files /mnt/OfficeNAS/nas-project-cloud/appdata
+```
+
+Alternatively, use ACL Manager to grant read/write/execute on both `files` and `appdata` to the container workload user (UID 1001) or a shared apps group.
 
 Avoid mixing SMB edits and app writes in the same active upload folders until the ownership model is clear. SMB is fine for snapshots, inspection, and future import workflows.
 
@@ -431,6 +434,8 @@ http://<truenas-ip>:3000
 ```
 
 Set proxy upload limits and buffering with the 2 GiB application limit in mind. For Nginx, raise `client_max_body_size` and review request buffering. For Caddy or Traefik, check the equivalent body-size and timeout settings.
+
+When the app is served over HTTPS (TLS terminated at the proxy), set `NAS_CLOUD_SECURE_COOKIES=true` so session and CSRF cookies are marked `Secure`. Leave it unset (the default) for direct LAN access over plain `http://<nas-ip>:3000` — browsers drop `Secure` cookies over HTTP, which silently blocks login.
 
 Do not put the app behind a path prefix unless the Next.js app has been tested with that prefix. `NAS_CLOUD_PUBLIC_BASE_PATH=/files` is for the app's file-serving API path, not a reverse-proxy base path.
 

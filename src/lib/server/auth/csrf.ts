@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
+import { appConfig } from "../config";
 
 export const csrfCookieName = "nas_cloud_csrf";
 export const csrfHeaderName = "x-nas-csrf";
@@ -20,7 +21,7 @@ export function withCsrfCookie(response: NextResponse, token: string): NextRespo
   response.cookies.set(csrfCookieName, token, {
     httpOnly: false,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: appConfig.secureCookies,
     path: "/",
     maxAge: 60 * 60 * 24 * 30
   });
@@ -31,7 +32,7 @@ export function clearCsrfCookie(response: NextResponse): NextResponse {
   response.cookies.set(csrfCookieName, "", {
     httpOnly: false,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: appConfig.secureCookies,
     path: "/",
     maxAge: 0
   });
