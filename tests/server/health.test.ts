@@ -26,7 +26,14 @@ describe("health checks", () => {
     db = createDatabase(config.dbPath);
     const { checkHealth } = await import("@/lib/server/health");
 
-    const result = await checkHealth({ config, db });
+    const result = await checkHealth({
+      config,
+      db,
+      probes: {
+        ffmpeg: async () => ({ available: true, version: "6.1" }),
+        poppler: async () => ({ available: true, version: "24.0" })
+      }
+    });
 
     expect(result.ok).toBe(true);
     expect(result.checks.storage.ok).toBe(true);
