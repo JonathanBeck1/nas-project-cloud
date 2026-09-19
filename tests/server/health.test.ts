@@ -89,6 +89,7 @@ function testConfig(tempRoot: string): AppConfig {
     publicBasePath: "/files",
     maxUploadBytes: 2_147_483_648,
     previewScheduler: "off",
-    secureCookies: false
+    secureCookies: false,
+    trustProxy: false
   };
 }

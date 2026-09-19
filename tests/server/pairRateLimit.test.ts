@@ -59,10 +59,28 @@ describe("POST /api/devices/pair rate limiting", () => {
     expect(mocks.repo.getDevicePairingCodeByHash).not.toHaveBeenCalled();
   });
 
+  it("returns 429 when the global window blocks after both per-IP windows allow", async () => {
+    mocks.consume
+      .mockReturnValueOnce({ allowed: true, remaining: 49 })
+      .mockReturnValueOnce({ allowed: true, remaining: 4 })
+      .mockReturnValueOnce({ allowed: false, retryAfterSeconds: 300 });
+
+    const { POST } = await import("@/app/api/devices/pair/route");
+    const response = await POST(pairRequest({ pairingCode: "ABCDEF" }));
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("300");
+    expect(mocks.consume).toHaveBeenLastCalledWith(
+      expect.objectContaining({ bucket: "pair_global", key: "all" })
+    );
+    expect(mocks.repo.getDevicePairingCodeByHash).not.toHaveBeenCalled();
+  });
+
   it("clears the short window throttle on a successful pair", async () => {
     mocks.consume
       .mockReturnValueOnce({ allowed: true, remaining: 49 })
-      .mockReturnValueOnce({ allowed: true, remaining: 4 });
+      .mockReturnValueOnce({ allowed: true, remaining: 4 })
+      .mockReturnValueOnce({ allowed: true, remaining: 19 });
     mocks.repo.getDevicePairingCodeByHash.mockReturnValue({
       id: "pair_1",
       userId: "user_1",

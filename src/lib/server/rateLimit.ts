@@ -1,3 +1,4 @@
+import { appConfig } from "@/lib/server/config";
 import { type AppDatabase, getDatabase } from "@/lib/server/db";
 
 export type RateLimitOptions = {
@@ -60,16 +61,13 @@ export function createRateLimiter(db: AppDatabase = getDatabase(), now: () => Da
   };
 }
 
-export function clientIpFromRequest(request: Request): string {
+// The last x-forwarded-for entry is the hop our proxy appended; earlier entries are client-supplied.
+export function trustedClientIp(request: Request, trustProxy = appConfig.trustProxy): string | null {
+  if (!trustProxy) return null;
   const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) {
-    const trimmed = realIp.trim();
-    if (trimmed) return trimmed;
-  }
-  return "unknown";
+  return forwarded?.split(",").at(-1)?.trim() || null;
+}
+
+export function clientIpFromRequest(request: Request): string {
+  return trustedClientIp(request) ?? "unknown";
 }

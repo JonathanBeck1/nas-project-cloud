@@ -56,6 +56,23 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Health check coverage.** `/api/health` now verifies preview binaries in
   addition to storage and SQLite.
 
+### Security
+
+- **Rate limits no longer trust `X-Forwarded-For` by default.** Login and
+  pairing limits were keyed on a client-supplied header, so rotating it
+  bypassed them and left the 6-digit pairing code open to brute force.
+  The header is now ignored unless `NAS_CLOUD_TRUST_PROXY=true`, and then
+  only its last entry is used.
+- **Global pairing cap.** Pairing attempts are also capped at 20 per 10
+  minutes across all clients.
+- **Share access history** no longer records a spoofable client address.
+
+### Migration notes
+
+- Reverse-proxied deployments should set `NAS_CLOUD_TRUST_PROXY=true` to
+  keep per-client rate limits and share-history addresses. Direct LAN
+  deployments need no change.
+
 ## [0.3.0] - 2026-05-28
 
 The preview pipeline release. v0.2.0 made the app safer and more usable

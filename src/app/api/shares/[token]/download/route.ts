@@ -3,6 +3,7 @@ import { verifyPassword } from "@/lib/server/auth/passwords";
 import { getDatabase } from "@/lib/server/db";
 import { createFileDownloadResponse } from "@/lib/server/downloadResponse";
 import { createMetadataRepository } from "@/lib/server/metadata";
+import { trustedClientIp } from "@/lib/server/rateLimit";
 import { hashShareToken } from "@/lib/server/shareLinks";
 import { createStorageService } from "@/lib/server/storage";
 import type { FileShareLink } from "@/lib/shared/types";
@@ -56,7 +57,7 @@ async function downloadSharedFile(
 
   repo.recordFileShareDownload(share.id, {
     userAgent: request.headers.get("user-agent"),
-    ipAddress: clientIpFromRequest(request)
+    ipAddress: trustedClientIp(request)
   });
   return response;
 }
@@ -83,15 +84,6 @@ async function readPasswordPayload(request: Request): Promise<{ password?: strin
   }
 
   return {};
-}
-
-function clientIpFromRequest(request: Request): string | null {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) {
-    return forwardedFor.split(",")[0]?.trim() || null;
-  }
-
-  return request.headers.get("x-real-ip");
 }
 
 function isShareUsable(share: FileShareLink): boolean {

@@ -118,6 +118,7 @@ All runtime configuration is environment variables. Defaults are sane for local 
 | `NAS_CLOUD_DB_PATH`            | `.data/nas-cloud.sqlite`         | SQLite file. WAL companions are written next to it. |
 | `NAS_CLOUD_PUBLIC_BASE_PATH`   | `/files`                         | Reserved for future public file-serving routes.   |
 | `NAS_CLOUD_MAX_UPLOAD_BYTES`   | `2147483648` (2 GiB)             | Hard upload cap. Enforced at upload start, on every chunk, and on direct uploads. |
+| `NAS_CLOUD_TRUST_PROXY`        | `false`                          | Set `true` only when every request arrives through a reverse proxy that sets `X-Forwarded-For`. When `false` the header is ignored and all clients share one rate-limit bucket. |
 
 See [`.env.example`](./.env.example) and [`.env.truenas.example`](./.env.truenas.example).
 
