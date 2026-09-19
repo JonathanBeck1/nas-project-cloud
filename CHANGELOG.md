@@ -51,8 +51,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- **Dependency security refresh.** Next.js is resolved to `15.5.18`, and
-  PostCSS is overridden to `8.5.12` so production dependency audit passes.
+- **Dependency security refresh.** Next.js `15.5.25`, sharp `0.35.4`, and
+  nanoid `5.1.16` pick up fixes for open advisories, including the libvips
+  and libheif issues behind image previews. PostCSS stays overridden to
+  `8.5.12`.
 - **Health check coverage.** `/api/health` now verifies preview binaries in
   addition to storage and SQLite.
 
