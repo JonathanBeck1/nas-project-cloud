@@ -14,15 +14,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const repo = createMetadataRepository(getDatabase());
   const file = repo.getFileById(id);
 
-  if (!file || file.status !== "archived") {
+  if (!file || file.status === "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
 
-  const storage = createStorageService();
-  try {
-    await storage.deleteFile(file.storagePath);
-  } catch {
-    return NextResponse.json({ error: "file not found" }, { status: 404 });
+  if (file.status === "archived") {
+    try {
+      await createStorageService().deleteFile(file.storagePath);
+    } catch {
+      return NextResponse.json({ error: "file not found" }, { status: 404 });
+    }
   }
 
   try {

@@ -7,6 +7,38 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Unreleased
 
+### Added
+
+- **Storage sync.** A reconcile pass brings the index in line with the disk
+  after changes made over SMB. A moved or renamed file is matched by size and
+  checksum and keeps its tags, project, share links, and preview; new files
+  are indexed and get previews, with their project taken from a
+  `Projects/<slug>/` path; files that are gone get a new `missing` status
+  instead of failing downloads and ZIP exports. Finder, Explorer, and Office
+  junk files and the app's own `.uploads/` and `.previews/` folders are
+  ignored. Run it from Settings → Storage sync, from
+  `POST /api/maintenance/reconcile`, or every 15 minutes with
+  `NAS_CLOUD_RECONCILE_SCHEDULER=on`.
+- **Missing file records can be removed** from the Storage sync card, which
+  was not possible before because permanent delete required the file on disk.
+
+### Changed
+
+- **`npm run index:storage` now reconciles** instead of only adding rows, and
+  no longer indexes `.uploads/`, `.previews/`, or dotfiles as user files.
+- **Search and listing with archived files included** no longer return rows
+  in any other status.
+
+### Migration notes
+
+- Storage sync is off by default. Set `NAS_CLOUD_RECONCILE_SCHEDULER=on`
+  (the TrueNAS compose example now does) or use the Settings button.
+- The first sync after upgrading marks files that were already moved or
+  deleted over SMB. Rows that an earlier `index:storage` run created for
+  `.DS_Store`, `._*`, `.uploads/`, or `.previews/` files also show up as
+  missing, since those paths are no longer scanned. Removing those records
+  leaves the files themselves untouched.
+
 ## [0.3.1] - 2026-09-19
 
 Security patch release. It closes a rate-limit bypass that left device

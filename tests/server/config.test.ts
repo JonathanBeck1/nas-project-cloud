@@ -9,6 +9,7 @@ describe("resolveAppConfig", () => {
     expect(config.maxUploadBytes).toBe(2_147_483_648);
     expect(config.previewScheduler).toBe("off");
     expect(config.trustProxy).toBe(false);
+    expect(config.reconcileScheduler).toBe("off");
   });
 
   it("honors explicit environment values", () => {
@@ -17,7 +18,8 @@ describe("resolveAppConfig", () => {
       NAS_CLOUD_DB_PATH: "/data/cloud.sqlite",
       NAS_CLOUD_MAX_UPLOAD_BYTES: "1024",
       NAS_CLOUD_PREVIEW_SCHEDULER: "on",
-      NAS_CLOUD_TRUST_PROXY: "true"
+      NAS_CLOUD_TRUST_PROXY: "true",
+      NAS_CLOUD_RECONCILE_SCHEDULER: "on"
     });
 
     expect(config.storageRoot).toBe("/mnt/nas-cloud");
@@ -25,6 +27,7 @@ describe("resolveAppConfig", () => {
     expect(config.maxUploadBytes).toBe(1024);
     expect(config.previewScheduler).toBe("on");
     expect(config.trustProxy).toBe(true);
+    expect(config.reconcileScheduler).toBe("on");
   });
 
   it("rejects unknown preview scheduler values", () => {

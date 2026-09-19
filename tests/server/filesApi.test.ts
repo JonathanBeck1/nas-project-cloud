@@ -962,6 +962,25 @@ describe("files API module", () => {
     expect(mocks.repo.deleteFile).toHaveBeenCalledWith("file_123");
   });
 
+  it("removes the record of a missing file without touching the disk", async () => {
+    const { DELETE } = await import("@/app/api/files/[id]/delete/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "manual.pdf",
+      status: "missing",
+      storagePath: "Inbox/Browser/manual.pdf"
+    });
+    mocks.repo.deleteFile.mockReturnValue(true);
+
+    const response = await DELETE(new Request("http://localhost/api/files/file_123/delete", { method: "DELETE" }), {
+      params: Promise.resolve({ id: "file_123" })
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.storage.deleteFile).not.toHaveBeenCalled();
+    expect(mocks.repo.deleteFile).toHaveBeenCalledWith("file_123");
+  });
+
   it("refuses to permanently delete active files", async () => {
     const { DELETE } = await import("@/app/api/files/[id]/delete/route");
     mocks.repo.getFileById.mockReturnValue({

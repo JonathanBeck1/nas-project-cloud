@@ -209,3 +209,52 @@ describe("metadata.searchFiles", () => {
     expect(result.truncated).toBe(true);
   });
 });
+
+describe("missing files", () => {
+  function seed(repo: ReturnType<typeof freshRepo>) {
+    const base = {
+      extension: "stl",
+      family: "cad" as const,
+      mimeType: "model/stl",
+      sizeBytes: 10,
+      sourceDevice: "Mac"
+    };
+    repo.createFile({ ...base, name: "here.stl", checksum: "a", storagePath: "Inbox/Mac/here.stl" });
+    repo.createFile({
+      ...base,
+      name: "old.stl",
+      checksum: "b",
+      storagePath: "Archive/2026/01/old.stl",
+      status: "archived"
+    });
+    return repo.createFile({
+      ...base,
+      name: "gone.stl",
+      checksum: "c",
+      storagePath: "Inbox/Mac/gone.stl",
+      status: "missing"
+    });
+  }
+
+  it("keeps missing files out of listFiles and searchFiles even with includeArchived", () => {
+    const repo = freshRepo();
+    seed(repo);
+
+    const listed = repo.listFiles({ includeArchived: true }).map((file) => file.name).sort();
+    const searched = repo
+      .searchFiles({ query: "stl", includeArchived: true })
+      .files.map((file) => file.name)
+      .sort();
+
+    expect(listed).toEqual(["here.stl", "old.stl"]);
+    expect(searched).toEqual(["here.stl", "old.stl"]);
+  });
+
+  it("lists missing files on their own", () => {
+    const repo = freshRepo();
+    const gone = seed(repo);
+
+    expect(repo.listMissingFiles().map((file) => file.id)).toEqual([gone.id]);
+    expect(repo.countMissingFiles()).toBe(1);
+  });
+});

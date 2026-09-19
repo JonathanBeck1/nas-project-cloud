@@ -807,6 +807,17 @@ export function createMetadataRepository(db: AppDatabase) {
       return row ? filesFromRowsWithTags(db, [row])[0] : null;
     },
 
+    listMissingFiles(limit = 50): CloudFile[] {
+      const rows = db
+        .prepare<[number], FileRow>("select * from files where status = 'missing' order by updated_at desc, name limit ?")
+        .all(limit);
+      return filesFromRowsWithTags(db, rows);
+    },
+
+    countMissingFiles(): number {
+      return db.prepare<[], { count: number }>("select count(*) as count from files where status = 'missing'").get()!.count;
+    },
+
     getProjectById(id: string): Project | null {
       const row = db.prepare<[string], ProjectRow>("select * from projects where id = ? limit 1").get(id);
       return row ? projectFromRow(row) : null;
@@ -916,9 +927,7 @@ export function createMetadataRepository(db: AppDatabase) {
       const where: string[] = [];
       const params: Record<string, string | null> = {};
 
-      if (!filters.includeArchived) {
-        where.push("status = 'active'");
-      }
+      where.push(filters.includeArchived ? "status in ('active', 'archived')" : "status = 'active'");
 
       if (filters.query) {
         where.push("(name like @query or storage_path like @query)");
@@ -944,9 +953,9 @@ export function createMetadataRepository(db: AppDatabase) {
       const where: string[] = [];
       const params: Record<string, string | number> = {};
 
-      if (!filters.includeArchived) {
-        where.push("files.status = 'active'");
-      }
+      where.push(
+        filters.includeArchived ? "files.status in ('active', 'archived')" : "files.status = 'active'"
+      );
 
       const trimmedQuery = filters.query?.trim();
       if (trimmedQuery) {

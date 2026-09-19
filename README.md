@@ -17,7 +17,7 @@ Tools like Nextcloud and OpenCloud are general-purpose. Tools like LocalSend are
 ## Features
 
 - **Project-first workspace** — Inbox, projects (with rename, status, delete, selected-file actions, and full-project ZIP export), custom categories with color, taggable files, per-file rename, selected-file ZIP downloads, local share links, folder-aware uploads, server-side search with composable filters, grid + list views, mobile sidebar drawer, dark mode, smart views, archive, and a 6-digit-code device pairing flow.
-- **Direct filesystem storage** — files live as real files under `Inbox/`, `Projects/<slug>/Inbox/`, `Library/`, and `Archive/<year>/<month>/`. SMB and Finder still work.
+- **Direct filesystem storage** — files live as real files under `Inbox/`, `Projects/<slug>/Inbox/`, `Library/`, and `Archive/<year>/<month>/`. SMB and Finder still work, and a storage sync pass brings the index back in line after files are moved, renamed, added, or deleted outside the app.
 - **SQLite metadata** — fast, single-file, journal-mode WAL. Indexed on project, category, family, and uploaded_at.
 - **Resumable large uploads** — chunked sessions with 8 MiB chunks, offset checking, abort, and stale-session cleanup. Default upload cap 2 GiB.
 - **Preview pipeline** — automatic 384 px webp previews for images, video poster frames via `ffmpeg`, and first-page PDF previews via `poppler-utils`, streamed from authenticated routes.
@@ -69,7 +69,7 @@ Next.js 15 App Router, React 19, TypeScript, Tailwind CSS, [Radix UI](https://ww
                   └──────────────────┘   └────────────────────┘
 ```
 
-Files are the source of truth. SQLite is a metadata index that can be rebuilt from the storage tree with `npm run index:storage`.
+Files are the source of truth, and SQLite is an index over them. Settings → Storage sync (or `POST /api/maintenance/reconcile`, or `NAS_CLOUD_RECONCILE_SCHEDULER=on`) reconciles the two: a file moved or renamed over SMB is matched by size and checksum and keeps its tags, project, share links, and preview; a new file is indexed; a file that is gone is marked missing rather than silently dropped. Projects, tags, and share links live only in SQLite, so back up the app data dataset as well as the files.
 
 ## Quick start (development)
 
@@ -118,6 +118,7 @@ All runtime configuration is environment variables. Defaults are sane for local 
 | `NAS_CLOUD_DB_PATH`            | `.data/nas-cloud.sqlite`         | SQLite file. WAL companions are written next to it. |
 | `NAS_CLOUD_PUBLIC_BASE_PATH`   | `/files`                         | Reserved for future public file-serving routes.   |
 | `NAS_CLOUD_MAX_UPLOAD_BYTES`   | `2147483648` (2 GiB)             | Hard upload cap. Enforced at upload start, on every chunk, and on direct uploads. |
+| `NAS_CLOUD_RECONCILE_SCHEDULER` | `off`                           | Set `on` to run storage sync every 15 minutes in-process. The Settings button and `POST /api/maintenance/reconcile` work either way. |
 | `NAS_CLOUD_TRUST_PROXY`        | `false`                          | Set `true` only when every request arrives through a reverse proxy that sets `X-Forwarded-For`. When `false` the header is ignored and all clients share one rate-limit bucket. |
 
 See [`.env.example`](./.env.example) and [`.env.truenas.example`](./.env.truenas.example).
@@ -131,7 +132,7 @@ npm run typecheck     # tsc --noEmit
 npm run lint          # eslint .
 npm run build         # production build
 npm run test:e2e      # Playwright (boots its own dev server on :3100)
-npm run index:storage # rebuild the metadata index from disk
+npm run index:storage # reconcile the metadata index with the disk
 npm run previews:generate # process pending preview jobs
 npm run screenshots   # regenerate docs/screenshots/*.png
 ```
@@ -190,7 +191,7 @@ NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbe
 - **Upload Center has tabs for Active / Failed / Aborted sessions** with a per-device filter. Active chunked uploads can be resumed by selecting the same local file again, and failed uploads can be retried as clean replacement sessions. The cleanup job tidies orphaned chunks for failed sessions older than 24 hours.
 - **Folder path preservation is workspace-ready.** Direct and chunked browser uploads preserve folder-relative paths when the browser provides them. Inbox and project workspaces both expose explicit file and folder pickers.
 - **Project delete is explicit about file handling.** You can detach metadata only or move active files back to `Inbox/<device>/` before deleting the project. Archived files are left in the archive tree.
-- **Changes made over SMB are not reconciled.** The app only tracks files it wrote itself. Renaming, moving, or deleting a file over SMB leaves its record pointing at the old path, and `npm run index:storage` adds new paths without clearing stale ones. Until a reconcile pass exists, treat SMB as read access and recovery.
+- **Storage sync matches files by content, not by edits.** A file edited in place over SMB keeps its old size and checksum in the index until it is re-uploaded, because no modification time is stored yet. Files changed in the last 60 seconds are left for the next pass so half-copied files are never indexed. Dropping a byte-identical copy of a missing file anywhere under the storage root restores its record, including its share links.
 - **Share links are file-level links.** Owners can create, list, edit, and revoke short-lived file download links from the detail drawer, including labels, expiry windows, optional download caps, optional passwords, recent access metadata, and CSV access-history export. Recipients use a local download page. Project/folder share pages are still future work.
 
 A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers/plans/2026-05-03-product-completion-sprint.md`](./docs/superpowers/plans/2026-05-03-product-completion-sprint.md).

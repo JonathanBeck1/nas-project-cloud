@@ -67,7 +67,7 @@ chown -R 1001:1001 /mnt/OfficeNAS/nas-project-cloud/files /mnt/OfficeNAS/nas-pro
 
 Alternatively, use ACL Manager to grant read/write/execute on both `files` and `appdata` to the container workload user (UID 1001) or a shared apps group.
 
-Avoid mixing SMB edits and app writes in the same active upload folders until the ownership model is clear. SMB is fine for snapshots, inspection, and future import workflows.
+SMB and the app can share the dataset. Storage sync (Settings → Storage sync, or the scheduler below) picks up files moved, renamed, added, or deleted over SMB, and ignores `.DS_Store`, `._*`, `Thumbs.db`, `desktop.ini`, and Office lock files. Keep the SMB user's writes compatible with UID/GID `1001` so the app can still read what arrives, and leave the hidden `.uploads/` and `.previews/` folders alone.
 
 ## Compose App
 
@@ -129,6 +129,7 @@ NAS_CLOUD_DB_PATH = /data/nas-cloud.sqlite
 NAS_CLOUD_PUBLIC_BASE_PATH = /files
 NAS_CLOUD_MAX_UPLOAD_BYTES = 2147483648
 NAS_CLOUD_PREVIEW_SCHEDULER = on
+NAS_CLOUD_RECONCILE_SCHEDULER = on
 ```
 
 Optional, but recommended if you want cron-driven maintenance:
@@ -327,16 +328,17 @@ If this fails after deploying to TrueNAS, check dataset permissions first. The t
 
 ## Maintenance Endpoints
 
-The app exposes two maintenance routes that can be driven from a TrueNAS cron job (or any scheduler that can issue HTTP):
+The app exposes three maintenance routes that can be driven from a TrueNAS cron job (or any scheduler that can issue HTTP):
 
 ```text
 POST /api/maintenance/previews        # process pending preview jobs
 POST /api/maintenance/upload-cleanup  # delete abandoned upload sessions older than 24h
+POST /api/maintenance/reconcile       # match the index to the disk after SMB changes
 ```
 
 > **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process preview loop that ticks every 60 seconds while there is pending work and idles to every 5 minutes when the queue is empty. The cron approach below still works either way and is the safe choice if you run multiple replicas.
 
-Both routes accept either:
+All three routes accept either:
 
 - a logged-in owner session cookie (so you can hit them from a browser tab while testing), **or**
 - a `Authorization: Bearer <token>` header that matches the `NAS_CLOUD_MAINTENANCE_TOKEN` environment variable. When set, this token is the only credential the route trusts for headless callers; comparison is constant-time.
@@ -378,6 +380,8 @@ curl --silent --show-error --fail \
   -H "Authorization: Bearer ${NAS_CLOUD_MAINTENANCE_TOKEN}" \
   -X POST http://127.0.0.1:3000/api/maintenance/upload-cleanup
 ```
+
+Storage sync runs every 15 minutes in-process when `NAS_CLOUD_RECONCILE_SCHEDULER=on`. To drive it from cron instead, use the same `curl` with `/api/maintenance/reconcile` (for example `*/15 * * * *`). Each call spends at most 20 seconds hashing new files and reports the rest as `deferred`, so a large SMB drop is absorbed over several runs. If the dataset is locked or not mounted the route answers `503` and changes nothing, rather than marking every file missing.
 
 Tips:
 
