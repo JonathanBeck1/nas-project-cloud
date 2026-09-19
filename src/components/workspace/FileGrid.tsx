@@ -138,7 +138,7 @@ export function FileGrid({
               aria-label={file.name}
               aria-pressed={selectedFileId === file.id}
               onClick={() => onSelectFile?.(file)}
-              className="block min-w-0 rounded-md p-3 text-left"
+              className="block w-full min-w-0 rounded-md p-3 text-left"
             >
               <div className="flex min-w-0 items-start gap-3 pr-7">
                 {previewUrl ? (

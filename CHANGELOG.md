@@ -51,8 +51,13 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- **Dependency security refresh.** Next.js is resolved to `15.5.18`, and
-  PostCSS is overridden to `8.5.12` so production dependency audit passes.
+- **Dependency security refresh.** Next.js `15.5.25`, sharp `0.35.4`, and
+  nanoid `5.1.16` pick up fixes for open advisories, including the libvips
+  and libheif issues behind image previews. The PostCSS override moves from
+  `8.5.12` to `8.5.28`, which also lifts its nested nanoid to `3.3.19`.
+- **File grid click targets.** A file card's button no longer grows past its
+  card for long names, which let a neighbouring card take the click and
+  open the wrong file. Long names now truncate inside the card.
 - **Health check coverage.** `/api/health` now verifies preview binaries in
   addition to storage and SQLite.
 

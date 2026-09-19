@@ -88,7 +88,7 @@ describe("preview worker", () => {
       fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
       fs.writeFileSync(
         path.join(dir, "Inbox", "Browser", "render.png"),
-        Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=", "base64")
+        Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64")
       );
       const file = repo.createFile({
         name: "render.png",
