@@ -1,6 +1,6 @@
 {
   "name": "nas-project-cloud",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Self-hosted, project-first file cloud for TrueNAS SCALE.",
   "license": "MIT",

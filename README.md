@@ -102,7 +102,7 @@ The full guide lives at [`docs/deployment/truenas-scale.md`](./docs/deployment/t
 
 2. Make them writable by UID/GID `1001` (the container's `nextjs` user) or by an apps group it can join.
 
-3. Paste [`docker/docker-compose.truenas.yml`](./docker/docker-compose.truenas.yml) into TrueNAS SCALE's custom-app YAML flow. Update the host volume paths to match your pool. The compose file pulls `ghcr.io/jonathanbeck1/nas-project-cloud:latest`; pin `ghcr.io/jonathanbeck1/nas-project-cloud:0.3.0` if you want a stable release tag.
+3. Paste [`docker/docker-compose.truenas.yml`](./docker/docker-compose.truenas.yml) into TrueNAS SCALE's custom-app YAML flow. Update the host volume paths to match your pool. The compose file pulls `ghcr.io/jonathanbeck1/nas-project-cloud:latest`; pin `ghcr.io/jonathanbeck1/nas-project-cloud:0.3.1` if you want a stable release tag.
 
 4. Wait for `/api/health` to turn green. Browse to `http://<truenas>:3000`, finish owner setup, and you're done.
 
@@ -190,13 +190,14 @@ NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbe
 - **Upload Center has tabs for Active / Failed / Aborted sessions** with a per-device filter. Active chunked uploads can be resumed by selecting the same local file again, and failed uploads can be retried as clean replacement sessions. The cleanup job tidies orphaned chunks for failed sessions older than 24 hours.
 - **Folder path preservation is workspace-ready.** Direct and chunked browser uploads preserve folder-relative paths when the browser provides them. Inbox and project workspaces both expose explicit file and folder pickers.
 - **Project delete is explicit about file handling.** You can detach metadata only or move active files back to `Inbox/<device>/` before deleting the project. Archived files are left in the archive tree.
+- **Changes made over SMB are not reconciled.** The app only tracks files it wrote itself. Renaming, moving, or deleting a file over SMB leaves its record pointing at the old path, and `npm run index:storage` adds new paths without clearing stale ones. Until a reconcile pass exists, treat SMB as read access and recovery.
 - **Share links are file-level links.** Owners can create, list, edit, and revoke short-lived file download links from the detail drawer, including labels, expiry windows, optional download caps, optional passwords, recent access metadata, and CSV access-history export. Recipients use a local download page. Project/folder share pages are still future work.
 
 A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers/plans/2026-05-03-product-completion-sprint.md`](./docs/superpowers/plans/2026-05-03-product-completion-sprint.md).
 
 ## Roadmap
 
-`v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). `v0.3.0` shipped the preview pipeline and Upload Center reliability pass. Near-term, in priority order:
+`v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). `v0.3.0` shipped the preview pipeline and Upload Center reliability pass. `v0.3.1` is a security patch on top of it: rate limits stop trusting a client-supplied `X-Forwarded-For`, and the production dependencies move past their open advisories. Near-term, in priority order:
 
 1. **CAD preview strategy** for STL, STEP, 3MF, and renderer-choice decisions.
 2. **Project and folder share pages** after file-level share-link behavior settles.
