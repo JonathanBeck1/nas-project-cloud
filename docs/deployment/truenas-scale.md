@@ -81,12 +81,12 @@ Key settings:
 - File dataset mount: `/mnt/OfficeNAS/nas-project-cloud/files:/mnt/nas-cloud`
 - App metadata mount: `/mnt/OfficeNAS/nas-project-cloud/appdata:/data`
 - Healthcheck: `GET /api/health`
-- Image: `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or the pinned release `ghcr.io/jonathanbeck1/nas-project-cloud:0.3.0`
+- Image: `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or the pinned release `ghcr.io/jonathanbeck1/nas-project-cloud:0.3.1`
 
 Recommended TrueNAS Install via YAML flow:
 
 1. Build and publish the image first, for example to GitHub Container Registry.
-2. Confirm the compose file points at `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or a pinned release tag such as `ghcr.io/jonathanbeck1/nas-project-cloud:0.3.0`.
+2. Confirm the compose file points at `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or a pinned release tag such as `ghcr.io/jonathanbeck1/nas-project-cloud:0.3.1`.
 3. Paste the compose YAML into TrueNAS SCALE's custom app YAML flow.
 4. Start the app and wait for the healthcheck to turn healthy.
 5. Browse to `http://<truenas-hostname-or-ip>:3000`.
@@ -105,11 +105,11 @@ nas-project-cloud
 
 ```text
 Repository: ghcr.io/jonathanbeck1/nas-project-cloud
-Tag: 0.3.0
+Tag: 0.3.1
 Pull Policy: Always pull an image even if it is present on the host
 ```
 
-Use `latest` only when you intentionally want the newest `main` build. Use `0.3.0` for a repeatable install.
+Use `latest` only when you intentionally want the newest `main` build. Use `0.3.1` for a repeatable install.
 
 ### Container Configuration
 
@@ -218,7 +218,7 @@ The first page should redirect to `/setup`. Create the owner account, then uploa
 Check these first:
 
 - Repository is `ghcr.io/jonathanbeck1/nas-project-cloud`.
-- Tag is `0.3.0` or `latest`.
+- Tag is `0.3.1` or `latest`.
 - The GitHub Container Registry package is public, or TrueNAS has pull credentials configured.
 - TrueNAS has outbound internet access and working DNS.
 
@@ -276,10 +276,10 @@ ghcr.io/jonathanbeck1/nas-project-cloud:latest
 ghcr.io/jonathanbeck1/nas-project-cloud:<commit-sha>
 ```
 
-When a semver tag is pushed, for example `v0.3.0`, it also publishes:
+When a semver tag is pushed, for example `v0.3.1`, it also publishes:
 
 ```text
-ghcr.io/jonathanbeck1/nas-project-cloud:0.3.0
+ghcr.io/jonathanbeck1/nas-project-cloud:0.3.1
 ghcr.io/jonathanbeck1/nas-project-cloud:0.3
 ```
 

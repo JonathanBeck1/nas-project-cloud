@@ -7,8 +7,72 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Unreleased
 
+## [0.3.1] - 2026-09-19
+
+Security patch release. It closes a rate-limit bypass that left device
+pairing open to brute force and moves the production dependencies past
+their open advisories. Anyone pinned to `0.3.0` should move to `0.3.1`.
+
+### Changed
+
+- **Dependency security refresh.** Next.js `15.5.25`, sharp `0.35.4`, and
+  nanoid `5.1.16` pick up fixes for open advisories, including the libvips
+  and libheif issues behind image previews. The PostCSS override moves from
+  `8.5.12` to `8.5.28`, which also lifts its nested nanoid to `3.3.19`.
+- **File grid click targets.** A file card's button no longer grows past its
+  card for long names, which let a neighbouring card take the click and
+  open the wrong file. Long names now truncate inside the card.
+
+### Security
+
+- **Rate limits no longer trust `X-Forwarded-For` by default.** Login and
+  pairing limits were keyed on a client-supplied header, so rotating it
+  bypassed them and left the 6-digit pairing code open to brute force.
+  The header is now ignored unless `NAS_CLOUD_TRUST_PROXY=true`, and then
+  only its last entry is used.
+- **Global pairing cap.** Pairing attempts are also capped at 20 per 10
+  minutes across all clients.
+- **Share access history** no longer records a spoofable client address.
+
+### Migration notes
+
+- Reverse-proxied deployments should set `NAS_CLOUD_TRUST_PROXY=true` to
+  keep per-client rate limits and share-history addresses. Direct LAN
+  deployments need no change.
+
+## [0.3.0] - 2026-06-24
+
+The preview pipeline release. v0.2.0 made the app safer and more usable
+on a home network; v0.3.0 makes visual file browsing more credible and
+surfaces more of the upload pipeline state in the UI.
+
+These notes were first drafted on 2026-05-28. The `v0.3.0` tag and image
+were cut on 2026-06-24 and also contain the file operations, upload, and
+share link work listed below, which earlier revisions of this file showed
+under Unreleased.
+
 ### Added
 
+- **In-process preview scheduler.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on`
+  to let the app process preview jobs automatically. The worker runs
+  every 60 seconds while work is pending and backs off to 5 minutes when
+  the queue is empty. The existing token-protected maintenance endpoint
+  remains available for TrueNAS cron-based deployments.
+- **Preview pipeline status card in Settings.** Owners can see pending,
+  ready, failed, skipped, and unsupported preview counts, plus `ffmpeg`
+  and `poppler` availability. Failed jobs can be requeued from the UI.
+- **Video poster frames.** Video files now generate 384 px webp poster
+  previews through `ffmpeg`. If `ffmpeg` is missing, the preview records
+  `unsupported` instead of crashing the worker.
+- **PDF first-page previews.** PDF documents now generate a first-page
+  preview through `pdftoppm` from `poppler-utils`. Missing poppler
+  support is also recorded as `unsupported`.
+- **Upload Center history.** The Upload Center now has Active, Failed,
+  and Aborted tabs, a per-device filter, and error-copy affordances for
+  failed sessions.
+- **Failed upload cleanup.** The upload cleanup job now removes orphaned
+  `.uploads/*.part` files for failed sessions older than 24 hours, in
+  addition to stale open sessions.
 - **File rename flow.** Active files can now be renamed from the detail
   drawer. The API keeps the metadata row, derived extension/family, and
   on-disk filename in sync with rollback protection if metadata writes fail.
@@ -51,64 +115,6 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- **Dependency security refresh.** Next.js `15.5.25`, sharp `0.35.4`, and
-  nanoid `5.1.16` pick up fixes for open advisories, including the libvips
-  and libheif issues behind image previews. The PostCSS override moves from
-  `8.5.12` to `8.5.28`, which also lifts its nested nanoid to `3.3.19`.
-- **File grid click targets.** A file card's button no longer grows past its
-  card for long names, which let a neighbouring card take the click and
-  open the wrong file. Long names now truncate inside the card.
-- **Health check coverage.** `/api/health` now verifies preview binaries in
-  addition to storage and SQLite.
-
-### Security
-
-- **Rate limits no longer trust `X-Forwarded-For` by default.** Login and
-  pairing limits were keyed on a client-supplied header, so rotating it
-  bypassed them and left the 6-digit pairing code open to brute force.
-  The header is now ignored unless `NAS_CLOUD_TRUST_PROXY=true`, and then
-  only its last entry is used.
-- **Global pairing cap.** Pairing attempts are also capped at 20 per 10
-  minutes across all clients.
-- **Share access history** no longer records a spoofable client address.
-
-### Migration notes
-
-- Reverse-proxied deployments should set `NAS_CLOUD_TRUST_PROXY=true` to
-  keep per-client rate limits and share-history addresses. Direct LAN
-  deployments need no change.
-
-## [0.3.0] - 2026-05-28
-
-The preview pipeline release. v0.2.0 made the app safer and more usable
-on a home network; v0.3.0 makes visual file browsing more credible and
-surfaces more of the upload pipeline state in the UI.
-
-### Added
-
-- **In-process preview scheduler.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on`
-  to let the app process preview jobs automatically. The worker runs
-  every 60 seconds while work is pending and backs off to 5 minutes when
-  the queue is empty. The existing token-protected maintenance endpoint
-  remains available for TrueNAS cron-based deployments.
-- **Preview pipeline status card in Settings.** Owners can see pending,
-  ready, failed, skipped, and unsupported preview counts, plus `ffmpeg`
-  and `poppler` availability. Failed jobs can be requeued from the UI.
-- **Video poster frames.** Video files now generate 384 px webp poster
-  previews through `ffmpeg`. If `ffmpeg` is missing, the preview records
-  `unsupported` instead of crashing the worker.
-- **PDF first-page previews.** PDF documents now generate a first-page
-  preview through `pdftoppm` from `poppler-utils`. Missing poppler
-  support is also recorded as `unsupported`.
-- **Upload Center history.** The Upload Center now has Active, Failed,
-  and Aborted tabs, a per-device filter, and error-copy affordances for
-  failed sessions.
-- **Failed upload cleanup.** The upload cleanup job now removes orphaned
-  `.uploads/*.part` files for failed sessions older than 24 hours, in
-  addition to stale open sessions.
-
-### Changed
-
 - **Docker runtime includes preview binaries.** The production image now
   installs `ffmpeg` and `poppler-utils` so video and PDF previews work
   out of the box on TrueNAS.
@@ -118,6 +124,10 @@ surfaces more of the upload pipeline state in the UI.
 - **Preview status vocabulary is richer.** Preview rows can now be
   `unsupported`, separate from `skipped`, so unsupported runtime tooling
   is distinguishable from intentionally unsupported file families.
+- **Dependency security refresh.** Next.js is resolved to `15.5.18`, and
+  PostCSS is overridden to `8.5.12` so production dependency audit passes.
+- **Health check coverage.** `/api/health` now verifies preview binaries in
+  addition to storage and SQLite.
 
 ### Migration notes
 
