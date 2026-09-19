@@ -9,7 +9,8 @@ const envSchema = z.object({
   NAS_CLOUD_PREVIEW_SCHEDULER: z
     .union([z.literal("on"), z.literal("off")])
     .default("off"),
-  NAS_CLOUD_SECURE_COOKIES: z.string().default("false")
+  NAS_CLOUD_SECURE_COOKIES: z.string().default("false"),
+  NAS_CLOUD_TRUST_PROXY: z.string().default("false")
 });
 
 export type AppConfig = {
@@ -19,6 +20,7 @@ export type AppConfig = {
   maxUploadBytes: number;
   previewScheduler: "on" | "off";
   secureCookies: boolean;
+  trustProxy: boolean;
 };
 
 export function resolveAppConfig(env: Partial<NodeJS.ProcessEnv> = process.env): AppConfig {
@@ -30,7 +32,8 @@ export function resolveAppConfig(env: Partial<NodeJS.ProcessEnv> = process.env):
     publicBasePath: parsed.NAS_CLOUD_PUBLIC_BASE_PATH,
     maxUploadBytes: parsed.NAS_CLOUD_MAX_UPLOAD_BYTES,
     previewScheduler: parsed.NAS_CLOUD_PREVIEW_SCHEDULER,
-    secureCookies: parsed.NAS_CLOUD_SECURE_COOKIES.toLowerCase() === "true"
+    secureCookies: parsed.NAS_CLOUD_SECURE_COOKIES.toLowerCase() === "true",
+    trustProxy: parsed.NAS_CLOUD_TRUST_PROXY.toLowerCase() === "true"
   };
 }
 

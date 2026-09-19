@@ -437,6 +437,14 @@ Set proxy upload limits and buffering with the 2 GiB application limit in mind. 
 
 When the app is served over HTTPS (TLS terminated at the proxy), set `NAS_CLOUD_SECURE_COOKIES=true` so session and CSRF cookies are marked `Secure`. Leave it unset (the default) for direct LAN access over plain `http://<nas-ip>:3000` — browsers drop `Secure` cookies over HTTP, which silently blocks login.
 
+Set `NAS_CLOUD_TRUST_PROXY=true` only when every request reaches the app through the proxy. The app then rate-limits login and pairing per client, using the last `X-Forwarded-For` entry, and records that address in share access history. Three conditions have to hold:
+
+- Port 3000 is not reachable except through the proxy. If it is, a client can connect directly and send its own `X-Forwarded-For`.
+- The proxy sets or appends `X-Forwarded-For`. Nginx (`$proxy_add_x_forwarded_for`), Nginx Proxy Manager, Caddy, Traefik, and Cloudflare Tunnel do. A bare `proxy_pass` with no header config forwards the client's value untouched.
+- With two proxies in a row, the app sees the inner proxy's address for every client. Restore the real address at the inner proxy rather than in the app.
+
+Left unset (the default), the header is ignored and all clients share one rate-limit bucket.
+
 Do not put the app behind a path prefix unless the Next.js app has been tested with that prefix. `NAS_CLOUD_PUBLIC_BASE_PATH=/files` is for the app's file-serving API path, not a reverse-proxy base path.
 
 ## Storage Engine Follow-Up

@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { clientIpFromRequest, createRateLimiter } from "@/lib/server/rateLimit";
+import { clientIpFromRequest, createRateLimiter, trustedClientIp } from "@/lib/server/rateLimit";
 
 function createTestDb() {
   const db = new Database(":memory:");
@@ -89,20 +89,30 @@ describe("rateLimit", () => {
   });
 });
 
+describe("trustedClientIp", () => {
+  const spoofed = new Request("http://localhost", {
+    headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1", "x-real-ip": "198.51.100.42" }
+  });
+
+  it("ignores proxy headers unless the proxy is trusted", () => {
+    expect(trustedClientIp(spoofed, false)).toBeNull();
+  });
+
+  it("uses the last x-forwarded-for entry when the proxy is trusted", () => {
+    expect(trustedClientIp(spoofed, true)).toBe("10.0.0.1");
+  });
+
+  it("returns null when a trusted proxy sent no x-forwarded-for", () => {
+    const request = new Request("http://localhost", { headers: { "x-real-ip": "198.51.100.42" } });
+    expect(trustedClientIp(request, true)).toBeNull();
+  });
+});
+
 describe("clientIpFromRequest", () => {
-  it("prefers the first entry of x-forwarded-for", () => {
+  it("keys every client as 'unknown' when no proxy is trusted", () => {
     const request = new Request("http://localhost", {
       headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" }
     });
-    expect(clientIpFromRequest(request)).toBe("203.0.113.10");
-  });
-
-  it("falls back to x-real-ip when x-forwarded-for is absent", () => {
-    const request = new Request("http://localhost", { headers: { "x-real-ip": "198.51.100.42" } });
-    expect(clientIpFromRequest(request)).toBe("198.51.100.42");
-  });
-
-  it("returns 'unknown' when no proxy headers are present", () => {
-    expect(clientIpFromRequest(new Request("http://localhost"))).toBe("unknown");
+    expect(clientIpFromRequest(request)).toBe("unknown");
   });
 });

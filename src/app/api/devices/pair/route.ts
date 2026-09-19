@@ -10,6 +10,7 @@ const PAIR_SHORT_WINDOW_MS = 10 * 60 * 1000;
 const PAIR_SHORT_MAX = 5;
 const PAIR_LONG_WINDOW_MS = 24 * 60 * 60 * 1000;
 const PAIR_LONG_MAX = 50;
+const PAIR_GLOBAL_MAX = 20;
 
 export async function POST(request: Request) {
   const body = await jsonBody(request);
@@ -43,6 +44,17 @@ export async function POST(request: Request) {
   });
   if (!shortWindow.allowed) {
     return rateLimited(shortWindow.retryAfterSeconds);
+  }
+
+  // Checked last so an IP that is already throttled cannot fill the shared bucket.
+  const globalWindow = limiter.consume({
+    bucket: "pair_global",
+    key: "all",
+    max: PAIR_GLOBAL_MAX,
+    windowMs: PAIR_SHORT_WINDOW_MS
+  });
+  if (!globalWindow.allowed) {
+    return rateLimited(globalWindow.retryAfterSeconds);
   }
 
   const repo = createMetadataRepository(getDatabase());

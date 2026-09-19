@@ -350,7 +350,7 @@ describe("share links API", () => {
     expect(mocks.repo.getFileShareLinkByTokenHash).toHaveBeenCalledWith(hashShareToken("share-token"));
     expect(mocks.repo.recordFileShareDownload).toHaveBeenCalledWith("share_123", {
       userAgent: "Safari on Mac",
-      ipAddress: "192.168.68.10"
+      ipAddress: null
     });
     expect(response.headers.get("content-disposition")).toContain('filename="manual.pdf"');
     expect(response.headers.get("cache-control")).toBe("no-store");
