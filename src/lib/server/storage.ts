@@ -105,6 +105,8 @@ export function createStorageService(root = appConfig.storageRoot) {
 
       const absolutePath = await nextAvailablePath(absoluteDirectory, safeName);
       await fs.writeFile(absolutePath, input.bytes, { flag: "wx" });
+      await syncPath(absolutePath);
+      await syncPath(absoluteDirectory);
 
       const relativePath = path.relative(storageRoot, absolutePath).split(path.sep).join("/");
       return {
@@ -151,6 +153,7 @@ export function createStorageService(root = appConfig.storageRoot) {
 
       try {
         await pipeline(source, limiter, writer);
+        await syncPath(tempAbsolute);
       } catch (error) {
         await fs.unlink(tempAbsolute).catch(() => undefined);
         throw error;
@@ -163,6 +166,7 @@ export function createStorageService(root = appConfig.storageRoot) {
           directory: path.join(storageRoot, targetDirectory(input.target), safeRelativeDirectory(input.relativePath)),
           filename: input.filename
         });
+        await syncPath(path.dirname(moved.absolutePath));
         return {
           ...moved,
           sizeBytes: received,
@@ -212,6 +216,8 @@ export function createStorageService(root = appConfig.storageRoot) {
       if ((await fs.stat(from)).size !== input.sizeBytes) {
         throw uploadError("Upload temp file size mismatch", "UPLOAD_SIZE_MISMATCH");
       }
+      // Once per upload, not per chunk: the row the caller is about to commit must not outlive these bytes.
+      await syncPath(from);
       const relativeDirectory = targetDirectory(input.target);
       const directory = path.join(storageRoot, relativeDirectory, safeRelativeDirectory(input.relativePath ?? undefined));
       const absolutePath = await moveIntoDirectory({
@@ -220,6 +226,7 @@ export function createStorageService(root = appConfig.storageRoot) {
         directory,
         filename: input.filename
       });
+      await syncPath(path.dirname(absolutePath.absolutePath));
       const stats = await fs.stat(absolutePath.absolutePath);
 
       return {
@@ -494,6 +501,17 @@ async function finishMove(from: string, to: string, staging: Staging): Promise<v
 async function discardStaging(staging: Staging): Promise<void> {
   if (staging.path) {
     await fs.unlink(staging.path).catch(() => undefined);
+  }
+}
+
+// SQLite fsyncs its commits; file data does not get the same treatment unless asked. For a directory this
+// makes the new name durable, which matters on ZFS where a transaction group can hold it for seconds.
+async function syncPath(target: string): Promise<void> {
+  const handle = await fs.open(target, "r");
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
   }
 }
 

@@ -65,6 +65,11 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   million codes and dead rows were kept, so a new code would eventually
   collide with one and return a `500`. Dead codes are deleted before each
   insert, and a collision with a live code draws a new one.
+- **Uploads are synced to disk before they are recorded.** SQLite commits
+  were fsynced but uploaded bytes were not, so a power loss inside a ZFS
+  transaction-group window could leave a committed row pointing at a
+  missing or short file. Each completed upload now fsyncs the file and its
+  destination directory once; chunks are not synced individually.
 - **Names starting with two dots are accepted.** `..notes.txt` was rejected
   as escaping the storage root because the check was `startsWith("..")`.
 - **PDF previews are capped at 1024 px.** `pdftoppm` rendered at a fixed
