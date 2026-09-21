@@ -185,7 +185,7 @@ tests/
 
 NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbed, partial, or deliberately deferred:
 
-- **Search uses `LIKE`, not FTS.** Good for the typical NAS corpus; an SQLite FTS5 index lands once the test corpus exposes a hot path. Result lists are capped at 200 rows with a banner.
+- **Search uses `LIKE`, not FTS.** Good for the typical NAS corpus; an SQLite FTS5 index lands once the test corpus exposes a hot path. Search results and smart views are capped at 200 rows with a banner.
 - **Previews: image, video, and single-page PDF today.** Video poster frames need `ffmpeg`; PDF first-page previews need `poppler-utils` (`pdftoppm`). Both are baked into the default Docker image; missing binaries are recorded as `unsupported` instead of crashing the worker. Other document families (docx, xlsx) and CAD families stay `skipped`. The Settings → Preview pipeline card shows live counts and `ffmpeg ready / unavailable` + `poppler ready / unavailable` badges.
 - **Preview worker is opt-in.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on` to run the in-process scheduler, which also cleans up abandoned uploads hourly, or hit `POST /api/maintenance/previews` and `POST /api/maintenance/upload-cleanup` from cron. Defaults to off so dev environments don't fight the test runner.
 - **Upload Center has tabs for Active / Failed / Aborted sessions** with a per-device filter. Active chunked uploads can be resumed by selecting the same local file again, and failed uploads can be retried as clean replacement sessions. The cleanup job tidies orphaned chunks for failed sessions older than 24 hours.

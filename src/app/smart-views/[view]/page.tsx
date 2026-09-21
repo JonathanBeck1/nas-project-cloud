@@ -22,7 +22,7 @@ export default async function SmartViewPage({ params }: SmartViewPageProps) {
 
   const { db, repo } = await requirePageSession();
   const projects = repo.listProjects();
-  const files = listSmartViewFiles(db, view as SmartViewKey);
+  const { files, truncated } = listSmartViewFiles(db, view as SmartViewKey);
 
   return (
     <WorkspaceFrame projects={projects} activeHref={`/smart-views/${view}`}>
@@ -32,6 +32,15 @@ export default async function SmartViewPage({ params }: SmartViewPageProps) {
           <h1 className="mt-1 text-2xl font-semibold text-ink">{definition.name}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">{definition.description}</p>
         </section>
+
+        {truncated ? (
+          <p
+            role="status"
+            className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700"
+          >
+            Showing the newest {files.length} files in this view. Use search to find older ones.
+          </p>
+        ) : null}
 
         <FileList
           files={files}

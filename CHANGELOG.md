@@ -76,6 +76,11 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   Listings are ordered by `uploaded_at desc, name, id`, so files that tie on
   time and name now have a stable order. The web UI does not call this
   endpoint; third-party clients need to follow `nextCursor`.
+- **Pages no longer load the whole file table.** The projects index counts
+  files per project with one `group by` query instead of loading every
+  file, the archive page queries archived rows only, and smart views show
+  the newest 200 files with a banner (`GET /api/smart-views/<view>` adds
+  `truncated`).
 - **Preview backlog drains faster.** A full batch of 25 schedules the next
   tick after one second instead of 60, lifting a ceiling of about 1,500
   previews per hour. The scheduler and the maintenance endpoint share one

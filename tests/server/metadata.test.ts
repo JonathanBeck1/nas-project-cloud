@@ -861,6 +861,27 @@ describe("metadata repository", () => {
     }
   });
 
+  it("counts active files per project without loading them", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-meta-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    createdDbs.push(db);
+    const repo = createMetadataRepository(db);
+    const shed = repo.createProject({ name: "Shed" });
+    const empty = repo.createProject({ name: "Empty" });
+    const base = { extension: "stl", family: "cad" as const, mimeType: "model/stl", sizeBytes: 1, checksum: "x", sourceDevice: "d" };
+    repo.createFile({ ...base, name: "a.stl", storagePath: "Projects/shed/Inbox/a.stl", projectId: shed.id });
+    repo.createFile({ ...base, name: "b.stl", storagePath: "Projects/shed/Inbox/b.stl", projectId: shed.id });
+    repo.createFile({ ...base, name: "c.stl", storagePath: "Archive/2026/09/c.stl", projectId: shed.id, status: "archived" });
+    repo.createFile({ ...base, name: "loose.stl", storagePath: "Inbox/d/loose.stl" });
+
+    const counts = repo.countActiveFilesByProject();
+
+    expect(counts.get(shed.id)).toBe(2);
+    expect(counts.get(empty.id)).toBeUndefined();
+    expect(counts.size).toBe(1);
+  });
+
   it("lists more files than SQLite allows bound variables", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-meta-"));
     createdDirs.push(dir);

@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function ArchivePage() {
   const { repo } = await requirePageSession();
   const projects = repo.listProjects();
-  const archivedFiles = repo.listFiles({ includeArchived: true }).filter((file) => file.status === "archived");
+  const archivedFiles = repo.listFiles({ status: "archived" });
 
   return (
     <WorkspaceFrame projects={projects} activeHref="/archive">

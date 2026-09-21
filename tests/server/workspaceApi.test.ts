@@ -102,14 +102,14 @@ describe("workspace API modules", () => {
   it("returns files for a known smart view", async () => {
     const route = await import("@/app/api/smart-views/[view]/route");
     const files = [{ id: "file_1", name: "part.stl" }];
-    mocks.listSmartViewFiles.mockReturnValue(files);
+    mocks.listSmartViewFiles.mockReturnValue({ files, truncated: false });
 
     const response = await route.GET(new Request("http://localhost/api/smart-views/cad"), {
       params: Promise.resolve({ view: "cad" })
     });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ files });
+    await expect(response.json()).resolves.toEqual({ files, truncated: false });
     expect(mocks.listSmartViewFiles).toHaveBeenCalledWith(mocks.db, "cad");
   });
 

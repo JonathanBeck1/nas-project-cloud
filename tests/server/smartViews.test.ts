@@ -55,10 +55,10 @@ describe("listSmartViewFiles", () => {
       sourceDevice: "MacBook-Pro"
     });
 
-    expect(listSmartViewFiles(db, "cad")).toHaveLength(1);
-    expect(listSmartViewFiles(db, "media")).toHaveLength(1);
-    expect(listSmartViewFiles(db, "unsorted")).toHaveLength(2);
-    expect(listSmartViewFiles(db, "large-files")).toHaveLength(1);
+    expect(listSmartViewFiles(db, "cad").files).toHaveLength(1);
+    expect(listSmartViewFiles(db, "media").files).toHaveLength(1);
+    expect(listSmartViewFiles(db, "unsorted").files).toHaveLength(2);
+    expect(listSmartViewFiles(db, "large-files").files).toHaveLength(1);
   });
 
   it("returns only files without projects in inbox and unsorted views", () => {
@@ -95,8 +95,8 @@ describe("listSmartViewFiles", () => {
       sourceDevice: "Windows-PC"
     });
 
-    expect(listSmartViewFiles(db, "inbox")).toEqual([unassignedFile]);
-    expect(listSmartViewFiles(db, "unsorted")).toEqual([unassignedFile]);
+    expect(listSmartViewFiles(db, "inbox").files).toEqual([unassignedFile]);
+    expect(listSmartViewFiles(db, "unsorted").files).toEqual([unassignedFile]);
   });
 
   it("includes file tags on smart view results", () => {
@@ -122,7 +122,7 @@ describe("listSmartViewFiles", () => {
     db.prepare("insert into tags (id, name, slug) values (?, ?, ?)").run("tag_priority", "Priority", "priority");
     db.prepare("insert into file_tags (file_id, tag_id) values (?, ?)").run(file.id, "tag_priority");
 
-    expect(listSmartViewFiles(db, "cad")).toEqual([
+    expect(listSmartViewFiles(db, "cad").files).toEqual([
       {
         ...file,
         tags: [{ id: "tag_priority", name: "Priority", slug: "priority" }]
@@ -165,7 +165,33 @@ describe("listSmartViewFiles", () => {
       archivedAt: "2026-04-30T00:00:00.000Z"
     });
 
-    expect(listSmartViewFiles(db, "cad")).toEqual([activeFile]);
-    expect(listSmartViewFiles(db, "recent")).toEqual([activeFile]);
+    expect(listSmartViewFiles(db, "cad").files).toEqual([activeFile]);
+    expect(listSmartViewFiles(db, "recent").files).toEqual([activeFile]);
+  });
+
+  it("caps a smart view at 200 files and says so", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-views-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    createdDbs.push(db);
+    const insert = db.prepare(`
+      insert into files
+        (id, name, extension, family, mime_type, size_bytes, checksum, storage_path, source_device, uploaded_at, updated_at, status)
+      values (?, ?, 'stl', 'cad', 'model/stl', 1, 'x', ?, 'd', ?, ?, 'active')
+    `);
+    const now = Date.now();
+    db.transaction(() => {
+      for (let index = 0; index < 205; index += 1) {
+        const uploadedAt = new Date(now - index * 1000).toISOString();
+        insert.run(`file_${index}`, `f${index}.stl`, `Inbox/d/f${index}.stl`, uploadedAt, uploadedAt);
+      }
+    })();
+
+    const capped = listSmartViewFiles(db, "cad");
+
+    expect(capped.files).toHaveLength(200);
+    expect(capped.files[0].id).toBe("file_0");
+    expect(capped.truncated).toBe(true);
+    expect(listSmartViewFiles(db, "videos")).toEqual({ files: [], truncated: false });
   });
 });

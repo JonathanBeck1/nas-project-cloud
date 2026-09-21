@@ -927,6 +927,18 @@ export function createMetadataRepository(db: AppDatabase) {
       });
     },
 
+    countActiveFilesByProject(): Map<string, number> {
+      const rows = db
+        .prepare<[], { project_id: string; count: number }>(`
+          select project_id, count(*) as count
+          from files
+          where status = 'active' and project_id is not null
+          group by project_id
+        `)
+        .all();
+      return new Map(rows.map((row) => [row.project_id, row.count]));
+    },
+
     listFiles(filters: ListFilesFilters = {}): CloudFile[] {
       const { where, params } = fileListWhere(filters);
       const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name, id`;
