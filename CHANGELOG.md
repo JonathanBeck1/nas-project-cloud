@@ -110,6 +110,13 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- **Security headers on every response.** `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, a `Permissions-Policy`, and
+  `Referrer-Policy: no-referrer` (share tokens live in the URL path) are
+  sent everywhere. Pages also get `Content-Security-Policy: frame-ancestors
+  'none'; base-uri 'self'; object-src 'none'; form-action 'self'`. API
+  routes are left out of that policy so downloads keep their stricter
+  `default-src 'none'; sandbox`.
 - **Share-link passwords are rate limited.** Password attempts were
   unlimited and each one costs a scrypt. A share now allows 10 attempts per
   15 minutes and then answers `429` with `Retry-After`. Requests without a
