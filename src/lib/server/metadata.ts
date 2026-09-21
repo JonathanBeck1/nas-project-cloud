@@ -1630,16 +1630,17 @@ export function filesFromRowsWithTags(db: AppDatabase, rows: FileRow[]): CloudFi
 
   const tagsByFileId = new Map<string, Tag[]>();
   const previewsByFileId = new Map<string, FilePreview>();
-  const placeholders = rows.map(() => "?").join(", ");
+  // One JSON parameter: a placeholder per row hits SQLite's 32,766 bound-variable limit.
+  const fileIds = JSON.stringify(rows.map((row) => row.id));
   const tagRows = db
-    .prepare<string[], TagRow & { file_id: string }>(`
+    .prepare<[string], TagRow & { file_id: string }>(`
       select file_tags.file_id, tags.id, tags.name, tags.slug
       from file_tags
       inner join tags on tags.id = file_tags.tag_id
-      where file_tags.file_id in (${placeholders})
+      where file_tags.file_id in (select value from json_each(?))
       order by tags.name
     `)
-    .all(...rows.map((row) => row.id));
+    .all(fileIds);
 
   for (const row of tagRows) {
     const tags = tagsByFileId.get(row.file_id) ?? [];
@@ -1648,12 +1649,12 @@ export function filesFromRowsWithTags(db: AppDatabase, rows: FileRow[]): CloudFi
   }
 
   const previewRows = db
-    .prepare<string[], FilePreviewRow>(`
+    .prepare<[string], FilePreviewRow>(`
       select * from file_previews
-      where status = 'ready' and kind = 'image' and file_id in (${placeholders})
+      where status = 'ready' and kind = 'image' and file_id in (select value from json_each(?))
       order by updated_at desc
     `)
-    .all(...rows.map((row) => row.id));
+    .all(fileIds);
 
   for (const row of previewRows) {
     if (!previewsByFileId.has(row.file_id)) {

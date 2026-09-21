@@ -857,4 +857,30 @@ describe("metadata repository", () => {
       db.close();
     }
   });
+
+  it("lists more files than SQLite allows bound variables", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-meta-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    createdDbs.push(db);
+    const repo = createMetadataRepository(db);
+    const tag = repo.createTag({ name: "Bulk" });
+    const insert = db.prepare(`
+      insert into files
+        (id, name, extension, family, mime_type, size_bytes, checksum, storage_path, source_device, uploaded_at, updated_at, status)
+      values (?, ?, 'stl', 'cad', 'model/stl', 1, 'x', ?, 'd', ?, ?, 'active')
+    `);
+    const now = new Date().toISOString();
+    db.transaction(() => {
+      for (let i = 0; i < 40_000; i += 1) {
+        insert.run(`file_${i}`, `f${i}.stl`, `Inbox/d/f${i}.stl`, now, now);
+      }
+    })();
+    db.prepare("insert into file_tags (file_id, tag_id) values (?, ?)").run("file_39999", tag.id);
+
+    const files = repo.listFiles();
+
+    expect(files).toHaveLength(40_000);
+    expect(files.find((file) => file.id === "file_39999")?.tags).toEqual([tag]);
+  });
 });

@@ -15,6 +15,11 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   (`.uploads/`, `.previews/`, the health probe) are skipped, and files under
   `Projects/<slug>/` are attached to that project, which is created if needed.
 
+- **Libraries past 32,766 files load again.** Listing files bound one SQL
+  variable per row, so the workspace, projects page, `GET /api/files`, and
+  project ZIP export all failed with "too many SQL variables" beyond
+  SQLite's limit. Tags and previews are now fetched with a single parameter.
+
 ### Changed
 
 - **Recovery docs are explicit.** README and the TrueNAS guide state what a
