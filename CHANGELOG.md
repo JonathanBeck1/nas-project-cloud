@@ -126,12 +126,18 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Chunks are capped at 32 MiB.** A larger chunk is rejected with `413`
   before it is buffered; previously one "chunk" could hold the whole upload
   in memory. The web client sends 8 MiB chunks and is unaffected.
+- **README no longer claims the publish workflow runs the full gate.** It
+  repeats the unit, type, lint, and build checks; the Playwright suite runs
+  in `ci.yml` only.
 - **Recovery docs are explicit.** README and the TrueNAS guide state what a
   re-index restores, what only an `appdata` backup restores, and that the
   script is not in the Docker image.
 
 ### Security
 
+- **Supply chain.** Every GitHub Action is pinned to a commit SHA, published
+  images carry build provenance and an SBOM, and Dependabot watches npm and
+  the pinned actions weekly.
 - **`/api/health` no longer leaks detail to anonymous callers.** It
   returned raw error messages, which can contain absolute paths, and the
   `ffmpeg` and `poppler` versions to anyone. Anonymous callers now get only

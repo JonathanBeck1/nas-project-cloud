@@ -143,7 +143,7 @@ The verification gate before any commit to `main` is:
 npm test && npm run typecheck && npm run lint && npm run build && npm run test:e2e
 ```
 
-The same gate runs on every pull request via [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) and again in [`.github/workflows/docker-publish.yml`](./.github/workflows/docker-publish.yml) before the image is published.
+The same gate runs on every pull request and push to `main` via [`.github/workflows/ci.yml`](./.github/workflows/ci.yml). [`.github/workflows/docker-publish.yml`](./.github/workflows/docker-publish.yml) repeats the unit, type, lint, and build checks before it publishes the image; it does not run the Playwright suite. Published images carry build provenance and an SBOM, and every action in both workflows is pinned to a commit SHA that Dependabot keeps current.
 
 ## Project layout
 
