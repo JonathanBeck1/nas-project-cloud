@@ -61,6 +61,26 @@ describe("device pairing API", () => {
     );
   });
 
+  it("draws a new code when the first one collides with a live pairing code", async () => {
+    const { POST } = await import("@/app/api/devices/route");
+    mocks.repo.createDevicePairingCode
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error("UNIQUE constraint failed: device_pairing_codes.code_hash"), {
+          code: "SQLITE_CONSTRAINT_UNIQUE"
+        });
+      })
+      .mockReturnValue({ id: "pair_2", expiresAt: "2026-05-02T12:00:00.000Z" });
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/devices", { deviceName: "Windows PC", deviceKind: "desktop" })
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.repo.createDevicePairingCode).toHaveBeenCalledTimes(2);
+    const [first, second] = mocks.repo.createDevicePairingCode.mock.calls.map(([input]) => input.codeHash);
+    expect(second).not.toBe(first);
+  });
+
   it("revokes another trusted device for the owner", async () => {
     const { DELETE } = await import("@/app/api/devices/[id]/route");
     mocks.repo.revokeDevice.mockReturnValue(true);

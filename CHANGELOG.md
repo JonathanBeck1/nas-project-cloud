@@ -56,6 +56,15 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Large ZIP exports no longer exhaust file descriptors.** Every source
   file was opened before streaming began; files are now opened one at a
   time, and the archive is aborted when the client disconnects.
+- **Expired auth state is purged.** Expired sessions, used or expired
+  pairing codes, and rate-limit rows were never deleted; an attacker-chosen
+  login email became a permanent row. They are now purged at boot, hourly by
+  the in-process scheduler, and by `POST /api/maintenance/upload-cleanup`
+  (which adds a `purged` object to its response).
+- **Pairing codes cannot run out.** `code_hash` is unique across only a
+  million codes and dead rows were kept, so a new code would eventually
+  collide with one and return a `500`. Dead codes are deleted before each
+  insert, and a collision with a live code draws a new one.
 - **PDF previews are capped at 1024 px.** `pdftoppm` rendered at a fixed
   150 dpi, so a large-format page (an A0 plot is 4967 x 7021 px) or a
   hostile one could exhaust memory. Pages are now scaled to 1024 px.

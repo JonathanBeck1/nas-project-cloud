@@ -362,6 +362,8 @@ type ListUploadSessionsFilters = {
 };
 
 const MAX_PREVIEW_ATTEMPTS = 3;
+// At least the longest rate-limit window any route uses (device pairing: 24 hours).
+const RATE_LIMIT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_UPLOAD_SESSIONS_LIMIT = 100;
 const MAX_UPLOAD_SESSIONS_LIMIT = 200;
 
@@ -1424,16 +1426,33 @@ export function createMetadataRepository(db: AppDatabase) {
         createdAt: new Date().toISOString()
       };
 
-      db.prepare(`
-        insert into device_pairing_codes (
-          id, user_id, code_hash, device_name, device_kind, expires_at, consumed_at, created_at
-        )
-        values (
-          @id, @userId, @codeHash, @deviceName, @deviceKind, @expiresAt, @consumedAt, @createdAt
-        )
-      `).run(code);
+      db.transaction(() => {
+        // code_hash is unique over only a million codes, so a dead row would eventually block a fresh code.
+        deleteDeadPairingCodes(db, code.createdAt);
+        db.prepare(`
+          insert into device_pairing_codes (
+            id, user_id, code_hash, device_name, device_kind, expires_at, consumed_at, created_at
+          )
+          values (
+            @id, @userId, @codeHash, @deviceName, @deviceKind, @expiresAt, @consumedAt, @createdAt
+          )
+        `).run(code);
+      })();
 
       return code;
+    },
+
+    purgeExpiredAuthState(): { sessions: number; pairingCodes: number; rateLimitEvents: number } {
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const rateLimitCutoff = new Date(now.getTime() - RATE_LIMIT_RETENTION_MS).toISOString();
+      return {
+        sessions: db.prepare<[string]>("delete from sessions where expires_at < ?").run(nowIso).changes,
+        pairingCodes: deleteDeadPairingCodes(db, nowIso),
+        // Across every key: the limiter only purges the key it is asked about, so one-off keys were kept forever.
+        rateLimitEvents: db.prepare<[string]>("delete from rate_limit_events where occurred_at < ?").run(rateLimitCutoff)
+          .changes
+      };
     },
 
     getDevicePairingCodeByHash(codeHash: string): DevicePairingCode | null {
@@ -1683,6 +1702,12 @@ function uniqueSlug(db: AppDatabase, tableName: "projects" | "tags" | "categorie
   }
 
   return candidate;
+}
+
+function deleteDeadPairingCodes(db: AppDatabase, nowIso: string): number {
+  return db
+    .prepare<[string]>("delete from device_pairing_codes where consumed_at is not null or expires_at < ?")
+    .run(nowIso).changes;
 }
 
 function fileListWhere(filters: ListFilesFilters): { where: string[]; params: Record<string, string | null> } {

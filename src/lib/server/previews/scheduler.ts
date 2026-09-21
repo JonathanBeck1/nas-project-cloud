@@ -3,7 +3,7 @@ import { runPreviewWorker, type PreviewWorkerResult } from "./worker";
 const ACTIVE_INTERVAL_MS = 60_000;
 const IDLE_INTERVAL_MS = 5 * 60_000;
 const FULL_BATCH_DELAY_MS = 1_000;
-const UPLOAD_CLEANUP_INTERVAL_MS = 60 * 60_000;
+const HOURLY_MAINTENANCE_INTERVAL_MS = 60 * 60_000;
 const BATCH_LIMIT = 25;
 
 type RunPreviewWorkerFn = (input?: { limit?: number }) => Promise<PreviewWorkerResult>;
@@ -12,7 +12,7 @@ type SchedulerInternals = {
   setTimeout: typeof globalThis.setTimeout;
   clearTimeout: typeof globalThis.clearTimeout;
   runWorker: RunPreviewWorkerFn;
-  runUploadCleanup?: () => Promise<unknown>;
+  runHourlyMaintenance?: () => Promise<unknown>;
   onError?: (error: unknown) => void;
 };
 
@@ -31,7 +31,8 @@ let activeHandle: PreviewSchedulerHandle | null = null;
  * The loop is single-flight: a tick that's already running blocks the
  * next tick from overlapping. When a tick finds zero pending jobs it
  * sleeps for IDLE_INTERVAL_MS, after a full batch FULL_BATCH_DELAY_MS,
- * otherwise ACTIVE_INTERVAL_MS. Stale upload cleanup rides along hourly.
+ * otherwise ACTIVE_INTERVAL_MS. Hourly maintenance (stale uploads, expired
+ * auth state) rides along on the same loop.
  */
 export function startPreviewScheduler(
   internals: Partial<SchedulerInternals> = {}
@@ -48,18 +49,18 @@ export function startPreviewScheduler(
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
   let inFlight: Promise<PreviewWorkerResult | null> | null = null;
-  let lastUploadCleanupAt: number | null = null;
+  let lastMaintenanceAt: number | null = null;
 
   const tick = async (): Promise<PreviewWorkerResult | null> => {
     if (stopped) return null;
     if (inFlight) return inFlight;
 
     inFlight = (async () => {
-      const cleanupDue =
-        lastUploadCleanupAt === null || Date.now() - lastUploadCleanupAt >= UPLOAD_CLEANUP_INTERVAL_MS;
-      if (internals.runUploadCleanup && cleanupDue) {
-        lastUploadCleanupAt = Date.now();
-        await internals.runUploadCleanup().catch(onError);
+      const maintenanceDue =
+        lastMaintenanceAt === null || Date.now() - lastMaintenanceAt >= HOURLY_MAINTENANCE_INTERVAL_MS;
+      if (internals.runHourlyMaintenance && maintenanceDue) {
+        lastMaintenanceAt = Date.now();
+        await internals.runHourlyMaintenance().catch(onError);
       }
       try {
         return await runWorker({ limit: BATCH_LIMIT });

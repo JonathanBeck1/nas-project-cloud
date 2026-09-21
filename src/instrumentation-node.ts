@@ -6,14 +6,19 @@ import { cleanupStaleUploads } from "@/lib/server/uploadCleanup";
 
 const STALE_UPLOAD_MS = 24 * 60 * 60 * 1000;
 
-const stale = createMetadataRepository(getDatabase()).requeueStalePreviewJobs();
+const repo = createMetadataRepository(getDatabase());
+repo.purgeExpiredAuthState();
+const stale = repo.requeueStalePreviewJobs();
 if (stale.requeued > 0 || stale.failed > 0) {
   console.log(`[instrumentation] previews interrupted by the last shutdown: ${stale.requeued} requeued, ${stale.failed} failed`);
 }
 
 if (getAppConfig().previewScheduler === "on") {
   startPreviewScheduler({
-    runUploadCleanup: () => cleanupStaleUploads({ olderThan: new Date(Date.now() - STALE_UPLOAD_MS) })
+    runHourlyMaintenance: async () => {
+      await cleanupStaleUploads({ olderThan: new Date(Date.now() - STALE_UPLOAD_MS) });
+      repo.purgeExpiredAuthState();
+    }
   });
   console.log("[instrumentation] preview scheduler started");
 }

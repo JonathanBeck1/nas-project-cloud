@@ -140,31 +140,31 @@ describe("preview scheduler", () => {
     await stopAndFlush(handle);
   });
 
-  it("runs upload cleanup on the first tick and then hourly", async () => {
+  it("runs hourly maintenance on the first tick and then hourly", async () => {
     const runWorker = vi.fn().mockResolvedValue({ scanned: 1, processed: 1, failed: 0 });
-    const runUploadCleanup = vi.fn().mockResolvedValue(undefined);
+    const runHourlyMaintenance = vi.fn().mockResolvedValue(undefined);
 
-    const handle = startPreviewScheduler({ runWorker, runUploadCleanup });
+    const handle = startPreviewScheduler({ runWorker, runHourlyMaintenance });
 
     await vi.advanceTimersByTimeAsync(ACTIVE_MS);
-    expect(runUploadCleanup).toHaveBeenCalledTimes(1);
+    expect(runHourlyMaintenance).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(ACTIVE_MS * 10);
-    expect(runUploadCleanup).toHaveBeenCalledTimes(1);
+    expect(runHourlyMaintenance).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(60 * 60_000);
-    expect(runUploadCleanup).toHaveBeenCalledTimes(2);
+    expect(runHourlyMaintenance).toHaveBeenCalledTimes(2);
 
     await stopAndFlush(handle);
   });
 
-  it("still runs the worker when upload cleanup fails", async () => {
+  it("still runs the worker when hourly maintenance fails", async () => {
     const error = new Error("cleanup boom");
     const runWorker = vi.fn().mockResolvedValue({ scanned: 0, processed: 0, failed: 0 });
-    const runUploadCleanup = vi.fn().mockRejectedValue(error);
+    const runHourlyMaintenance = vi.fn().mockRejectedValue(error);
     const onError = vi.fn();
 
-    const handle = startPreviewScheduler({ runWorker, runUploadCleanup, onError });
+    const handle = startPreviewScheduler({ runWorker, runHourlyMaintenance, onError });
 
     await vi.advanceTimersByTimeAsync(ACTIVE_MS);
     expect(onError).toHaveBeenCalledWith(error);
