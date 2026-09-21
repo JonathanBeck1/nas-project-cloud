@@ -70,6 +70,9 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   transaction-group window could leave a committed row pointing at a
   missing or short file. Each completed upload now fsyncs the file and its
   destination directory once; chunks are not synced individually.
+- **A malformed cookie is no longer a 500.** Bad percent-encoding in the
+  session or CSRF cookie threw while decoding. The request is now treated
+  as unauthenticated (`401`) or as failing the CSRF check (`403`).
 - **Names starting with two dots are accepted.** `..notes.txt` was rejected
   as escaping the storage root because the check was `startsWith("..")`.
 - **PDF previews are capped at 1024 px.** `pdftoppm` rendered at a fixed

@@ -100,6 +100,38 @@ describe("requireApiSession with CSRF", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("treats a session cookie with bad percent-encoding as no session", async () => {
+    const { requireApiSession } = await import("@/lib/server/auth/guards");
+    const { sessionCookieName } = await import("@/lib/server/auth/sessions");
+
+    const result = await requireApiSession(
+      new Request("http://localhost/api/files", { headers: { cookie: `${sessionCookieName}=%E0%A4%A` } })
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(401);
+    }
+  });
+
+  it("treats a CSRF cookie with bad percent-encoding as a failed check", async () => {
+    const { requireApiSession } = await import("@/lib/server/auth/guards");
+    const { sessionCookieName } = await import("@/lib/server/auth/sessions");
+    const { csrfCookieName, csrfHeaderName } = await import("@/lib/server/auth/csrf");
+
+    const result = await requireApiSession(
+      new Request("http://localhost/api/files", {
+        method: "POST",
+        headers: { cookie: `${sessionCookieName}=token123; ${csrfCookieName}=%ZZ`, [csrfHeaderName]: "%ZZ" }
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(403);
+    }
+  });
+
   it("returns 401 (not 403) when the session cookie is missing entirely", async () => {
     const { requireApiSession } = await import("@/lib/server/auth/guards");
     const { csrfCookieName, csrfHeaderName } = await import("@/lib/server/auth/csrf");

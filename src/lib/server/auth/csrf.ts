@@ -48,7 +48,11 @@ export function csrfTokenFromRequest(request: Request): string | null {
     if (equals === -1) continue;
     const name = trimmed.slice(0, equals);
     if (name === csrfCookieName) {
-      return decodeURIComponent(trimmed.slice(equals + 1));
+      try {
+        return decodeURIComponent(trimmed.slice(equals + 1));
+      } catch {
+        return null;
+      }
     }
   }
   return null;
