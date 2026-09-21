@@ -132,6 +132,12 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- **`/api/health` no longer leaks detail to anonymous callers.** It
+  returned raw error messages, which can contain absolute paths, and the
+  `ffmpeg` and `poppler` versions to anyone. Anonymous callers now get only
+  a boolean per check and the same `200`/`503` status, so container
+  healthchecks are unaffected. A signed-in session or the maintenance token
+  still gets the full detail.
 - **Security headers on every response.** `X-Frame-Options: DENY`,
   `X-Content-Type-Options: nosniff`, a `Permissions-Policy`, and
   `Referrer-Policy: no-referrer` (share tokens live in the URL path) are

@@ -311,17 +311,25 @@ It checks:
 
 - the storage mount can be written to and cleaned up
 - SQLite can answer a basic query
+- `ffmpeg` and `pdftoppm` are present
 
-The public response intentionally does not reveal host paths. A healthy response looks like:
+An anonymous caller gets only whether each check passed, plus the status code (`200` healthy, `503` not), which is all the compose healthcheck reads:
 
 ```json
 {
   "ok": true,
   "checks": {
     "storage": { "ok": true },
-    "database": { "ok": true }
+    "database": { "ok": true },
+    "previewTools": { "ffmpeg": { "ok": true }, "poppler": { "ok": true } }
   }
 }
+```
+
+Error messages and tool versions are added when the request carries a signed-in session (the Settings page does) or `Authorization: Bearer <NAS_CLOUD_MAINTENANCE_TOKEN>`. To see why a check is failing from a shell:
+
+```bash
+curl -s -H "Authorization: Bearer $NAS_CLOUD_MAINTENANCE_TOKEN" http://127.0.0.1:3000/api/health
 ```
 
 If this fails after deploying to TrueNAS, check dataset permissions first. The two most likely causes are:
