@@ -211,6 +211,7 @@ function migrate(db: AppDatabase) {
   addColumnIfMissing(db, "upload_sessions", "relative_path", "text");
   addColumnIfMissing(db, "file_share_links", "password_hash", "text");
   addColumnIfMissing(db, "upload_sessions", "temp_path_cleaned_at", "text");
+  addColumnIfMissing(db, "file_previews", "attempts", "integer not null default 0");
 }
 
 function addColumnIfMissing(db: AppDatabase, table: string, column: string, definition: string) {

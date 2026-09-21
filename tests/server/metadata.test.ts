@@ -529,6 +529,7 @@ describe("metadata repository", () => {
 
       expect(repo.countFilePreviewsByStatus()).toEqual({
         pending: 0,
+        processing: 0,
         ready: 0,
         failed: 0,
         skipped: 0,
@@ -593,6 +594,7 @@ describe("metadata repository", () => {
 
       expect(repo.countFilePreviewsByStatus()).toEqual({
         pending: 1,
+        processing: 0,
         ready: 1,
         failed: 1,
         skipped: 1,
@@ -604,6 +606,7 @@ describe("metadata repository", () => {
       expect(reset).toBe(1);
       expect(repo.countFilePreviewsByStatus()).toEqual({
         pending: 2,
+        processing: 0,
         ready: 1,
         failed: 0,
         skipped: 1,

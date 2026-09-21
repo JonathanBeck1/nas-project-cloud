@@ -111,7 +111,7 @@ Tag: 0.3.1
 Pull Policy: Always pull an image even if it is present on the host
 ```
 
-Use `latest` only when you intentionally want the newest `main` build. Use `0.3.1` for a repeatable install.
+Pin a release tag such as `0.3.1`. `latest` is rebuilt on every push to `main`, so with the "always pull" policy a restart can silently move you to an unreleased build. Use it only when you want that.
 
 ### Container Configuration
 
@@ -179,6 +179,8 @@ Memory: 2048 MiB minimum, 4096 MiB recommended if generating video/PDF previews
 ```
 
 Video and PDF previews use `ffmpeg` and `pdftoppm`; they are short-lived but can spike CPU and memory while processing large files.
+
+The compose file sets `mem_limit: 2g`, drops all Linux capabilities, sets `no-new-privileges`, and runs an init process as PID 1. If a preview job gets the container killed for memory, the job is counted: after the app restarts it is retried, and a file that takes the worker down three times is marked `failed` instead of looping. Raise `mem_limit` to `4g` if you store very large source images.
 
 ## First-Run Verification
 
@@ -336,7 +338,7 @@ POST /api/maintenance/previews        # process pending preview jobs
 POST /api/maintenance/upload-cleanup  # delete abandoned upload sessions older than 24h
 ```
 
-> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process preview loop that ticks every 60 seconds while there is pending work and idles to every 5 minutes when the queue is empty. The cron approach below still works either way and is the safe choice if you run multiple replicas.
+> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process loop that ticks every 60 seconds while there is pending preview work, goes again after one second when a batch of 25 came back full, and idles to every 5 minutes when the queue is empty. The same loop runs the stale-upload cleanup once an hour. The cron approach below still works either way and is the safe choice if you run multiple replicas; with the scheduler off, cron is the only thing that cleans up abandoned uploads.
 
 Both routes accept either:
 

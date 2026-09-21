@@ -18,7 +18,7 @@ type StatusResponse = {
   poppler?: BinaryStatus;
 };
 
-const ZERO_COUNTS: Counts = { pending: 0, ready: 0, failed: 0, skipped: 0, unsupported: 0 };
+const ZERO_COUNTS: Counts = { pending: 0, processing: 0, ready: 0, failed: 0, skipped: 0, unsupported: 0 };
 
 export function PreviewStatusCard() {
   const [counts, setCounts] = useState<Counts>(ZERO_COUNTS);
@@ -123,7 +123,8 @@ export function PreviewStatusCard() {
     }
   }
 
-  const total = counts.pending + counts.ready + counts.failed + counts.skipped + counts.unsupported;
+  const queued = counts.pending + counts.processing;
+  const total = queued + counts.ready + counts.failed + counts.skipped + counts.unsupported;
 
   return (
     <section
@@ -151,7 +152,7 @@ export function PreviewStatusCard() {
 
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Counter label="Ready" value={counts.ready} tone="ready" />
-        <Counter label="Pending" value={counts.pending} tone="pending" />
+        <Counter label="Pending" value={queued} tone="pending" />
         <Counter label="Failed" value={counts.failed} tone="failed" />
         <Counter label="Skipped" value={counts.skipped} tone="muted" />
         <Counter label="Unsupported" value={counts.unsupported} tone="muted" />

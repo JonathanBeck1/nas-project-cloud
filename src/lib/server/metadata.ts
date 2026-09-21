@@ -347,6 +347,7 @@ type ListUploadSessionsFilters = {
   limit?: number;
 };
 
+const MAX_PREVIEW_ATTEMPTS = 3;
 const DEFAULT_UPLOAD_SESSIONS_LIMIT = 100;
 const MAX_UPLOAD_SESSIONS_LIMIT = 200;
 
@@ -1133,6 +1134,33 @@ export function createMetadataRepository(db: AppDatabase) {
       });
     },
 
+    claimPreviewJob(fileId: string, kind: FilePreviewKind): boolean {
+      const result = db
+        .prepare<[string, string, FilePreviewKind]>(`
+          update file_previews
+          set status = 'processing', attempts = attempts + 1, updated_at = ?
+          where file_id = ? and kind = ? and status = 'pending'
+        `)
+        .run(new Date().toISOString(), fileId, kind);
+      return result.changes === 1;
+    },
+
+    // A row still 'processing' at boot means the process died mid-job; a file that keeps doing that is a poison pill.
+    requeueStalePreviewJobs(): { requeued: number; failed: number } {
+      const now = new Date().toISOString();
+      const failed = db
+        .prepare<[string, string, number]>(`
+          update file_previews
+          set status = 'failed', error = ?, updated_at = ?
+          where status = 'processing' and attempts >= ?
+        `)
+        .run(`preview worker did not survive ${MAX_PREVIEW_ATTEMPTS} attempts on this file`, now, MAX_PREVIEW_ATTEMPTS);
+      const requeued = db
+        .prepare<[string]>("update file_previews set status = 'pending', updated_at = ? where status = 'processing'")
+        .run(now);
+      return { requeued: requeued.changes, failed: failed.changes };
+    },
+
     countFilePreviewsByStatus(): Record<FilePreviewStatus, number> {
       const rows = db
         .prepare<[], { status: FilePreviewStatus; count: number }>(`
@@ -1144,6 +1172,7 @@ export function createMetadataRepository(db: AppDatabase) {
 
       const counts: Record<FilePreviewStatus, number> = {
         pending: 0,
+        processing: 0,
         ready: 0,
         failed: 0,
         skipped: 0,
@@ -1176,7 +1205,7 @@ export function createMetadataRepository(db: AppDatabase) {
       const result = db
         .prepare<[string]>(`
           update file_previews
-          set status = 'pending', error = null, updated_at = ?
+          set status = 'pending', error = null, attempts = 0, updated_at = ?
           where status = 'failed'
         `)
         .run(now);

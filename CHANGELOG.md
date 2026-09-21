@@ -34,14 +34,39 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **The browser retries a failed chunk.** Network errors and 5xx responses
   are retried with backoff, and a `409` resumes from the server's offset.
 
+- **PDF previews are capped at 1024 px.** `pdftoppm` rendered at a fixed
+  150 dpi, so a large-format page (an A0 plot is 4967 x 7021 px) or a
+  hostile one could exhaust memory. Pages are now scaled to 1024 px.
+- **A preview that crashes the app no longer loops.** Jobs are claimed
+  (`processing`) and counted before work starts. Jobs interrupted by a
+  restart are requeued at boot, and a file that takes the worker down
+  three times is marked `failed`. "Retry failed" resets the count.
+- **Abandoned uploads are cleaned up by default.** The in-process
+  scheduler now runs the stale-upload cleanup hourly; it was only
+  reachable through the maintenance endpoint.
+
 ### Changed
 
+- **Preview backlog drains faster.** A full batch of 25 schedules the next
+  tick after one second instead of 60, lifting a ceiling of about 1,500
+  previews per hour. The scheduler and the maintenance endpoint share one
+  run, so two batches never decode at once.
+- **Compose hardening.** `docker-compose.truenas.yml` sets `mem_limit: 2g`,
+  `cap_drop: [ALL]`, `no-new-privileges`, and `init: true`. The deploy
+  guide recommends pinning a release tag over `:latest`.
 - **Chunks are capped at 32 MiB.** A larger chunk is rejected with `413`
   before it is buffered; previously one "chunk" could hold the whole upload
   in memory. The web client sends 8 MiB chunks and is unaffected.
 - **Recovery docs are explicit.** README and the TrueNAS guide state what a
   re-index restores, what only an `appdata` backup restores, and that the
   script is not in the Docker image.
+
+### Security
+
+- **Preview tools are restricted to local files.** `ffmpeg` and `ffprobe`
+  run with `-protocol_whitelist file` (and `ffmpeg` with `-nostdin`), so a
+  playlist posing as a video cannot pull in network or concat sources.
+  `sharp` is limited to one libvips thread to keep peak memory predictable.
 
 ## [0.3.1] - 2026-09-19
 
