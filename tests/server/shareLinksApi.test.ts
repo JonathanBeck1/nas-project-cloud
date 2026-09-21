@@ -57,6 +57,11 @@ vi.mock("@/lib/server/metadata", () => ({
   createMetadataRepository: vi.fn(() => mocks.repo)
 }));
 
+vi.mock("@/lib/server/rateLimit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/rateLimit")>()),
+  createRateLimiter: () => ({ consume: () => ({ allowed: true, remaining: 9 }), reset: vi.fn() })
+}));
+
 vi.mock("@/lib/server/storage", () => ({
   createStorageService: vi.fn(() => mocks.storage)
 }));
@@ -91,7 +96,7 @@ describe("share links API", () => {
     mocks.repo.listFileShareLinks.mockReturnValue([]);
     mocks.repo.revokeFileShareLink.mockReturnValue(null);
     mocks.repo.updateFileShareLink.mockReturnValue(null);
-    mocks.repo.recordFileShareDownload.mockReturnValue(null);
+    mocks.repo.recordFileShareDownload.mockReturnValue({ id: "share_123" });
     mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(os.tmpdir(), relativePath));
   });
 

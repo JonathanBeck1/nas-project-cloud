@@ -101,6 +101,15 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- **Share-link passwords are rate limited.** Password attempts were
+  unlimited and each one costs a scrypt. A share now allows 10 attempts per
+  15 minutes and then answers `429` with `Retry-After`. Requests without a
+  password do not count.
+- **`maxDownloads` cannot be overrun.** The cap was checked, then the file
+  was prepared, then the counter was incremented unconditionally, so
+  simultaneous requests could all take the last download. The increment is
+  now a single conditional statement and the file is only streamed when it
+  succeeds.
 - **Preview tools are restricted to local files.** `ffmpeg` and `ffprobe`
   run with `-protocol_whitelist file` (and `ffmpeg` with `-nostdin`), so a
   playlist posing as a video cannot pull in network or concat sources.

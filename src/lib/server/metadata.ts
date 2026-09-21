@@ -595,6 +595,7 @@ export function createMetadataRepository(db: AppDatabase) {
     recordFileShareDownload(id: string, input: RecordFileShareDownloadInput = {}): FileShareLink | null {
       const now = new Date().toISOString();
       const record = db.transaction(() => {
+        // The cap and revocation are re-checked in the statement itself, so concurrent requests cannot both take the last download.
         const result = db
           .prepare<[string, string, string]>(`
             update file_share_links
@@ -602,6 +603,8 @@ export function createMetadataRepository(db: AppDatabase) {
                 last_accessed_at = ?,
                 updated_at = ?
             where id = ?
+              and revoked_at is null
+              and (max_downloads is null or download_count < max_downloads)
           `)
           .run(now, now, id);
 
