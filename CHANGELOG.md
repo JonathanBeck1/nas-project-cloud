@@ -34,6 +34,16 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **The browser retries a failed chunk.** Network errors and 5xx responses
   are retried with backoff, and a `409` resumes from the server's offset.
 
+- **Project ZIP export keeps folders.** Entries were named by basename, so
+  the folder structure that uploads preserve was flattened and duplicates
+  got `-2` suffixes. Entries are now named by their path under
+  `Projects/<slug>/Inbox/`, with leading slashes and `..` segments removed.
+- **One missing file no longer fails a ZIP export.** A file renamed or
+  deleted over SMB made the whole project or bulk export return `404`.
+  Missing files are skipped and listed in a `_MISSING.txt` entry.
+- **Large ZIP exports no longer exhaust file descriptors.** Every source
+  file was opened before streaming began; files are now opened one at a
+  time, and the archive is aborted when the client disconnects.
 - **PDF previews are capped at 1024 px.** `pdftoppm` rendered at a fixed
   150 dpi, so a large-format page (an A0 plot is 4967 x 7021 px) or a
   hostile one could exhaust memory. Pages are now scaled to 1024 px.
