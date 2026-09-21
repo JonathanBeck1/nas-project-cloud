@@ -4,6 +4,8 @@ import type { Category, CloudFile, Project, Tag, UploadSession } from "@/lib/sha
 
 export type WorkspaceData = {
   files: CloudFile[];
+  // Set when `files` is only the first page; pass it to GET /api/files as `cursor`.
+  nextCursor?: string | null;
   projects: Project[];
   categories: Category[];
   tags: Tag[];
@@ -24,9 +26,11 @@ type WorkspaceDataFilters = {
 
 export function loadWorkspaceData(db: AppDatabase = getDatabase(), filters: WorkspaceDataFilters = {}): WorkspaceData {
   const repo = createMetadataRepository(db);
+  const firstPage = repo.listFilesPage();
 
   return {
-    files: repo.listFiles(),
+    files: firstPage.files,
+    nextCursor: firstPage.nextCursor,
     projects: repo.listProjects(),
     categories: repo.listCategories(),
     tags: repo.listTags(),

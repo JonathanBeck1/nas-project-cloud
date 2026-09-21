@@ -36,5 +36,31 @@ describe("loadWorkspaceData", () => {
     expect(data.categories.length).toBeGreaterThan(1);
     expect(data.files).toEqual([]);
     expect(data.tags).toEqual([]);
+    expect(data.nextCursor).toBeNull();
+  });
+
+  it("loads only the first page of files and a cursor for the rest", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-workspace-"));
+    createdDirs.push(dir);
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    createdDbs.push(db);
+    const insert = db.prepare(`
+      insert into files
+        (id, name, extension, family, mime_type, size_bytes, checksum, storage_path, source_device, uploaded_at, updated_at, status)
+      values (?, ?, 'stl', 'cad', 'model/stl', 1, 'x', ?, 'd', ?, ?, 'active')
+    `);
+    const now = Date.now();
+    db.transaction(() => {
+      for (let index = 0; index < 150; index += 1) {
+        const uploadedAt = new Date(now - index * 1000).toISOString();
+        insert.run(`file_${index}`, `f${index}.stl`, `Inbox/d/f${index}.stl`, uploadedAt, uploadedAt);
+      }
+    })();
+
+    const data = loadWorkspaceData(db);
+
+    expect(data.files).toHaveLength(100);
+    expect(data.files[0].id).toBe("file_0");
+    expect(data.nextCursor).toEqual(expect.any(String));
   });
 });

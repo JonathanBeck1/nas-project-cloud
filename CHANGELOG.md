@@ -76,6 +76,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   Listings are ordered by `uploaded_at desc, name, id`, so files that tie on
   time and name now have a stable order. The web UI does not call this
   endpoint; third-party clients need to follow `nextCursor`.
+- **The workspace loads files a page at a time.** The home page renders
+  the newest 100 files and a "Load more" button fetches the next page. It
+  used to serialize every active file into the page (about 80 MB of HTML at
+  40,000 files; now about 200 KB).
 - **Pages no longer load the whole file table.** The projects index counts
   files per project with one `group by` query instead of loading every
   file, the archive page queries archived rows only, and smart views show
