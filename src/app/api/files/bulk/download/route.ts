@@ -36,8 +36,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "file not found" }, { status: 404 });
     }
 
-    const absolutePath = storage.absolutePathFor(file.storagePath);
-    if (await isFile(absolutePath)) {
+    const absolutePath = await readableFile(storage, file.storagePath);
+    if (absolutePath) {
       files.push({ file, absolutePath });
     } else {
       missing.push(file.name);
@@ -47,11 +47,15 @@ export async function GET(request: Request) {
   return createZipDownloadResponse(files, "nas-project-cloud-files.zip", missing);
 }
 
-async function isFile(absolutePath: string): Promise<boolean> {
+async function readableFile(
+  storage: ReturnType<typeof createStorageService>,
+  storagePath: string
+): Promise<string | null> {
   try {
-    return (await stat(absolutePath)).isFile();
+    const absolutePath = await storage.resolveReadPath(storagePath);
+    return (await stat(absolutePath)).isFile() ? absolutePath : null;
   } catch {
-    return false;
+    return null;
   }
 }
 

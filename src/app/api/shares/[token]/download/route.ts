@@ -63,10 +63,12 @@ async function downloadSharedFile(
     return NextResponse.json({ error: "share not found" }, { status: 404 });
   }
 
-  const storage = createStorageService();
-  const response = await createFileDownloadResponse(request, file, storage.absolutePathFor(file.storagePath), {
-    cacheControl: "no-store"
-  });
+  const absolutePath = await createStorageService()
+    .resolveReadPath(file.storagePath)
+    .catch(() => null);
+  const response = absolutePath
+    ? await createFileDownloadResponse(request, file, absolutePath, { cacheControl: "no-store" })
+    : null;
 
   if (!response) {
     return NextResponse.json({ error: "share not found" }, { status: 404 });

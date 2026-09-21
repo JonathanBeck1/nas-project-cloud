@@ -19,8 +19,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
 
-  const storage = createStorageService();
-  const response = await createFileDownloadResponse(request, file, storage.absolutePathFor(file.storagePath));
+  const absolutePath = await createStorageService()
+    .resolveReadPath(file.storagePath)
+    .catch(() => null);
+  const response = absolutePath ? await createFileDownloadResponse(request, file, absolutePath) : null;
 
   return response ?? NextResponse.json({ error: "file not found" }, { status: 404 });
 }

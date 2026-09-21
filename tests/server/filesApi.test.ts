@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     writeUpload: vi.fn(),
     streamUpload: vi.fn(),
     absolutePathFor: vi.fn(),
+    resolveReadPath: vi.fn(),
     moveToProject: vi.fn(),
     renameFile: vi.fn(),
     archiveFile: vi.fn(),
@@ -71,6 +72,9 @@ vi.mock("@/lib/shared/fileTypes", () => ({
 describe("files API module", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.storage.resolveReadPath.mockImplementation(async (relativePath: string) =>
+      mocks.storage.absolutePathFor(relativePath)
+    );
     mocks.appConfig.maxUploadBytes = 10;
     mocks.appConfig.storageRoot = os.tmpdir();
     mocks.repo.bulkUpdateFiles.mockReturnValue([]);

@@ -81,11 +81,19 @@ export function createStorageService(root = appConfig.storageRoot) {
   const storageRoot = path.resolve(root);
   const absolutePathFor = (relativePath: string) => {
     const absolutePath = path.resolve(storageRoot, relativePath);
-    const resolvedRelativePath = path.relative(storageRoot, absolutePath);
-    if (resolvedRelativePath.startsWith("..") || path.isAbsolute(resolvedRelativePath)) {
+    if (escapesRoot(storageRoot, absolutePath)) {
       throw new Error("Storage path escapes configured root");
     }
     return absolutePath;
+  };
+  // absolutePathFor is lexical. Anything that opens a file for reading goes through this, because a symlink
+  // dropped in over SMB could otherwise point a download at the app database or anything else the container can read.
+  const resolveReadPath = async (relativePath: string) => {
+    const [realRoot, realPath] = await Promise.all([fs.realpath(storageRoot), fs.realpath(absolutePathFor(relativePath))]);
+    if (escapesRoot(realRoot, realPath)) {
+      throw new Error("Storage path escapes configured root");
+    }
+    return realPath;
   };
 
   return {
@@ -109,6 +117,7 @@ export function createStorageService(root = appConfig.storageRoot) {
     },
 
     absolutePathFor,
+    resolveReadPath,
 
     /**
      * Stream the request body straight to a temp file, hash it on the
@@ -222,7 +231,7 @@ export function createStorageService(root = appConfig.storageRoot) {
     },
 
     async fileDetails(relativePath: string) {
-      const absolutePath = absolutePathFor(relativePath);
+      const absolutePath = await resolveReadPath(relativePath);
       const stats = await fs.stat(absolutePath);
       if (!stats.isFile()) {
         throw new Error("Storage path is not a file");
@@ -486,6 +495,12 @@ async function discardStaging(staging: Staging): Promise<void> {
   if (staging.path) {
     await fs.unlink(staging.path).catch(() => undefined);
   }
+}
+
+function escapesRoot(root: string, absolutePath: string): boolean {
+  const relative = path.relative(root, absolutePath);
+  // Not startsWith(".."): "..notes.txt" is a legal filename inside the root.
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
 }
 
 function uploadError(message: string, code: "UPLOAD_OFFSET_MISMATCH" | "UPLOAD_SIZE_MISMATCH"): Error {

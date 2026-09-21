@@ -173,4 +173,24 @@ describe("scanStorageRoot", () => {
     }
   });
 
+  it("ignores symlinks", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-index-"));
+    createdDirs.push(dir);
+    const storageRoot = path.join(dir, "storage");
+    fs.mkdirSync(path.join(storageRoot, "Inbox", "Mac"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "outside-dir"));
+    fs.writeFileSync(path.join(dir, "outside.txt"), "outside-root");
+    fs.writeFileSync(path.join(dir, "outside-dir", "note.txt"), "outside-root");
+    fs.symlinkSync(path.join(dir, "outside.txt"), path.join(storageRoot, "Inbox", "Mac", "link.txt"));
+    fs.symlinkSync(path.join(dir, "outside-dir"), path.join(storageRoot, "Inbox", "Mac", "linked-dir"));
+
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const result = await scanStorageRoot({ db, storageRoot });
+
+      expect(result).toEqual({ scanned: 0, indexed: 0 });
+    } finally {
+      db.close();
+    }
+  });
 });

@@ -65,6 +65,8 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   million codes and dead rows were kept, so a new code would eventually
   collide with one and return a `500`. Dead codes are deleted before each
   insert, and a collision with a live code draws a new one.
+- **Names starting with two dots are accepted.** `..notes.txt` was rejected
+  as escaping the storage root because the check was `startsWith("..")`.
 - **PDF previews are capped at 1024 px.** `pdftoppm` rendered at a fixed
   150 dpi, so a large-format page (an A0 plot is 4967 x 7021 px) or a
   hostile one could exhaust memory. Pages are now scaled to 1024 px.
@@ -127,6 +129,12 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Login no longer reveals which emails exist.** An unknown email skipped
   the password derivation and answered measurably faster. It now spends the
   same derivation.
+- **Reads cannot follow a symlink out of the storage root.** Path
+  containment was lexical, so a symlink placed over SMB could point a
+  download, share link, ZIP export, or preview at anything the container can
+  read, including the app database. Every read path now resolves the real
+  path and re-checks containment; a symlink that stays inside the root still
+  works. The indexer already ignored symlinks and now has a test for it.
 - **Only one owner can be created.** Setup checked for an existing user,
   then hashed the password, then inserted, so two simultaneous requests
   could both become owner. The insert now only succeeds into an empty users

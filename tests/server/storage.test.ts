@@ -375,6 +375,49 @@ describe("storage service", () => {
     );
   });
 
+  it("refuses to read through a symlink that leaves the storage root", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const root = path.join(dir, "root");
+    const secret = path.join(dir, "secret.txt");
+    fs.writeFileSync(secret, "outside-root");
+    fs.mkdirSync(path.join(root, "Inbox", "dev"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "outside-dir"));
+    fs.writeFileSync(path.join(dir, "outside-dir", "note.txt"), "outside-root");
+    fs.symlinkSync(secret, path.join(root, "Inbox", "dev", "link.txt"));
+    fs.symlinkSync(path.join(dir, "outside-dir"), path.join(root, "Inbox", "linked-dir"));
+    const storage = createStorageService(root);
+
+    await expect(storage.fileDetails("Inbox/dev/link.txt")).rejects.toThrow("escapes configured root");
+    await expect(storage.resolveReadPath("Inbox/dev/link.txt")).rejects.toThrow("escapes configured root");
+    await expect(storage.resolveReadPath("Inbox/linked-dir/note.txt")).rejects.toThrow("escapes configured root");
+  });
+
+  it("reads through a symlink that stays inside the storage root", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, "Inbox", "dev"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Inbox", "dev", "real.txt"), "inside");
+    fs.symlinkSync(path.join(dir, "Inbox", "dev", "real.txt"), path.join(dir, "Inbox", "dev", "alias.txt"));
+    const storage = createStorageService(dir);
+
+    const resolved = await storage.resolveReadPath("Inbox/dev/alias.txt");
+
+    expect(fs.readFileSync(resolved, "utf8")).toBe("inside");
+    expect(path.basename(resolved)).toBe("real.txt");
+  });
+
+  it("accepts names that merely start with two dots", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+
+    expect(storage.absolutePathFor("..notes.txt")).toBe(path.join(dir, "..notes.txt"));
+    expect(storage.absolutePathFor("Inbox/..hidden/file.txt")).toBe(path.join(dir, "Inbox", "..hidden", "file.txt"));
+    expect(() => storage.absolutePathFor("../outside.txt")).toThrow("escapes configured root");
+    expect(() => storage.absolutePathFor("..")).toThrow("escapes configured root");
+  });
+
   it("streamUpload pipes the body to a temp file and moves it into the target", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
     createdDirs.push(root);

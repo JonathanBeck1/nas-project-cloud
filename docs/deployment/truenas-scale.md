@@ -69,7 +69,7 @@ chown -R 1001:1001 /mnt/OfficeNAS/nas-project-cloud/files /mnt/OfficeNAS/nas-pro
 
 Alternatively, use ACL Manager to grant read/write/execute on both `files` and `appdata` to the container workload user (UID 1001) or a shared apps group.
 
-Avoid mixing SMB edits and app writes in the same active upload folders until the ownership model is clear. SMB is fine for snapshots, inspection, and future import workflows.
+Symlinks inside `files` are only followed when they resolve to somewhere inside `files`; the app refuses to download, share, export, or preview through one that leaves it. Avoid mixing SMB edits and app writes in the same active upload folders until the ownership model is clear. SMB is fine for snapshots, inspection, and future import workflows.
 
 ## Compose App
 

@@ -31,9 +31,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     // Uploads keep their folder structure under the project, so the export does too.
     const entryPath = file.storagePath.startsWith(projectRoot) ? file.storagePath.slice(projectRoot.length) : file.name;
-    const absolutePath = storage.absolutePathFor(file.storagePath);
+    const absolutePath = await readableFile(storage, file.storagePath);
     // SMB edits are not reconciled, so one renamed file must not sink the whole export.
-    if (await isFile(absolutePath)) {
+    if (absolutePath) {
       files.push({ file, absolutePath, entryPath });
     } else {
       missing.push(entryPath);
@@ -43,10 +43,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   return createZipDownloadResponse(files, `${project.slug}.zip`, missing);
 }
 
-async function isFile(absolutePath: string): Promise<boolean> {
+async function readableFile(
+  storage: ReturnType<typeof createStorageService>,
+  storagePath: string
+): Promise<string | null> {
   try {
-    return (await stat(absolutePath)).isFile();
+    const absolutePath = await storage.resolveReadPath(storagePath);
+    return (await stat(absolutePath)).isFile() ? absolutePath : null;
   } catch {
-    return false;
+    return null;
   }
 }

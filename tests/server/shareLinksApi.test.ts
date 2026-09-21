@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => {
     recordFileShareDownload: vi.fn()
   };
   const storage = {
-    absolutePathFor: vi.fn()
+    absolutePathFor: vi.fn(),
+    resolveReadPath: vi.fn()
   };
   const requireApiSession = vi.fn(async () => ({
     ok: true,
@@ -70,6 +71,9 @@ vi.mock("@/lib/server/storage", () => ({
 describe("share links API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.storage.resolveReadPath.mockImplementation(async (relativePath: string) =>
+      mocks.storage.absolutePathFor(relativePath)
+    );
     mocks.repo.getFileById.mockReturnValue({
       id: "file_123",
       name: "manual.pdf",

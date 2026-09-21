@@ -32,6 +32,7 @@ type PreviewRepo = {
 
 type PreviewStorage = {
   absolutePathFor: (relativePath: string) => string;
+  resolveReadPath?: (relativePath: string) => Promise<string>;
 };
 
 type ProcessPreviewJobInput = {
@@ -66,8 +67,11 @@ export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJo
     return;
   }
 
-  const absolutePath = storage.absolutePathFor(job.file.storagePath);
+  let absolutePath: string;
   try {
+    absolutePath = storage.resolveReadPath
+      ? await storage.resolveReadPath(job.file.storagePath)
+      : storage.absolutePathFor(job.file.storagePath);
     const stats = await fs.stat(absolutePath);
     if (!stats.isFile()) {
       throw new Error("storage path is not a file");

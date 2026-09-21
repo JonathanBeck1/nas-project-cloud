@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   },
   storage: {
     absolutePathFor: vi.fn(),
+    resolveReadPath: vi.fn(),
     moveToInbox: vi.fn()
   },
   requireApiSession: vi.fn()
@@ -48,6 +49,9 @@ const project = {
 describe("projects API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.storage.resolveReadPath.mockImplementation(async (relativePath: string) =>
+      mocks.storage.absolutePathFor(relativePath)
+    );
     mocks.requireApiSession.mockResolvedValue({
       ok: true,
       userId: "user_1",
