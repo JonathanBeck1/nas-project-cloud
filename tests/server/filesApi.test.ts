@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
     absolutePathFor: vi.fn(),
     resolveReadPath: vi.fn(),
     moveToProject: vi.fn(),
+    moveToInbox: vi.fn(),
     renameFile: vi.fn(),
     archiveFile: vi.fn(),
     restoreFile: vi.fn(),
@@ -707,20 +708,25 @@ describe("files API module", () => {
     expect(mocks.repo.updateFile).not.toHaveBeenCalled();
   });
 
-  it("does not move storage when clearing a file project on patch", async () => {
+  it("moves a file back to its device inbox when its project is cleared on patch", async () => {
     const { PATCH } = await import("@/app/api/files/[id]/route");
     mocks.repo.getFileById.mockReturnValue({
       id: "file_123",
       name: "bracket.stl",
       projectId: "proj_123",
+      sourceDevice: "Windows-PC",
       status: "active",
       storagePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
+    mocks.storage.moveToInbox.mockResolvedValue({
+      absolutePath: "/storage/Inbox/Windows-PC/bracket.stl",
+      relativePath: "Inbox/Windows-PC/bracket.stl"
     });
     mocks.repo.updateFile.mockReturnValue({
       id: "file_123",
       name: "bracket.stl",
       projectId: null,
-      storagePath: "Projects/print-parts/Inbox/bracket.stl"
+      storagePath: "Inbox/Windows-PC/bracket.stl"
     });
 
     const response = await PATCH(
@@ -732,12 +738,73 @@ describe("files API module", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.storage.moveToProject).not.toHaveBeenCalled();
+    expect(mocks.storage.moveToInbox).toHaveBeenCalledWith({
+      currentRelativePath: "Projects/print-parts/Inbox/bracket.stl",
+      sourceDevice: "Windows-PC",
+      filename: "bracket.stl"
+    });
     expect(mocks.repo.updateFile).toHaveBeenCalledWith(
       "file_123",
-      { projectId: null },
+      { projectId: null, storagePath: "Inbox/Windows-PC/bracket.stl" },
       { storagePath: "Projects/print-parts/Inbox/bracket.stl", status: "active" }
     );
+  });
+
+  it("does not move a file that has no project when its project is cleared", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      projectId: null,
+      sourceDevice: "Windows-PC",
+      status: "active",
+      storagePath: "Inbox/Windows-PC/bracket.stl"
+    });
+    mocks.repo.updateFile.mockReturnValue({ id: "file_123", name: "bracket.stl", projectId: null });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: null })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.storage.moveToInbox).not.toHaveBeenCalled();
+  });
+
+  it("puts the file back in its project when the metadata update fails after detaching", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      projectId: "proj_123",
+      sourceDevice: "Windows-PC",
+      status: "active",
+      storagePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
+    mocks.storage.moveToInbox.mockResolvedValue({
+      absolutePath: "/storage/Inbox/Windows-PC/bracket.stl",
+      relativePath: "Inbox/Windows-PC/bracket.stl"
+    });
+    mocks.repo.updateFile.mockImplementation(() => {
+      throw new Error("database is locked");
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: null })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(500);
+    expect(mocks.storage.restoreFile).toHaveBeenCalledWith({
+      currentRelativePath: "Inbox/Windows-PC/bracket.stl",
+      targetRelativePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
   });
 
   it("archives a file by moving storage and updating metadata", async () => {
