@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
   const repo = {
     bulkUpdateFiles: vi.fn(),
     listFiles: vi.fn(),
+    listFilesPage: vi.fn(),
     createFile: vi.fn(),
     getFileById: vi.fn(),
     getProjectById: vi.fn(),
@@ -138,22 +139,44 @@ describe("files API module", () => {
     }
   });
 
-  it("passes GET filters to the repository", async () => {
+  it("passes GET filters and paging to the repository", async () => {
     const { GET } = await import("@/app/api/files/route");
     const files = [{ id: "file_1" }];
-    mocks.repo.listFiles.mockReturnValue(files);
+    mocks.repo.listFilesPage.mockReturnValue({ files, nextCursor: "next" });
 
     const response = await GET(
-      new Request("http://localhost/api/files?query=bracket&projectId=proj_1&categoryId=cat_1")
+      new Request("http://localhost/api/files?query=bracket&projectId=proj_1&categoryId=cat_1&limit=50&cursor=abc")
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ files });
-    expect(mocks.repo.listFiles).toHaveBeenCalledWith({
-      query: "bracket",
-      projectId: "proj_1",
-      categoryId: "cat_1"
+    await expect(response.json()).resolves.toEqual({ files, nextCursor: "next" });
+    expect(mocks.repo.listFilesPage).toHaveBeenCalledWith(
+      { query: "bracket", projectId: "proj_1", categoryId: "cat_1" },
+      { limit: 50, cursor: "abc" }
+    );
+  });
+
+  it("pages with the default limit when none is given", async () => {
+    const { GET } = await import("@/app/api/files/route");
+    mocks.repo.listFilesPage.mockReturnValue({ files: [], nextCursor: null });
+
+    await GET(new Request("http://localhost/api/files?limit=lots"));
+
+    expect(mocks.repo.listFilesPage).toHaveBeenCalledWith(
+      { query: undefined, projectId: undefined, categoryId: undefined },
+      { limit: undefined, cursor: null }
+    );
+  });
+
+  it("answers a cursor it cannot decode with 400", async () => {
+    const { GET } = await import("@/app/api/files/route");
+    mocks.repo.listFilesPage.mockImplementation(() => {
+      throw Object.assign(new Error("invalid cursor"), { code: "INVALID_CURSOR" });
     });
+
+    const response = await GET(new Request("http://localhost/api/files?cursor=garbage"));
+
+    expect(response.status).toBe(400);
   });
 
   it("enqueues image previews when a direct upload creates image metadata", async () => {

@@ -253,8 +253,22 @@ type ListFilesFilters = {
   query?: string;
   projectId?: string | null;
   categoryId?: string | null;
+  status?: FileStatus;
   includeArchived?: boolean;
 };
+
+type ListFilesPageOptions = {
+  limit?: number;
+  cursor?: string | null;
+};
+
+export type FilesPage = {
+  files: CloudFile[];
+  nextCursor: string | null;
+};
+
+export const FILES_PAGE_DEFAULT_LIMIT = 100;
+export const FILES_PAGE_MAX_LIMIT = 500;
 
 export const SEARCH_FILES_LIMIT = 200;
 
@@ -914,31 +928,35 @@ export function createMetadataRepository(db: AppDatabase) {
     },
 
     listFiles(filters: ListFilesFilters = {}): CloudFile[] {
-      const where: string[] = [];
-      const params: Record<string, string | null> = {};
-
-      if (!filters.includeArchived) {
-        where.push("status = 'active'");
-      }
-
-      if (filters.query) {
-        where.push("(name like @query or storage_path like @query)");
-        params.query = `%${filters.query}%`;
-      }
-
-      if (filters.projectId !== undefined) {
-        where.push(filters.projectId === null ? "project_id is null" : "project_id = @projectId");
-        params.projectId = filters.projectId;
-      }
-
-      if (filters.categoryId !== undefined) {
-        where.push(filters.categoryId === null ? "category_id is null" : "category_id = @categoryId");
-        params.categoryId = filters.categoryId;
-      }
-
-      const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name`;
+      const { where, params } = fileListWhere(filters);
+      const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name, id`;
       const files = db.prepare<Record<string, string | null>, FileRow>(sql).all(params);
       return filesFromRowsWithTags(db, files);
+    },
+
+    listFilesPage(filters: ListFilesFilters = {}, options: ListFilesPageOptions = {}): FilesPage {
+      const limit = Math.max(1, Math.min(Math.floor(options.limit ?? FILES_PAGE_DEFAULT_LIMIT), FILES_PAGE_MAX_LIMIT));
+      const { where, params } = fileListWhere(filters);
+      const pageParams: Record<string, string | number | null> = { ...params, limit: limit + 1 };
+
+      if (options.cursor) {
+        const cursor = decodeFilesCursor(options.cursor);
+        // The leading bound is redundant but lets SQLite seek into files_listing_idx instead of scanning to the cursor.
+        where.push(
+          "uploaded_at <= @u and (uploaded_at < @u or (uploaded_at = @u and (name > @n or (name = @n and id > @i))))"
+        );
+        Object.assign(pageParams, cursor);
+      }
+
+      const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name, id limit @limit`;
+      const rows = db.prepare<Record<string, string | number | null>, FileRow>(sql).all(pageParams);
+      const pageRows = rows.slice(0, limit);
+      const last = pageRows[pageRows.length - 1];
+
+      return {
+        files: filesFromRowsWithTags(db, pageRows),
+        nextCursor: rows.length > limit && last ? encodeFilesCursor(last) : null
+      };
     },
 
     searchFiles(filters: SearchFilesFilters = {}): SearchFilesResult {
@@ -1650,6 +1668,54 @@ function uniqueSlug(db: AppDatabase, tableName: "projects" | "tags" | "categorie
   }
 
   return candidate;
+}
+
+function fileListWhere(filters: ListFilesFilters): { where: string[]; params: Record<string, string | null> } {
+  const where: string[] = [];
+  const params: Record<string, string | null> = {};
+
+  if (filters.status) {
+    where.push("status = @status");
+    params.status = filters.status;
+  } else if (!filters.includeArchived) {
+    where.push("status = 'active'");
+  }
+
+  if (filters.query) {
+    where.push("(name like @query or storage_path like @query)");
+    params.query = `%${filters.query}%`;
+  }
+
+  if (filters.projectId !== undefined) {
+    where.push(filters.projectId === null ? "project_id is null" : "project_id = @projectId");
+    params.projectId = filters.projectId;
+  }
+
+  if (filters.categoryId !== undefined) {
+    where.push(filters.categoryId === null ? "category_id is null" : "category_id = @categoryId");
+    params.categoryId = filters.categoryId;
+  }
+
+  return { where, params };
+}
+
+type FilesCursor = { u: string; n: string; i: string };
+
+function encodeFilesCursor(row: FileRow): string {
+  const cursor: FilesCursor = { u: row.uploaded_at, n: row.name, i: row.id };
+  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+}
+
+function decodeFilesCursor(value: string): FilesCursor {
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<FilesCursor>;
+    if (typeof parsed.u === "string" && typeof parsed.n === "string" && typeof parsed.i === "string") {
+      return { u: parsed.u, n: parsed.n, i: parsed.i };
+    }
+  } catch {
+    // fall through
+  }
+  throw Object.assign(new Error("invalid cursor"), { code: "INVALID_CURSOR" });
 }
 
 export function filesFromRowsWithTags(db: AppDatabase, rows: FileRow[]): CloudFile[] {

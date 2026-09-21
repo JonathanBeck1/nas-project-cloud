@@ -15,13 +15,24 @@ export async function GET(request: Request) {
 
   const repo = createMetadataRepository(getDatabase());
   const { searchParams } = new URL(request.url);
-  const files = repo.listFiles({
-    query: searchParams.get("query") ?? undefined,
-    projectId: searchParams.get("projectId") ?? undefined,
-    categoryId: searchParams.get("categoryId") ?? undefined
-  });
+  const limit = Number.parseInt(searchParams.get("limit") ?? "", 10);
 
-  return NextResponse.json({ files });
+  try {
+    const page = repo.listFilesPage(
+      {
+        query: searchParams.get("query") ?? undefined,
+        projectId: searchParams.get("projectId") ?? undefined,
+        categoryId: searchParams.get("categoryId") ?? undefined
+      },
+      { limit: Number.isInteger(limit) ? limit : undefined, cursor: searchParams.get("cursor") }
+    );
+    return NextResponse.json(page);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "INVALID_CURSOR") {
+      return NextResponse.json({ error: "invalid cursor" }, { status: 400 });
+    }
+    throw error;
+  }
 }
 
 export async function POST(request: Request) {

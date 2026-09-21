@@ -69,6 +69,13 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **`GET /api/files` is paginated (breaking).** It returns
+  `{ files, nextCursor }` with at most `limit` files (default 100, maximum
+  500) and takes the previous response's `nextCursor` as `cursor`. It used
+  to return every matching file. A cursor that cannot be decoded is a `400`.
+  Listings are ordered by `uploaded_at desc, name, id`, so files that tie on
+  time and name now have a stable order. The web UI does not call this
+  endpoint; third-party clients need to follow `nextCursor`.
 - **Preview backlog drains faster.** A full batch of 25 schedules the next
   tick after one second instead of 60, lifting a ceiling of about 1,500
   previews per hour. The scheduler and the maintenance endpoint share one

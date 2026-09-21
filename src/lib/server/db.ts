@@ -212,6 +212,9 @@ function migrate(db: AppDatabase) {
   addColumnIfMissing(db, "file_share_links", "password_hash", "text");
   addColumnIfMissing(db, "upload_sessions", "temp_path_cleaned_at", "text");
   addColumnIfMissing(db, "file_previews", "attempts", "integer not null default 0");
+
+  // After the column migrations: files.status does not exist until the line above adds it.
+  db.exec("create index if not exists files_listing_idx on files(status, uploaded_at desc, name, id)");
 }
 
 function addColumnIfMissing(db: AppDatabase, table: string, column: string, definition: string) {
