@@ -375,6 +375,51 @@ describe("storage service", () => {
     );
   });
 
+  async function storedName(filename: string): Promise<string> {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const stored = await createStorageService(dir).writeUpload({
+      target: { kind: "inbox", sourceDevice: "Browser" },
+      filename,
+      mimeType: "application/octet-stream",
+      bytes: Buffer.from("x")
+    });
+    return path.basename(stored.relativePath);
+  }
+
+  it("shortens names the filesystem would reject, on a character boundary, keeping the extension", async () => {
+    const ascii = await storedName(`${"a".repeat(300)}.stl`);
+    const multibyte = await storedName(`${"é".repeat(200)}.step`);
+    const emoji = await storedName(`${"📐".repeat(100)}.3mf`);
+
+    for (const name of [ascii, multibyte, emoji]) {
+      expect(Buffer.byteLength(name)).toBeLessThanOrEqual(240);
+      expect(name).not.toContain("\uFFFD");
+    }
+    expect(ascii.endsWith(".stl")).toBe(true);
+    expect(multibyte.endsWith(".step")).toBe(true);
+    expect(emoji.endsWith(".3mf")).toBe(true);
+  });
+
+  it.each([
+    ["CON", "_CON"],
+    ["nul.txt", "_nul.txt"],
+    ["COM1.stl", "_COM1.stl"],
+    ["lpt9.tar.gz", "_lpt9.tar.gz"],
+    ["console.log", "console.log"]
+  ])("keeps %s usable from Windows as %s", async (input, expected) => {
+    expect(await storedName(input)).toBe(expected);
+  });
+
+  it.each([
+    ["report. . ", "report"],
+    ["notes.txt.", "notes.txt"],
+    ["   ", "upload.bin"],
+    ["...", "upload.bin"]
+  ])("strips trailing dots and spaces from %j", async (input, expected) => {
+    expect(await storedName(input)).toBe(expected);
+  });
+
   it("refuses to read through a symlink that leaves the storage root", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
     createdDirs.push(dir);

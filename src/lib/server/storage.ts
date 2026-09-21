@@ -348,9 +348,42 @@ function targetDirectory(target: UploadTarget): string {
   return path.join("Projects", sanitizePathSegment(target.projectSlug), "Inbox");
 }
 
+// Filesystems stop at 255 bytes; the rest is room for a "-12" collision suffix.
+const MAX_FILENAME_BYTES = 240;
+const MAX_KEPT_EXTENSION_BYTES = 32;
+// Windows cannot open these over SMB, with or without an extension.
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+
 function sanitizeFilename(filename: string): string {
-  const base = path.basename(filename).replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").trim();
-  return base.length > 0 ? base : "upload.bin";
+  // Windows also drops trailing dots and spaces, so a name ending in one cannot be addressed from there.
+  const base = path
+    .basename(filename)
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
+    .replace(/[. ]+$/, "")
+    .trim();
+  if (base.length === 0) {
+    return "upload.bin";
+  }
+  return truncateFilename(WINDOWS_RESERVED_NAME.test(base) ? `_${base}` : base);
+}
+
+function truncateFilename(filename: string): string {
+  if (Buffer.byteLength(filename) <= MAX_FILENAME_BYTES) {
+    return filename;
+  }
+
+  const rawExtension = path.extname(filename);
+  const extension = Buffer.byteLength(rawExtension) <= MAX_KEPT_EXTENSION_BYTES ? rawExtension : "";
+  const budget = MAX_FILENAME_BYTES - Buffer.byteLength(extension);
+  let stem = "";
+  // for...of walks code points, so a multi-byte character or surrogate pair is never cut in half.
+  for (const character of filename.slice(0, filename.length - extension.length)) {
+    if (Buffer.byteLength(stem + character) > budget) {
+      break;
+    }
+    stem += character;
+  }
+  return `${stem.replace(/[. ]+$/, "")}${extension}`;
 }
 
 function sanitizePathSegment(segment: string): string {

@@ -74,6 +74,12 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `projectId: null` cleared the project in the database but left the file
   under `Projects/<slug>/`. It now moves to `Inbox/<sourceDevice>/`, and is
   moved back if the metadata update fails.
+- **Filenames that break the filesystem or SMB are made safe.** A name over
+  255 bytes failed the upload with `ENAMETOOLONG`; names are now shortened
+  to 240 bytes on a character boundary with the extension kept. Windows
+  reserved names (`CON`, `NUL`, `COM1`, ...) get a leading underscore, and
+  trailing dots and spaces are removed, since Windows cannot open either
+  over SMB. The name shown in the app is unchanged.
 - **A malformed cookie is no longer a 500.** Bad percent-encoding in the
   session or CSRF cookie threw while decoding. The request is now treated
   as unauthenticated (`401`) or as failing the CSRF check (`403`).
