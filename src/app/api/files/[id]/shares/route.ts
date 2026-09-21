@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiSession } from "@/lib/server/auth/guards";
-import { hashPassword } from "@/lib/server/auth/passwords";
+import { hashSharePassword } from "@/lib/server/auth/passwords";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createShareToken, hashShareToken, shareExpiresAt } from "@/lib/server/shareLinks";
@@ -53,7 +53,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     expiresAt: shareExpiresAt(parsed.data?.expiresInHours),
     maxDownloads: parsed.data?.maxDownloads ?? null,
     label: parsed.data?.label ?? null,
-    passwordHash: parsed.data?.password ? await hashPassword(parsed.data.password) : null
+    passwordHash: parsed.data?.password ? await hashSharePassword(parsed.data.password) : null
   });
 
   return NextResponse.json(

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiSession } from "@/lib/server/auth/guards";
-import { hashPassword } from "@/lib/server/auth/passwords";
+import { hashSharePassword } from "@/lib/server/auth/passwords";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { shareExpiresAt } from "@/lib/server/shareLinks";
@@ -71,7 +71,7 @@ export async function PATCH(
     ...(input.maxDownloads !== undefined ? { maxDownloads: input.maxDownloads } : {}),
     ...(input.label !== undefined ? { label: input.label } : {}),
     ...(input.password !== undefined
-      ? { passwordHash: input.password === null ? null : await hashPassword(input.password) }
+      ? { passwordHash: input.password === null ? null : await hashSharePassword(input.password) }
       : {})
   });
 

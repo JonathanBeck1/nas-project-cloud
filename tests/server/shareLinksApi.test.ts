@@ -50,6 +50,7 @@ vi.mock("@/lib/server/auth/guards", () => ({
 
 vi.mock("@/lib/server/auth/passwords", () => ({
   hashPassword: mocks.hashPassword,
+  hashSharePassword: mocks.hashPassword,
   verifyPassword: mocks.verifyPassword
 }));
 

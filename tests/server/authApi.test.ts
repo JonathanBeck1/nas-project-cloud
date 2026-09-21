@@ -9,17 +9,21 @@ const mocks = vi.hoisted(() => ({
     createDevice: vi.fn(),
     createSession: vi.fn(),
     getSessionByTokenHash: vi.fn(),
-    deleteSession: vi.fn()
+    deleteSession: vi.fn(),
+    updateUserPasswordHash: vi.fn()
   },
   hashPassword: vi.fn(),
-  verifyPassword: vi.fn()
+  verifyPassword: vi.fn(),
+  needsRehash: vi.fn()
 }));
 
 vi.mock("@/lib/server/db", () => ({ getDatabase: vi.fn(() => mocks.db) }));
 vi.mock("@/lib/server/metadata", () => ({ createMetadataRepository: vi.fn(() => mocks.repo) }));
 vi.mock("@/lib/server/auth/passwords", () => ({
   hashPassword: mocks.hashPassword,
-  verifyPassword: mocks.verifyPassword
+  verifyPassword: mocks.verifyPassword,
+  needsRehash: mocks.needsRehash,
+  DUMMY_PASSWORD_HASH: "scrypt:dummy"
 }));
 vi.mock("@/lib/server/rateLimit", () => ({
   createRateLimiter: () => ({
@@ -102,6 +106,44 @@ describe("auth API", () => {
     await expect(response.json()).resolves.toEqual({
       user: expect.objectContaining({ id: "user_1" })
     });
+  });
+
+  it("spends a password derivation even when the email is unknown", async () => {
+    const { POST } = await import("@/app/api/auth/login/route");
+    mocks.repo.getUserByEmail.mockReturnValue(null);
+    mocks.verifyPassword.mockResolvedValue(false);
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/auth/login", { email: "nobody@example.local", password: "whatever-password" })
+    );
+
+    expect(response.status).toBe(401);
+    expect(mocks.verifyPassword).toHaveBeenCalledWith("whatever-password", "scrypt:dummy");
+  });
+
+  it("rehashes a legacy password hash after a successful login", async () => {
+    const { POST } = await import("@/app/api/auth/login/route");
+    mocks.repo.getUserByEmail.mockReturnValue({
+      id: "user_1",
+      email: "owner@example.local",
+      name: "Owner",
+      role: "owner",
+      passwordHash: "scrypt:legacy-salt:legacy-hash"
+    });
+    mocks.needsRehash.mockReturnValue(true);
+    mocks.hashPassword.mockResolvedValue("scrypt:131072:8:1:salt:hash");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/auth/login", {
+        email: "owner@example.local",
+        password: "long-enough-password",
+        deviceName: "Mac Studio"
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.hashPassword).toHaveBeenCalledWith("long-enough-password");
+    expect(mocks.repo.updateUserPasswordHash).toHaveBeenCalledWith("user_1", "scrypt:131072:8:1:salt:hash");
   });
 
   it("rejects invalid login credentials", async () => {

@@ -117,6 +117,16 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   'none'; base-uri 'self'; object-src 'none'; form-action 'self'`. API
   routes are left out of that policy so downloads keep their stricter
   `default-src 'none'; sandbox`.
+- **Stronger password hashing.** Account passwords move from Node's scrypt
+  defaults (N=2^14) to N=2^17, r=8, p=1, OWASP's current minimum, and the
+  parameters are now stored in the hash (`scrypt:N:r:p:salt:hash`) so they
+  can be raised again. Existing hashes keep working and are upgraded on the
+  next successful login. Share-link passwords use N=2^15. At most two
+  derivations run at once, since each account derivation needs about
+  128 MiB.
+- **Login no longer reveals which emails exist.** An unknown email skipped
+  the password derivation and answered measurably faster. It now spends the
+  same derivation.
 - **Share-link passwords are rate limited.** Password attempts were
   unlimited and each one costs a scrypt. A share now allows 10 attempts per
   15 minutes and then answers `429` with `Retry-After`. Requests without a

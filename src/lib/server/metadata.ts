@@ -1326,6 +1326,14 @@ export function createMetadataRepository(db: AppDatabase) {
       return userWithoutPasswordHash(user);
     },
 
+    updateUserPasswordHash(userId: string, passwordHash: string): void {
+      db.prepare<[string, string, string]>("update users set password_hash = ?, updated_at = ? where id = ?").run(
+        passwordHash,
+        new Date().toISOString(),
+        userId
+      );
+    },
+
     getUserByEmail(email: string): UserWithPasswordHash | null {
       const row = db.prepare<[string], UserRow>("select * from users where email = ? limit 1").get(email);
       return row ? userWithPasswordHashFromRow(row) : null;

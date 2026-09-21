@@ -180,7 +180,7 @@ Memory: 2048 MiB minimum, 4096 MiB recommended if generating video/PDF previews
 
 Video and PDF previews use `ffmpeg` and `pdftoppm`; they are short-lived but can spike CPU and memory while processing large files.
 
-The compose file sets `mem_limit: 2g`, drops all Linux capabilities, sets `no-new-privileges`, and runs an init process as PID 1. If a preview job gets the container killed for memory, the job is counted: after the app restarts it is retried, and a file that takes the worker down three times is marked `failed` instead of looping. Raise `mem_limit` to `4g` if you store very large source images.
+The compose file sets `mem_limit: 2g`, drops all Linux capabilities, sets `no-new-privileges`, and runs an init process as PID 1. If a preview job gets the container killed for memory, the job is counted: after the app restarts it is retried, and a file that takes the worker down three times is marked `failed` instead of looping. Raise `mem_limit` to `4g` if you store very large source images. Signing in also needs memory: each account password check uses about 128 MiB for a fraction of a second, and at most two run at once.
 
 ## First-Run Verification
 
