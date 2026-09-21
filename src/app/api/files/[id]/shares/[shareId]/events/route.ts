@@ -24,6 +24,7 @@ export async function GET(
     return NextResponse.json({ error: "share not found" }, { status: 404 });
   }
 
+  // SECURITY: not scoped to created_by_user_id. Harmless with a single owner; an IDOR if multi-user lands.
   const events = repo.listFileShareAccessEvents(shareId);
   const format = new URL(request.url).searchParams.get("format");
   if (format === "csv") {

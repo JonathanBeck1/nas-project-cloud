@@ -31,6 +31,7 @@ export async function DELETE(
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
 
+  // SECURITY: not scoped to created_by_user_id. Harmless with a single owner; an IDOR if multi-user lands.
   const share = repo.revokeFileShareLink(file.id, shareId);
   return share
     ? NextResponse.json({ share })
@@ -66,6 +67,7 @@ export async function PATCH(
   }
 
   const input = parsed.data;
+  // SECURITY: not scoped to created_by_user_id. Harmless with a single owner; an IDOR if multi-user lands.
   const share = repo.updateFileShareLink(file.id, shareId, {
     ...(input.expiresInHours !== undefined ? { expiresAt: shareExpiresAt(input.expiresInHours) } : {}),
     ...(input.maxDownloads !== undefined ? { maxDownloads: input.maxDownloads } : {}),

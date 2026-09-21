@@ -24,6 +24,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
 async function handleChunk(request: Request, id: string) {
   const repo = createMetadataRepository(getDatabase());
+  // SECURITY: not scoped to the caller's user id. Harmless with a single owner; an IDOR if multi-user lands.
   const session = repo.getUploadSession(id);
   if (!session) {
     return NextResponse.json({ error: "upload session not found" }, { status: 404 });
