@@ -19,7 +19,7 @@ Tools like Nextcloud and OpenCloud are general-purpose. Tools like LocalSend are
 - **Project-first workspace** — Inbox, projects (with rename, status, delete, selected-file actions, and full-project ZIP export), custom categories with color, taggable files, per-file rename, selected-file ZIP downloads, local share links, folder-aware uploads, server-side search with composable filters, grid + list views, mobile sidebar drawer, dark mode, smart views, archive, and a 6-digit-code device pairing flow.
 - **Direct filesystem storage** — files live as real files under `Inbox/`, `Projects/<slug>/Inbox/`, `Library/`, and `Archive/<year>/<month>/`. SMB and Finder still work.
 - **SQLite metadata** — fast, single-file, journal-mode WAL. Indexed on project, category, family, and uploaded_at.
-- **Resumable large uploads** — chunked sessions with 8 MiB chunks, offset checking, abort, and stale-session cleanup. Default upload cap 2 GiB.
+- **Resumable large uploads** — chunked sessions with 8 MiB chunks (the server accepts up to 32 MiB per chunk), offset checking, automatic retry of a failed chunk, abort, and stale-session cleanup. Default upload cap 2 GiB.
 - **Preview pipeline** — automatic 384 px webp previews for images, video poster frames via `ffmpeg`, and first-page PDF previews via `poppler-utils`, streamed from authenticated routes.
 - **Trusted-device auth** — owner bootstrap on first run, scrypt password hashing, HTTP-only session cookie, route guards on every API and page, and pairing-code device trust.
 - **TrueNAS-ready** — Dockerfile, `docker-compose.truenas.yml`, deployment guide, and `/api/health` readiness check that exercises the storage mount, database, and preview binaries.

@@ -74,6 +74,7 @@ export type CompleteUploadSessionInput = {
   filename: string;
   relativePath?: string | null;
   mimeType: string;
+  sizeBytes: number;
 };
 
 export function createStorageService(root = appConfig.storageRoot) {
@@ -183,16 +184,25 @@ export function createStorageService(root = appConfig.storageRoot) {
         throw new Error("Upload temp path is not a file");
       }
 
-      if (stats.size !== input.offset) {
-        throw new Error("Upload chunk offset mismatch");
+      if (input.offset > stats.size) {
+        throw uploadError("Upload chunk offset mismatch", "UPLOAD_OFFSET_MISMATCH");
       }
 
-      await fs.writeFile(absolutePath, input.bytes, { flag: "a" });
-      return { receivedBytes: stats.size + input.bytes.length };
+      // Positional, not append: a resent chunk rewrites the same bytes instead of growing the file.
+      const handle = await fs.open(absolutePath, "r+");
+      try {
+        await handle.write(input.bytes, 0, input.bytes.length, input.offset);
+      } finally {
+        await handle.close();
+      }
+      return { receivedBytes: input.offset + input.bytes.length };
     },
 
     async completeUploadSession(input: CompleteUploadSessionInput): Promise<StoredFile> {
       const from = absolutePathFor(input.tempRelativePath);
+      if ((await fs.stat(from)).size !== input.sizeBytes) {
+        throw uploadError("Upload temp file size mismatch", "UPLOAD_SIZE_MISMATCH");
+      }
       const relativeDirectory = targetDirectory(input.target);
       const directory = path.join(storageRoot, relativeDirectory, safeRelativeDirectory(input.relativePath ?? undefined));
       const absolutePath = await moveIntoDirectory({
@@ -476,6 +486,10 @@ async function discardStaging(staging: Staging): Promise<void> {
   if (staging.path) {
     await fs.unlink(staging.path).catch(() => undefined);
   }
+}
+
+function uploadError(message: string, code: "UPLOAD_OFFSET_MISMATCH" | "UPLOAD_SIZE_MISMATCH"): Error {
+  return Object.assign(new Error(message), { code });
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

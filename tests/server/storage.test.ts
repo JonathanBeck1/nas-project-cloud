@@ -272,16 +272,17 @@ describe("storage service", () => {
     await expect(
       storage.appendUploadChunk({
         tempRelativePath: temp.relativePath,
-        offset: 3,
+        offset: 12,
         bytes: Buffer.from("bad")
       })
-    ).rejects.toThrow("Upload chunk offset mismatch");
+    ).rejects.toMatchObject({ message: "Upload chunk offset mismatch", code: "UPLOAD_OFFSET_MISMATCH" });
 
     const completed = await storage.completeUploadSession({
       tempRelativePath: temp.relativePath,
       target: { kind: "inbox", sourceDevice: "Browser" },
       filename: "movie.webm",
-      mimeType: "video/webm"
+      mimeType: "video/webm",
+      sizeBytes: 11
     });
 
     expect(completed.relativePath).toBe("Inbox/Browser/movie.webm");
@@ -289,6 +290,60 @@ describe("storage service", () => {
     expect(completed.mimeType).toBe("video/webm");
     expect(fs.readFileSync(path.join(dir, completed.relativePath), "utf8")).toBe("hello world");
     expect(fs.existsSync(path.join(dir, temp.relativePath))).toBe(false);
+  });
+
+  it("keeps the temp file intact when the same chunk arrives twice at once", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const temp = await storage.createUploadTempPath("upload_race");
+    const chunk = Buffer.alloc(1024 * 1024, 7);
+
+    await Promise.allSettled([
+      storage.appendUploadChunk({ tempRelativePath: temp.relativePath, offset: 0, bytes: chunk }),
+      storage.appendUploadChunk({ tempRelativePath: temp.relativePath, offset: 0, bytes: chunk })
+    ]);
+
+    expect(fs.readFileSync(temp.absolutePath).equals(chunk)).toBe(true);
+  });
+
+  it("rewrites a resent chunk in place", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const temp = await storage.createUploadTempPath("upload_resend");
+    await storage.appendUploadChunk({ tempRelativePath: temp.relativePath, offset: 0, bytes: Buffer.from("hello ") });
+    await storage.appendUploadChunk({ tempRelativePath: temp.relativePath, offset: 6, bytes: Buffer.from("world") });
+
+    const resent = await storage.appendUploadChunk({
+      tempRelativePath: temp.relativePath,
+      offset: 6,
+      bytes: Buffer.from("world")
+    });
+
+    expect(resent.receivedBytes).toBe(11);
+    expect(fs.readFileSync(temp.absolutePath, "utf8")).toBe("hello world");
+  });
+
+  it("refuses to complete an upload whose temp file is the wrong size", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const temp = await storage.createUploadTempPath("upload_short");
+    await storage.appendUploadChunk({ tempRelativePath: temp.relativePath, offset: 0, bytes: Buffer.from("hello") });
+
+    await expect(
+      storage.completeUploadSession({
+        tempRelativePath: temp.relativePath,
+        target: { kind: "inbox", sourceDevice: "Browser" },
+        filename: "movie.webm",
+        mimeType: "video/webm",
+        sizeBytes: 11
+      })
+    ).rejects.toMatchObject({ code: "UPLOAD_SIZE_MISMATCH" });
+
+    expect(fs.existsSync(temp.absolutePath)).toBe(true);
+    expect(fs.existsSync(path.join(dir, "Inbox", "Browser", "movie.webm"))).toBe(false);
   });
 
   it("aborts temp upload files without allowing path escape", async () => {
@@ -371,7 +426,8 @@ describe("storage service", () => {
       target: { kind: "project", projectSlug: "Garden Shed" },
       filename: "movie.webm",
       relativePath: "Shoot A/../Exports/movie.webm",
-      mimeType: "video/webm"
+      mimeType: "video/webm",
+      sizeBytes: 5
     });
 
     expect(stored.relativePath).toBe("Projects/Garden Shed/Inbox/Shoot A/Exports/movie.webm");

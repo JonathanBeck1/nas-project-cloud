@@ -76,25 +76,7 @@ export async function uploadFileInChunks({
   }
   onSessionCreated?.(sessionId);
 
-  for (let offset = 0; offset < file.size; offset += chunkSizeBytes) {
-    const end = Math.min(offset + chunkSizeBytes, file.size);
-    const chunkResponse = await fetchImpl(`/api/upload-sessions/${sessionId}/chunk`, {
-      method: "POST",
-      headers: { "upload-offset": String(offset), ...csrfHeaders() },
-      body: file.slice(offset, end),
-      signal
-    });
-
-    if (!chunkResponse.ok) {
-      throw new Error(await uploadErrorMessage(chunkResponse));
-    }
-
-    const chunkBody = (await chunkResponse.json()) as UploadSessionResponse;
-    onProgress?.({
-      loadedBytes: chunkBody.session?.receivedBytes ?? end,
-      totalBytes: file.size
-    });
-  }
+  await sendChunks({ sessionId, file, startOffset: 0, sizeBytes: file.size, chunkSizeBytes, fetchImpl, signal, onProgress });
 
   const completeResponse = await fetchImpl(`/api/upload-sessions/${sessionId}/complete`, {
     method: "POST",
@@ -111,6 +93,88 @@ export async function uploadFileInChunks({
     throw new Error("Upload failed");
   }
   return completeBody.file;
+}
+
+const CHUNK_ATTEMPTS = 4;
+const RETRY_BASE_MS = 500;
+
+type SendChunksInput = {
+  sessionId: string;
+  file: File;
+  startOffset: number;
+  sizeBytes: number;
+  chunkSizeBytes: number;
+  fetchImpl: typeof fetch;
+  signal?: AbortSignal;
+  onProgress?: (progress: UploadProgress) => void;
+};
+
+async function sendChunks({
+  sessionId,
+  file,
+  startOffset,
+  sizeBytes,
+  chunkSizeBytes,
+  fetchImpl,
+  signal,
+  onProgress
+}: SendChunksInput): Promise<void> {
+  let offset = startOffset;
+  let failures = 0;
+
+  while (offset < sizeBytes) {
+    const end = Math.min(offset + chunkSizeBytes, sizeBytes);
+    let response: Response | null = null;
+    let networkError: unknown = null;
+    try {
+      response = await fetchImpl(`/api/upload-sessions/${encodeURIComponent(sessionId)}/chunk`, {
+        method: "POST",
+        headers: { "upload-offset": String(offset), ...csrfHeaders() },
+        body: file.slice(offset, end),
+        signal
+      });
+    } catch (error) {
+      if (signal?.aborted) {
+        throw error;
+      }
+      networkError = error;
+    }
+
+    if (response?.ok) {
+      const chunkBody = (await response.json()) as UploadSessionResponse;
+      onProgress?.({ loadedBytes: chunkBody.session?.receivedBytes ?? end, totalBytes: sizeBytes });
+      offset = end;
+      failures = 0;
+      continue;
+    }
+
+    const errorBody = response ? await errorBodyFrom(response) : {};
+    // A 409 carries the server's offset: a chunk whose response was lost has already landed.
+    const serverOffset =
+      response?.status === 409 && typeof errorBody.receivedBytes === "number" ? errorBody.receivedBytes : null;
+    const retryable = !response || response.status >= 500 || serverOffset !== null;
+    failures += 1;
+    if (!retryable || failures >= CHUNK_ATTEMPTS) {
+      if (networkError) {
+        throw networkError;
+      }
+      throw new Error(typeof errorBody.error === "string" && errorBody.error ? errorBody.error : "Upload failed");
+    }
+
+    if (serverOffset !== null) {
+      offset = serverOffset;
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_MS * 2 ** (failures - 1)));
+    }
+  }
+}
+
+async function errorBodyFrom(response: Response): Promise<{ error?: unknown; receivedBytes?: unknown }> {
+  try {
+    return (await response.json()) as { error?: unknown; receivedBytes?: unknown };
+  } catch {
+    return {};
+  }
 }
 
 export async function abortUploadSession(sessionId: string, fetchImpl: typeof fetch = fetch): Promise<void> {
@@ -134,25 +198,7 @@ export async function resumeUploadSession({
   signal,
   onProgress
 }: ResumeUploadSessionInput): Promise<CloudFile> {
-  for (let offset = receivedBytes; offset < sizeBytes; offset += chunkSizeBytes) {
-    const end = Math.min(offset + chunkSizeBytes, sizeBytes);
-    const chunkResponse = await fetchImpl(`/api/upload-sessions/${encodeURIComponent(sessionId)}/chunk`, {
-      method: "POST",
-      headers: { "upload-offset": String(offset), ...csrfHeaders() },
-      body: file.slice(offset, end),
-      signal
-    });
-
-    if (!chunkResponse.ok) {
-      throw new Error(await uploadErrorMessage(chunkResponse));
-    }
-
-    const chunkBody = (await chunkResponse.json()) as UploadSessionResponse;
-    onProgress?.({
-      loadedBytes: chunkBody.session?.receivedBytes ?? end,
-      totalBytes: sizeBytes
-    });
-  }
+  await sendChunks({ sessionId, file, startOffset: receivedBytes, sizeBytes, chunkSizeBytes, fetchImpl, signal, onProgress });
 
   const completeResponse = await fetchImpl(`/api/upload-sessions/${encodeURIComponent(sessionId)}/complete`, {
     method: "POST",

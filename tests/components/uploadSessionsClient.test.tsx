@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   listOpenUploadSessions,
   listUploadSessions,
@@ -227,5 +227,96 @@ describe("resumeUploadSession", () => {
       "/api/upload-sessions/upload_1/complete",
       expect.objectContaining({ method: "POST" })
     );
+  });
+});
+
+describe("chunk retry", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function chunkFetch(chunkResponses: Array<() => Promise<Response>>) {
+    return vi.fn<typeof fetch>((url) => {
+      if (url === "/api/upload-sessions/upload_1/chunk") {
+        const next = chunkResponses.shift();
+        return next ? next() : Promise.resolve(new Response("{}", { status: 500 }));
+      }
+      if (url === "/api/upload-sessions/upload_1/complete") {
+        return Promise.resolve(new Response(JSON.stringify({ file: { id: "file_1" } }), { status: 201 }));
+      }
+      return Promise.resolve(new Response("bad", { status: 500 }));
+    });
+  }
+
+  const ok = (receivedBytes: number) => () =>
+    Promise.resolve(new Response(JSON.stringify({ session: { receivedBytes } }), { status: 200 }));
+  const status = (code: number, body: object = {}) => () =>
+    Promise.resolve(new Response(JSON.stringify(body), { status: code }));
+
+  function resume(fetchMock: typeof fetch) {
+    return resumeUploadSession({
+      sessionId: "upload_1",
+      file: new File([new Uint8Array(10)], "movie.webm"),
+      receivedBytes: 0,
+      sizeBytes: 10,
+      chunkSizeBytes: 4,
+      fetchImpl: fetchMock
+    });
+  }
+
+  const chunkOffsets = (fetchMock: ReturnType<typeof chunkFetch>) =>
+    fetchMock.mock.calls
+      .filter(([url]) => url === "/api/upload-sessions/upload_1/chunk")
+      .map(([, init]) => (init?.headers as Record<string, string>)["upload-offset"]);
+
+  it("retries a chunk after a network error and a 5xx", async () => {
+    vi.useFakeTimers();
+    const fetchMock = chunkFetch([
+      () => Promise.reject(new TypeError("Failed to fetch")),
+      status(503),
+      ok(4),
+      ok(8),
+      ok(10)
+    ]);
+
+    const upload = resume(fetchMock);
+    await vi.runAllTimersAsync();
+
+    await expect(upload).resolves.toEqual({ id: "file_1" });
+    expect(chunkOffsets(fetchMock)).toEqual(["0", "0", "0", "4", "8"]);
+  });
+
+  it("resumes from the server's offset after a 409", async () => {
+    vi.useFakeTimers();
+    const fetchMock = chunkFetch([
+      status(409, { error: "upload offset mismatch", receivedBytes: 4 }),
+      ok(8),
+      ok(10)
+    ]);
+
+    const upload = resume(fetchMock);
+    await vi.runAllTimersAsync();
+
+    await expect(upload).resolves.toEqual({ id: "file_1" });
+    expect(chunkOffsets(fetchMock)).toEqual(["0", "4", "8"]);
+  });
+
+  it("gives up after repeated failures", async () => {
+    vi.useFakeTimers();
+    const fetchMock = chunkFetch([]);
+
+    const upload = resume(fetchMock);
+    const settled = expect(upload).rejects.toThrow("Upload failed");
+    await vi.runAllTimersAsync();
+
+    await settled;
+    expect(chunkOffsets(fetchMock)).toEqual(["0", "0", "0", "0"]);
+  });
+
+  it("does not retry a rejected chunk", async () => {
+    const fetchMock = chunkFetch([status(413, { error: "chunk exceeds declared upload size" })]);
+
+    await expect(resume(fetchMock)).rejects.toThrow("chunk exceeds declared upload size");
+    expect(chunkOffsets(fetchMock)).toEqual(["0"]);
   });
 });

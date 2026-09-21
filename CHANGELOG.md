@@ -14,21 +14,31 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Re-indexing no longer ingests the app's own files.** Root dot-entries
   (`.uploads/`, `.previews/`, the health probe) are skipped, and files under
   `Projects/<slug>/` are attached to that project, which is created if needed.
-
 - **Libraries past 32,766 files load again.** Listing files bound one SQL
   variable per row, so the workspace, projects page, `GET /api/files`, and
   project ZIP export all failed with "too many SQL variables" beyond
   SQLite's limit. Tags and previews are now fetched with a single parameter.
-
 - **Moves work across filesystems.** Move, rename, archive, restore, and
   upload completion all hard-link the file into place, which fails with
   `EXDEV` when `Projects/` or `Archive/` is a child ZFS dataset. They now
   fall back to a copy staged in the destination folder and linked into
   place, so an existing file is still never overwritten and the source is
   removed only after the destination is complete.
+- **A chunk that arrives twice no longer corrupts the upload.** Chunks were
+  appended, so a replayed or concurrent duplicate grew the temp file even
+  though its request was rejected; the session then wedged with a 500, or a
+  duplicated final chunk completed a corrupt file. Chunks are now written
+  at their offset, requests for one session are handled one at a time, a
+  storage offset mismatch answers `409` with `receivedBytes`, and
+  `complete` fails the session if the temp file is not the declared size.
+- **The browser retries a failed chunk.** Network errors and 5xx responses
+  are retried with backoff, and a `409` resumes from the server's offset.
 
 ### Changed
 
+- **Chunks are capped at 32 MiB.** A larger chunk is rejected with `413`
+  before it is buffered; previously one "chunk" could hold the whole upload
+  in memory. The web client sends 8 MiB chunks and is unaffected.
 - **Recovery docs are explicit.** README and the TrueNAS guide state what a
   re-index restores, what only an `appdata` backup restores, and that the
   script is not in the Docker image.

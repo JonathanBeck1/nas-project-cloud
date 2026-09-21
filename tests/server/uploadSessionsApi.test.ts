@@ -317,6 +317,118 @@ describe("upload sessions API module", () => {
     expect(mocks.storage.appendUploadChunk).not.toHaveBeenCalled();
   });
 
+  it("handles one chunk at a time per session so a duplicate is rejected before it is written", async () => {
+    const { POST } = await import("@/app/api/upload-sessions/[id]/chunk/route");
+    let receivedBytes = 0;
+    mocks.repo.getUploadSession.mockImplementation(() => ({ ...openSession, receivedBytes }));
+    mocks.repo.advanceUploadSession.mockImplementation((id, input) => {
+      receivedBytes = input.receivedBytes;
+      return { ...openSession, id, receivedBytes };
+    });
+    mocks.storage.appendUploadChunk.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { receivedBytes: 5 };
+    });
+    const send = () =>
+      POST(
+        new Request("http://localhost/api/upload-sessions/upload_1/chunk", {
+          method: "POST",
+          headers: { "upload-offset": "0" },
+          body: "hello"
+        }),
+        { params: Promise.resolve({ id: "upload_1" }) }
+      );
+
+    const responses = await Promise.all([send(), send()]);
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(mocks.storage.appendUploadChunk).toHaveBeenCalledTimes(1);
+    const rejected = responses.find((response) => response.status === 409);
+    await expect(rejected?.json()).resolves.toMatchObject({ receivedBytes: 5 });
+  });
+
+  it("answers a storage offset mismatch with 409 and the offset to resume from", async () => {
+    const { POST } = await import("@/app/api/upload-sessions/[id]/chunk/route");
+    mocks.storage.appendUploadChunk.mockRejectedValue(
+      Object.assign(new Error("Upload chunk offset mismatch"), { code: "UPLOAD_OFFSET_MISMATCH" })
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/upload-sessions/upload_1/chunk", {
+        method: "POST",
+        headers: { "upload-offset": "0" },
+        body: "hello"
+      }),
+      { params: Promise.resolve({ id: "upload_1" }) }
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ receivedBytes: 0 });
+  });
+
+  it("rejects an oversized chunk by content-length without reading the body", async () => {
+    const { POST } = await import("@/app/api/upload-sessions/[id]/chunk/route");
+    const request = new Request("http://localhost/api/upload-sessions/upload_1/chunk", {
+      method: "POST",
+      headers: { "upload-offset": "0", "content-length": String(32 * 1024 * 1024 + 1) },
+      body: "hello"
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ id: "upload_1" }) });
+
+    expect(response.status).toBe(413);
+    expect(request.bodyUsed).toBe(false);
+    expect(mocks.storage.appendUploadChunk).not.toHaveBeenCalled();
+  });
+
+  it("stops reading a streamed chunk once it passes the cap", async () => {
+    const { POST } = await import("@/app/api/upload-sessions/[id]/chunk/route");
+    const mebibyte = new Uint8Array(1024 * 1024);
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 64) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(mebibyte);
+      }
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/upload-sessions/upload_1/chunk", {
+        method: "POST",
+        headers: { "upload-offset": "0" },
+        body,
+        duplex: "half"
+      } as RequestInit),
+      { params: Promise.resolve({ id: "upload_1" }) }
+    );
+
+    expect(response.status).toBe(413);
+    expect(pulls).toBeLessThan(40);
+    expect(mocks.storage.appendUploadChunk).not.toHaveBeenCalled();
+  });
+
+  it("fails the session instead of completing a temp file of the wrong size", async () => {
+    const { POST } = await import("@/app/api/upload-sessions/[id]/complete/route");
+    mocks.repo.getUploadSession.mockReturnValue({ ...openSession, receivedBytes: 11 });
+    mocks.storage.completeUploadSession.mockRejectedValue(
+      Object.assign(new Error("Upload temp file size mismatch"), { code: "UPLOAD_SIZE_MISMATCH" })
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/upload-sessions/upload_1/complete", { method: "POST" }),
+      { params: Promise.resolve({ id: "upload_1" }) }
+    );
+
+    expect(response.status).toBe(409);
+    expect(mocks.repo.failUploadSession).toHaveBeenCalledWith("upload_1", "upload size mismatch");
+    expect(mocks.storage.abortUploadSession).toHaveBeenCalledWith(".uploads/upload_1.part");
+    expect(mocks.repo.createFile).not.toHaveBeenCalled();
+  });
+
   it("completes a session into normal file metadata", async () => {
     const { POST } = await import("@/app/api/upload-sessions/[id]/complete/route");
     mocks.repo.getUploadSession.mockReturnValue({ ...openSession, receivedBytes: 11 });

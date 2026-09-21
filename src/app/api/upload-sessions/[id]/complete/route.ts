@@ -4,6 +4,7 @@ import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { enqueuePreviewForFile } from "@/lib/server/previews/enqueue";
 import { createStorageService, type UploadTarget } from "@/lib/server/storage";
+import { withUploadSessionLock } from "@/lib/server/uploadSessionLock";
 import { classifyFile } from "@/lib/shared/fileTypes";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -13,6 +14,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
+  return withUploadSessionLock(id, () => completeSession(id));
+}
+
+async function completeSession(id: string) {
   const repo = createMetadataRepository(getDatabase());
   const session = repo.getUploadSession(id);
   if (!session) {
@@ -34,13 +39,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       : { kind: "inbox", sourceDevice: session.sourceDevice };
 
   const storage = createStorageService();
-  const stored = await storage.completeUploadSession({
-    tempRelativePath: session.tempPath,
-    target,
-    filename: session.filename,
-    relativePath: session.relativePath,
-    mimeType: session.mimeType
-  });
+  let stored;
+  try {
+    stored = await storage.completeUploadSession({
+      tempRelativePath: session.tempPath,
+      target,
+      filename: session.filename,
+      relativePath: session.relativePath,
+      mimeType: session.mimeType,
+      sizeBytes: session.sizeBytes
+    });
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "UPLOAD_SIZE_MISMATCH") {
+      await storage.abortUploadSession(session.tempPath).catch(() => undefined);
+      repo.failUploadSession(id, "upload size mismatch");
+      return NextResponse.json({ error: "upload size mismatch" }, { status: 409 });
+    }
+    throw error;
+  }
 
   if (session.checksum && session.checksum !== stored.checksum) {
     await storage.deleteFile(stored.relativePath).catch(() => undefined);
