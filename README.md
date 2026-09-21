@@ -17,9 +17,10 @@ Tools like Nextcloud and OpenCloud are general-purpose. Tools like LocalSend are
 ## Features
 
 - **Project-first workspace** — Inbox, projects (with rename, status, delete, selected-file actions, and full-project ZIP export), custom categories with color, taggable files, per-file rename, selected-file ZIP downloads, local share links, folder-aware uploads, server-side search with composable filters, grid + list views, mobile sidebar drawer, dark mode, smart views, archive, and a 6-digit-code device pairing flow.
+- **Resumable downloads** — file and share-link downloads honor HTTP `Range`, so an interrupted transfer of a multi-gigabyte file picks up where it stopped.
 - **Direct filesystem storage** — files live as real files under `Inbox/`, `Projects/<slug>/Inbox/`, `Library/`, and `Archive/<year>/<month>/`. SMB and Finder still work.
 - **SQLite metadata** — fast, single-file, journal-mode WAL. Indexed on project, category, family, and uploaded_at.
-- **Resumable large uploads** — chunked sessions with 8 MiB chunks, offset checking, abort, and stale-session cleanup. Default upload cap 2 GiB.
+- **Resumable large uploads** — chunked sessions with 8 MiB chunks (the server accepts up to 32 MiB per chunk), offset checking, automatic retry of a failed chunk, abort, and stale-session cleanup. Default upload cap 2 GiB.
 - **Preview pipeline** — automatic 384 px webp previews for images, video poster frames via `ffmpeg`, and first-page PDF previews via `poppler-utils`, streamed from authenticated routes.
 - **Trusted-device auth** — owner bootstrap on first run, scrypt password hashing, HTTP-only session cookie, route guards on every API and page, and pairing-code device trust.
 - **TrueNAS-ready** — Dockerfile, `docker-compose.truenas.yml`, deployment guide, and `/api/health` readiness check that exercises the storage mount, database, and preview binaries.
@@ -69,7 +70,7 @@ Next.js 15 App Router, React 19, TypeScript, Tailwind CSS, [Radix UI](https://ww
                   └──────────────────┘   └────────────────────┘
 ```
 
-Files are the source of truth. SQLite is a metadata index that can be rebuilt from the storage tree with `npm run index:storage`.
+Files are the source of truth for file contents, but SQLite holds more than an index. `npm run index:storage` rebuilds file records from the storage tree: each file, its project (inferred from `Projects/<slug>/`), and a default category. It cannot restore tags, custom categories, share links, users, devices, or upload sessions, so back up `appdata` alongside `files`. The script runs from a source checkout; the published Docker image does not include it.
 
 ## Quick start (development)
 
@@ -131,7 +132,7 @@ npm run typecheck     # tsc --noEmit
 npm run lint          # eslint .
 npm run build         # production build
 npm run test:e2e      # Playwright (boots its own dev server on :3100)
-npm run index:storage # rebuild the metadata index from disk
+npm run index:storage # re-add files and inferred projects from disk (source checkout only)
 npm run previews:generate # process pending preview jobs
 npm run screenshots   # regenerate docs/screenshots/*.png
 ```
@@ -142,7 +143,7 @@ The verification gate before any commit to `main` is:
 npm test && npm run typecheck && npm run lint && npm run build && npm run test:e2e
 ```
 
-The same gate runs on every pull request via [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) and again in [`.github/workflows/docker-publish.yml`](./.github/workflows/docker-publish.yml) before the image is published.
+The same gate runs on every pull request and push to `main` via [`.github/workflows/ci.yml`](./.github/workflows/ci.yml). [`.github/workflows/docker-publish.yml`](./.github/workflows/docker-publish.yml) repeats the unit, type, lint, and build checks before it publishes the image; it does not run the Playwright suite. Published images carry build provenance and an SBOM, and every action in both workflows is pinned to a commit SHA that Dependabot keeps current.
 
 ## Project layout
 
@@ -184,13 +185,13 @@ tests/
 
 NAS Project Cloud is intentionally LAN-first and pre-1.0. Things that are stubbed, partial, or deliberately deferred:
 
-- **Search uses `LIKE`, not FTS.** Good for the typical NAS corpus; an SQLite FTS5 index lands once the test corpus exposes a hot path. Result lists are capped at 200 rows with a banner.
+- **Search uses `LIKE`, not FTS.** Good for the typical NAS corpus; an SQLite FTS5 index lands once the test corpus exposes a hot path. Search results and smart views are capped at 200 rows with a banner.
 - **Previews: image, video, and single-page PDF today.** Video poster frames need `ffmpeg`; PDF first-page previews need `poppler-utils` (`pdftoppm`). Both are baked into the default Docker image; missing binaries are recorded as `unsupported` instead of crashing the worker. Other document families (docx, xlsx) and CAD families stay `skipped`. The Settings → Preview pipeline card shows live counts and `ffmpeg ready / unavailable` + `poppler ready / unavailable` badges.
-- **Preview worker is opt-in.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on` to run the in-process scheduler, or hit `POST /api/maintenance/previews` from cron. Defaults to off so dev environments don't fight the test runner.
+- **Preview worker is opt-in.** Set `NAS_CLOUD_PREVIEW_SCHEDULER=on` to run the in-process scheduler, which also cleans up abandoned uploads hourly, or hit `POST /api/maintenance/previews` and `POST /api/maintenance/upload-cleanup` from cron. Defaults to off so dev environments don't fight the test runner.
 - **Upload Center has tabs for Active / Failed / Aborted sessions** with a per-device filter. Active chunked uploads can be resumed by selecting the same local file again, and failed uploads can be retried as clean replacement sessions. The cleanup job tidies orphaned chunks for failed sessions older than 24 hours.
 - **Folder path preservation is workspace-ready.** Direct and chunked browser uploads preserve folder-relative paths when the browser provides them. Inbox and project workspaces both expose explicit file and folder pickers.
 - **Project delete is explicit about file handling.** You can detach metadata only or move active files back to `Inbox/<device>/` before deleting the project. Archived files are left in the archive tree.
-- **Changes made over SMB are not reconciled.** The app only tracks files it wrote itself. Renaming, moving, or deleting a file over SMB leaves its record pointing at the old path, and `npm run index:storage` adds new paths without clearing stale ones. Until a reconcile pass exists, treat SMB as read access and recovery.
+- **Changes made over SMB are not reconciled.** The app only tracks files it wrote itself. Renaming, moving, or deleting a file over SMB leaves its record pointing at the old path, and `npm run index:storage` adds new paths without clearing stale ones. Until a reconcile pass exists, treat SMB as read access and recovery. ZIP exports skip files that are missing on disk and list them in a `_MISSING.txt` entry rather than failing.
 - **Share links are file-level links.** Owners can create, list, edit, and revoke short-lived file download links from the detail drawer, including labels, expiry windows, optional download caps, optional passwords, recent access metadata, and CSV access-history export. Recipients use a local download page. Project/folder share pages are still future work.
 
 A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers/plans/2026-05-03-product-completion-sprint.md`](./docs/superpowers/plans/2026-05-03-product-completion-sprint.md).

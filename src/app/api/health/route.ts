@@ -1,15 +1,33 @@
 import { NextResponse } from "next/server";
+import { requireMaintenanceAuth } from "@/lib/server/auth/maintenance";
 import { checkHealth, type HealthCheckResult } from "@/lib/server/health";
 
-export async function GET() {
+export async function GET(request: Request) {
   const health = await checkHealth();
+  // Error text can carry absolute paths and the tool versions help fingerprint the host, so they
+  // go only to a session or the maintenance token. The status code is all a container healthcheck reads.
+  const detailed = (await requireMaintenanceAuth(request)).ok;
 
-  return NextResponse.json(publicHealth(health), {
+  return NextResponse.json(detailed ? detailedHealth(health) : anonymousHealth(health), {
     status: health.ok ? 200 : 503
   });
 }
 
-function publicHealth(health: HealthCheckResult) {
+function anonymousHealth(health: HealthCheckResult) {
+  return {
+    ok: health.ok,
+    checks: {
+      storage: { ok: health.checks.storage.ok },
+      database: { ok: health.checks.database.ok },
+      previewTools: {
+        ffmpeg: { ok: health.checks.previewTools.ffmpeg.ok },
+        poppler: { ok: health.checks.previewTools.poppler.ok }
+      }
+    }
+  };
+}
+
+function detailedHealth(health: HealthCheckResult) {
   return {
     ok: health.ok,
     checks: {

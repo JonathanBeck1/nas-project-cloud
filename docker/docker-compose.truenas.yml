@@ -1,8 +1,18 @@
 services:
   nas-project-cloud:
+    # :latest is rebuilt on every push to main. Pin a release tag (for example :0.3.1) for a repeatable install.
     image: ghcr.io/jonathanbeck1/nas-project-cloud:latest
     container_name: nas-project-cloud
     restart: unless-stopped
+    # PID 1 in the image is npm, which neither forwards signals nor reaps ffmpeg/pdftoppm children.
+    init: true
+    # A hostile or oversized image, video, or PDF gets this container killed, not the NAS. Raise to 4g for very large source images.
+    mem_limit: 2g
+    # The app runs as UID 1001 on an unprivileged port and needs no capabilities.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "3000:3000"
     environment:

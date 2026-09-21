@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function ProjectsPage() {
   const { repo } = await requirePageSession();
   const projects = repo.listProjects();
-  const files = repo.listFiles();
+  const fileCounts = repo.countActiveFilesByProject();
 
   return (
     <WorkspaceFrame projects={projects} activeHref="/projects">
@@ -18,7 +18,7 @@ export default async function ProjectsPage() {
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
           {projects.map((project) => {
-            const projectFiles = files.filter((file) => file.projectId === project.id);
+            const fileCount = fileCounts.get(project.id) ?? 0;
             return (
               <Link
                 key={project.id}
@@ -35,7 +35,7 @@ export default async function ProjectsPage() {
                       {project.description || "No description yet"}
                     </p>
                     <p className="mt-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted">
-                      {projectFiles.length} {projectFiles.length === 1 ? "file" : "files"}
+                      {fileCount} {fileCount === 1 ? "file" : "files"}
                     </p>
                   </div>
                 </div>

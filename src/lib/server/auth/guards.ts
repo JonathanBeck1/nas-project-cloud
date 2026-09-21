@@ -66,7 +66,12 @@ function sessionTokenFromRequest(request: Request): string {
   for (const cookie of cookies) {
     const [name, ...valueParts] = cookie.split("=");
     if (name === sessionCookieName) {
-      return decodeURIComponent(valueParts.join("="));
+      try {
+        return decodeURIComponent(valueParts.join("="));
+      } catch {
+        // Bad percent-encoding: not a token we issued, so the request is simply unauthenticated.
+        return "";
+      }
     }
   }
   return "";

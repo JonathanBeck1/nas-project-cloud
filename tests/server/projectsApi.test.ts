@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readStoredZip } from "../helpers/readZip";
 
 const mocks = vi.hoisted(() => ({
   db: {},
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   },
   storage: {
     absolutePathFor: vi.fn(),
+    resolveReadPath: vi.fn(),
     moveToInbox: vi.fn()
   },
   requireApiSession: vi.fn()
@@ -47,6 +49,9 @@ const project = {
 describe("projects API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.storage.resolveReadPath.mockImplementation(async (relativePath: string) =>
+      mocks.storage.absolutePathFor(relativePath)
+    );
     mocks.requireApiSession.mockResolvedValue({
       ok: true,
       userId: "user_1",
@@ -244,6 +249,50 @@ describe("projects API", () => {
       expect(mocks.repo.listFiles).toHaveBeenCalledWith({ projectId: "proj_garage" });
       const bytes = new Uint8Array(await response.arrayBuffer());
       expect(String.fromCharCode(...bytes.slice(0, 2))).toBe("PK");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("exports nested folders intact and lists files missing on disk", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-project-api-"));
+    try {
+      const inbox = path.join(dir, "Projects", "garage-build", "Inbox");
+      fs.mkdirSync(path.join(inbox, "Shoot A", "Exports"), { recursive: true });
+      fs.mkdirSync(path.join(inbox, "Shoot B"), { recursive: true });
+      fs.mkdirSync(path.join(dir, "Inbox", "Mac"), { recursive: true });
+      fs.writeFileSync(path.join(inbox, "Shoot A", "Exports", "movie.webm"), "a-movie");
+      fs.writeFileSync(path.join(inbox, "Shoot B", "movie.webm"), "b-movie");
+      fs.writeFileSync(path.join(dir, "Inbox", "Mac", "stray.txt"), "stray");
+      mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(dir, relativePath));
+      mocks.repo.getProjectById.mockReturnValue(project);
+      mocks.repo.listFiles.mockReturnValue(
+        [
+          "Projects/garage-build/Inbox/Shoot A/Exports/movie.webm",
+          "Projects/garage-build/Inbox/Shoot B/movie.webm",
+          "Projects/garage-build/Inbox/Shoot B/renamed-over-smb.stl",
+          "Inbox/Mac/stray.txt"
+        ].map((storagePath, index) => ({
+          id: `file_${index}`,
+          name: path.posix.basename(storagePath),
+          status: "active",
+          storagePath
+        }))
+      );
+      const { GET } = await import("@/app/api/projects/[id]/download/route");
+
+      const response = await GET(new Request("http://localhost/api/projects/proj_garage/download"), {
+        params: Promise.resolve({ id: "proj_garage" })
+      });
+
+      expect(response.status).toBe(200);
+      const entries = readStoredZip(new Uint8Array(await response.arrayBuffer()));
+      expect(Object.fromEntries(entries)).toEqual({
+        "Shoot A/Exports/movie.webm": "a-movie",
+        "Shoot B/movie.webm": "b-movie",
+        "stray.txt": "stray",
+        "_MISSING.txt": expect.stringContaining("Shoot B/renamed-over-smb.stl")
+      });
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

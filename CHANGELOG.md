@@ -7,6 +7,216 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Unreleased
 
+### Added
+
+- **Resumable downloads.** File and share-link downloads support single
+  HTTP `Range` requests (`bytes=a-b`, `bytes=a-`, `bytes=-n`) with `206`,
+  answer `416` with `Content-Range: bytes */size` when unsatisfiable, and
+  send `Accept-Ranges`, `ETag`, and `Last-Modified`. `If-Range` is
+  honored; multi-range requests get the whole file. The `ETag` combines the
+  stored SHA-256 with size and mtime, so a file edited in place over SMB
+  does not validate a resume. A share link counts a download only when the
+  response includes the first byte, so resuming does not use up
+  `maxDownloads`; a link that has reached its cap still refuses resumes.
+
+### Fixed
+
+- **`npm run index:storage` and `npm run previews:generate` run again.** Both
+  crashed on startup with a top-level `await` error. A test now executes them.
+- **Re-indexing no longer ingests the app's own files.** Root dot-entries
+  (`.uploads/`, `.previews/`, the health probe) are skipped, and files under
+  `Projects/<slug>/` are attached to that project, which is created if needed.
+- **Libraries past 32,766 files load again.** Listing files bound one SQL
+  variable per row, so the workspace, projects page, `GET /api/files`, and
+  project ZIP export all failed with "too many SQL variables" beyond
+  SQLite's limit. Tags and previews are now fetched with a single parameter.
+- **Moves work across filesystems.** Move, rename, archive, restore, and
+  upload completion all hard-link the file into place, which fails with
+  `EXDEV` when `Projects/` or `Archive/` is a child ZFS dataset. They now
+  fall back to a copy staged in the destination folder and linked into
+  place, so an existing file is still never overwritten and the source is
+  removed only after the destination is complete.
+- **A chunk that arrives twice no longer corrupts the upload.** Chunks were
+  appended, so a replayed or concurrent duplicate grew the temp file even
+  though its request was rejected; the session then wedged with a 500, or a
+  duplicated final chunk completed a corrupt file. Chunks are now written
+  at their offset, requests for one session are handled one at a time, a
+  storage offset mismatch answers `409` with `receivedBytes`, and
+  `complete` fails the session if the temp file is not the declared size.
+- **The browser retries a failed chunk.** Network errors and 5xx responses
+  are retried with backoff, and a `409` resumes from the server's offset.
+
+- **Project ZIP export keeps folders.** Entries were named by basename, so
+  the folder structure that uploads preserve was flattened and duplicates
+  got `-2` suffixes. Entries are now named by their path under
+  `Projects/<slug>/Inbox/`, with leading slashes and `..` segments removed.
+- **One missing file no longer fails a ZIP export.** A file renamed or
+  deleted over SMB made the whole project or bulk export return `404`.
+  Missing files are skipped and listed in a `_MISSING.txt` entry.
+- **Large ZIP exports no longer exhaust file descriptors.** Every source
+  file was opened before streaming began; files are now opened one at a
+  time, and the archive is aborted when the client disconnects.
+- **Expired auth state is purged.** Expired sessions, used or expired
+  pairing codes, and rate-limit rows were never deleted; an attacker-chosen
+  login email became a permanent row. They are now purged at boot, hourly by
+  the in-process scheduler, and by `POST /api/maintenance/upload-cleanup`
+  (which adds a `purged` object to its response).
+- **Pairing codes cannot run out.** `code_hash` is unique across only a
+  million codes and dead rows were kept, so a new code would eventually
+  collide with one and return a `500`. Dead codes are deleted before each
+  insert, and a collision with a live code draws a new one.
+- **Uploads are synced to disk before they are recorded.** SQLite commits
+  were fsynced but uploaded bytes were not, so a power loss inside a ZFS
+  transaction-group window could leave a committed row pointing at a
+  missing or short file. Each completed upload now fsyncs the file and its
+  destination directory once; chunks are not synced individually.
+- **Removing a file from a project moves it.** `PATCH /api/files/<id>` with
+  `projectId: null` cleared the project in the database but left the file
+  under `Projects/<slug>/`. It now moves to `Inbox/<sourceDevice>/`, and is
+  moved back if the metadata update fails.
+- **Filenames that break the filesystem or SMB are made safe.** A name over
+  255 bytes failed the upload with `ENAMETOOLONG`; names are now shortened
+  to 240 bytes on a character boundary with the extension kept. Windows
+  reserved names (`CON`, `NUL`, `COM1`, ...) get a leading underscore, and
+  trailing dots and spaces are removed, since Windows cannot open either
+  over SMB. The name shown in the app is unchanged.
+- **`%` and `_` in a search are literal.** They were passed to `LIKE` as
+  wildcards, so searching `100%` matched every file.
+- **A malformed cookie is no longer a 500.** Bad percent-encoding in the
+  session or CSRF cookie threw while decoding. The request is now treated
+  as unauthenticated (`401`) or as failing the CSRF check (`403`).
+- **Names starting with two dots are accepted.** `..notes.txt` was rejected
+  as escaping the storage root because the check was `startsWith("..")`.
+- **PDF previews are capped at 1024 px.** `pdftoppm` rendered at a fixed
+  150 dpi, so a large-format page (an A0 plot is 4967 x 7021 px) or a
+  hostile one could exhaust memory. Pages are now scaled to 1024 px.
+- **A preview that crashes the app no longer loops.** Jobs are claimed
+  (`processing`) and counted before work starts. Jobs interrupted by a
+  restart are requeued at boot, and a file that takes the worker down
+  three times is marked `failed`. "Retry failed" resets the count.
+- **Abandoned uploads are cleaned up by default.** The in-process
+  scheduler now runs the stale-upload cleanup hourly; it was only
+  reachable through the maintenance endpoint.
+
+### Changed
+
+- **`GET /api/files` is paginated (breaking).** It returns
+  `{ files, nextCursor }` with at most `limit` files (default 100, maximum
+  500) and takes the previous response's `nextCursor` as `cursor`. It used
+  to return every matching file. A cursor that cannot be decoded is a `400`.
+  Listings are ordered by `uploaded_at desc, name, id`, so files that tie on
+  time and name now have a stable order. The web UI does not call this
+  endpoint; third-party clients need to follow `nextCursor`.
+- **Signing in reuses your device.** Every login added a row to Trusted
+  devices. A login now reuses the browser device with the same name for the
+  same user and updates its last-seen time. Two browsers that share a name
+  therefore share one device, and revoking it signs both out; give them
+  different names at sign-in to keep them apart. Paired devices are not
+  affected.
+- **The workspace loads files a page at a time.** The home page renders
+  the newest 100 files and a "Load more" button fetches the next page. It
+  used to serialize every active file into the page (about 80 MB of HTML at
+  40,000 files; now about 200 KB).
+- **Pages no longer load the whole file table.** The projects index counts
+  files per project with one `group by` query instead of loading every
+  file, the archive page queries archived rows only, and smart views show
+  the newest 200 files with a banner (`GET /api/smart-views/<view>` adds
+  `truncated`).
+- **Preview backlog drains faster.** A full batch of 25 schedules the next
+  tick after one second instead of 60, lifting a ceiling of about 1,500
+  previews per hour. The scheduler and the maintenance endpoint share one
+  run, so two batches never decode at once.
+- **Compose hardening.** `docker-compose.truenas.yml` sets `mem_limit: 2g`,
+  `cap_drop: [ALL]`, `no-new-privileges`, and `init: true`. The deploy
+  guide recommends pinning a release tag over `:latest`.
+- **Chunks are capped at 32 MiB.** A larger chunk is rejected with `413`
+  before it is buffered; previously one "chunk" could hold the whole upload
+  in memory. The web client sends 8 MiB chunks and is unaffected.
+- **README no longer claims the publish workflow runs the full gate.** It
+  repeats the unit, type, lint, and build checks; the Playwright suite runs
+  in `ci.yml` only.
+- **Recovery docs are explicit.** README and the TrueNAS guide state what a
+  re-index restores, what only an `appdata` backup restores, and that the
+  script is not in the Docker image.
+
+### Security
+
+- **Supply chain.** Every GitHub Action is pinned to a commit SHA, published
+  images carry build provenance and an SBOM, and Dependabot watches npm and
+  the pinned actions weekly.
+- **`/api/health` no longer leaks detail to anonymous callers.** It
+  returned raw error messages, which can contain absolute paths, and the
+  `ffmpeg` and `poppler` versions to anyone. Anonymous callers now get only
+  a boolean per check and the same `200`/`503` status, so container
+  healthchecks are unaffected. A signed-in session or the maintenance token
+  still gets the full detail.
+- **Security headers on every response.** `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, a `Permissions-Policy`, and
+  `Referrer-Policy: no-referrer` (share tokens live in the URL path) are
+  sent everywhere. Pages also get `Content-Security-Policy: frame-ancestors
+  'none'; base-uri 'self'; object-src 'none'; form-action 'self'`. API
+  routes are left out of that policy so downloads keep their stricter
+  `default-src 'none'; sandbox`.
+- **Stronger password hashing.** Account passwords move from Node's scrypt
+  defaults (N=2^14) to N=2^17, r=8, p=1, OWASP's current minimum, and the
+  parameters are now stored in the hash (`scrypt:N:r:p:salt:hash`) so they
+  can be raised again. Existing hashes keep working and are upgraded on the
+  next successful login. Share-link passwords use N=2^15. At most two
+  derivations run at once, since each account derivation needs about
+  128 MiB.
+- **Login no longer reveals which emails exist.** An unknown email skipped
+  the password derivation and answered measurably faster. It now spends the
+  same derivation.
+- **Reads cannot follow a symlink out of the storage root.** Path
+  containment was lexical, so a symlink placed over SMB could point a
+  download, share link, ZIP export, or preview at anything the container can
+  read, including the app database. Every read path now resolves the real
+  path and re-checks containment; a symlink that stays inside the root still
+  works. The indexer already ignored symlinks and now has a test for it.
+- **Only one owner can be created.** Setup checked for an existing user,
+  then hashed the password, then inserted, so two simultaneous requests
+  could both become owner. The insert now only succeeds into an empty users
+  table and the loser gets `409`.
+- **Share-link passwords are rate limited.** Password attempts were
+  unlimited and each one costs a scrypt. A share now allows 10 attempts per
+  15 minutes and then answers `429` with `Retry-After`. Requests without a
+  password do not count.
+- **`maxDownloads` cannot be overrun.** The cap was checked, then the file
+  was prepared, then the counter was incremented unconditionally, so
+  simultaneous requests could all take the last download. The increment is
+  now a single conditional statement and the file is only streamed when it
+  succeeds.
+- **Preview tools are restricted to local files.** `ffmpeg` and `ffprobe`
+  run with `-protocol_whitelist file` (and `ffmpeg` with `-nostdin`), so a
+  playlist posing as a video cannot pull in network or concat sources.
+  `sharp` is limited to one libvips thread to keep peak memory predictable.
+
+### Migration notes
+
+- **Upgrading a v0.3.1 database needs no manual step.** On first start the
+  app adds `file_previews.attempts` and the index `files_listing_idx`.
+  Nothing is dropped or renamed. Take the usual stopped-app snapshot of
+  `appdata` first, because an older image will not know the `processing`
+  preview status if you roll back while jobs are in flight (they are
+  requeued by the newer image at boot, and ignored by the older one).
+- **Passwords keep working.** v0.3.1 hashes verify as before and are
+  upgraded on each account's next successful sign-in. That sign-in and
+  every later one needs about 128 MiB for a fraction of a second.
+- **`GET /api/files` is paginated.** Third-party clients must follow
+  `nextCursor`; without it they now see only the first 100 files.
+- **Chunks over 32 MiB are rejected.** The web client sends 8 MiB.
+- **`/api/health` detail needs credentials.** Monitoring that parsed error
+  text or tool versions anonymously must send the maintenance token. The
+  status code is unchanged.
+- **Compose changes are opt-in.** `mem_limit`, `cap_drop`,
+  `no-new-privileges`, and `init` only apply if you re-paste
+  `docker-compose.truenas.yml`. They were not run under Docker during
+  development; if the app fails to start, remove `cap_drop` first.
+- **Expect one-time effects on first boot:** expired sessions, dead pairing
+  codes, and rate-limit rows older than 24 hours are deleted, and files
+  removed from a project from now on move to `Inbox/<device>/`. Files
+  detached before the upgrade stay where they are.
+
 ## [0.3.1] - 2026-09-19
 
 Security patch release. It closes a rate-limit bypass that left device

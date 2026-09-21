@@ -74,17 +74,26 @@ export type CompleteUploadSessionInput = {
   filename: string;
   relativePath?: string | null;
   mimeType: string;
+  sizeBytes: number;
 };
 
 export function createStorageService(root = appConfig.storageRoot) {
   const storageRoot = path.resolve(root);
   const absolutePathFor = (relativePath: string) => {
     const absolutePath = path.resolve(storageRoot, relativePath);
-    const resolvedRelativePath = path.relative(storageRoot, absolutePath);
-    if (resolvedRelativePath.startsWith("..") || path.isAbsolute(resolvedRelativePath)) {
+    if (escapesRoot(storageRoot, absolutePath)) {
       throw new Error("Storage path escapes configured root");
     }
     return absolutePath;
+  };
+  // absolutePathFor is lexical. Anything that opens a file for reading goes through this, because a symlink
+  // dropped in over SMB could otherwise point a download at the app database or anything else the container can read.
+  const resolveReadPath = async (relativePath: string) => {
+    const [realRoot, realPath] = await Promise.all([fs.realpath(storageRoot), fs.realpath(absolutePathFor(relativePath))]);
+    if (escapesRoot(realRoot, realPath)) {
+      throw new Error("Storage path escapes configured root");
+    }
+    return realPath;
   };
 
   return {
@@ -96,6 +105,8 @@ export function createStorageService(root = appConfig.storageRoot) {
 
       const absolutePath = await nextAvailablePath(absoluteDirectory, safeName);
       await fs.writeFile(absolutePath, input.bytes, { flag: "wx" });
+      await syncPath(absolutePath);
+      await syncPath(absoluteDirectory);
 
       const relativePath = path.relative(storageRoot, absolutePath).split(path.sep).join("/");
       return {
@@ -108,6 +119,7 @@ export function createStorageService(root = appConfig.storageRoot) {
     },
 
     absolutePathFor,
+    resolveReadPath,
 
     /**
      * Stream the request body straight to a temp file, hash it on the
@@ -141,6 +153,7 @@ export function createStorageService(root = appConfig.storageRoot) {
 
       try {
         await pipeline(source, limiter, writer);
+        await syncPath(tempAbsolute);
       } catch (error) {
         await fs.unlink(tempAbsolute).catch(() => undefined);
         throw error;
@@ -153,6 +166,7 @@ export function createStorageService(root = appConfig.storageRoot) {
           directory: path.join(storageRoot, targetDirectory(input.target), safeRelativeDirectory(input.relativePath)),
           filename: input.filename
         });
+        await syncPath(path.dirname(moved.absolutePath));
         return {
           ...moved,
           sizeBytes: received,
@@ -183,16 +197,27 @@ export function createStorageService(root = appConfig.storageRoot) {
         throw new Error("Upload temp path is not a file");
       }
 
-      if (stats.size !== input.offset) {
-        throw new Error("Upload chunk offset mismatch");
+      if (input.offset > stats.size) {
+        throw uploadError("Upload chunk offset mismatch", "UPLOAD_OFFSET_MISMATCH");
       }
 
-      await fs.writeFile(absolutePath, input.bytes, { flag: "a" });
-      return { receivedBytes: stats.size + input.bytes.length };
+      // Positional, not append: a resent chunk rewrites the same bytes instead of growing the file.
+      const handle = await fs.open(absolutePath, "r+");
+      try {
+        await handle.write(input.bytes, 0, input.bytes.length, input.offset);
+      } finally {
+        await handle.close();
+      }
+      return { receivedBytes: input.offset + input.bytes.length };
     },
 
     async completeUploadSession(input: CompleteUploadSessionInput): Promise<StoredFile> {
       const from = absolutePathFor(input.tempRelativePath);
+      if ((await fs.stat(from)).size !== input.sizeBytes) {
+        throw uploadError("Upload temp file size mismatch", "UPLOAD_SIZE_MISMATCH");
+      }
+      // Once per upload, not per chunk: the row the caller is about to commit must not outlive these bytes.
+      await syncPath(from);
       const relativeDirectory = targetDirectory(input.target);
       const directory = path.join(storageRoot, relativeDirectory, safeRelativeDirectory(input.relativePath ?? undefined));
       const absolutePath = await moveIntoDirectory({
@@ -201,6 +226,7 @@ export function createStorageService(root = appConfig.storageRoot) {
         directory,
         filename: input.filename
       });
+      await syncPath(path.dirname(absolutePath.absolutePath));
       const stats = await fs.stat(absolutePath.absolutePath);
 
       return {
@@ -212,7 +238,7 @@ export function createStorageService(root = appConfig.storageRoot) {
     },
 
     async fileDetails(relativePath: string) {
-      const absolutePath = absolutePathFor(relativePath);
+      const absolutePath = await resolveReadPath(relativePath);
       const stats = await fs.stat(absolutePath);
       if (!stats.isFile()) {
         throw new Error("Storage path is not a file");
@@ -322,9 +348,42 @@ function targetDirectory(target: UploadTarget): string {
   return path.join("Projects", sanitizePathSegment(target.projectSlug), "Inbox");
 }
 
+// Filesystems stop at 255 bytes; the rest is room for a "-12" collision suffix.
+const MAX_FILENAME_BYTES = 240;
+const MAX_KEPT_EXTENSION_BYTES = 32;
+// Windows cannot open these over SMB, with or without an extension.
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+
 function sanitizeFilename(filename: string): string {
-  const base = path.basename(filename).replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").trim();
-  return base.length > 0 ? base : "upload.bin";
+  // Windows also drops trailing dots and spaces, so a name ending in one cannot be addressed from there.
+  const base = path
+    .basename(filename)
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
+    .replace(/[. ]+$/, "")
+    .trim();
+  if (base.length === 0) {
+    return "upload.bin";
+  }
+  return truncateFilename(WINDOWS_RESERVED_NAME.test(base) ? `_${base}` : base);
+}
+
+function truncateFilename(filename: string): string {
+  if (Buffer.byteLength(filename) <= MAX_FILENAME_BYTES) {
+    return filename;
+  }
+
+  const rawExtension = path.extname(filename);
+  const extension = Buffer.byteLength(rawExtension) <= MAX_KEPT_EXTENSION_BYTES ? rawExtension : "";
+  const budget = MAX_FILENAME_BYTES - Buffer.byteLength(extension);
+  let stem = "";
+  // for...of walks code points, so a multi-byte character or surrogate pair is never cut in half.
+  for (const character of filename.slice(0, filename.length - extension.length)) {
+    if (Buffer.byteLength(stem + character) > budget) {
+      break;
+    }
+    stem += character;
+  }
+  return `${stem.replace(/[. ]+$/, "")}${extension}`;
 }
 
 function sanitizePathSegment(segment: string): string {
@@ -392,37 +451,111 @@ async function linkIntoAvailablePath(
   from: string
 ): Promise<string> {
   const parsed = path.parse(filename);
-  for (let index = 1; index < 10_000; index += 1) {
-    const candidateName = index === 1 ? filename : `${parsed.name}-${index}${parsed.ext}`;
-    const candidatePath = path.join(directory, candidateName);
-    try {
-      await fs.link(from, candidatePath);
+  const staging: Staging = { path: null };
+  try {
+    for (let index = 1; index < 10_000; index += 1) {
+      const candidateName = index === 1 ? filename : `${parsed.name}-${index}${parsed.ext}`;
+      const candidatePath = path.join(directory, candidateName);
       try {
-        await fs.unlink(from);
+        await linkNoClobber(from, candidatePath, staging);
       } catch (error) {
-        await fs.unlink(candidatePath).catch(() => undefined);
+        if (isNodeError(error) && error.code === "EEXIST") {
+          continue;
+        }
         throw error;
       }
+      await finishMove(from, candidatePath, staging);
       return candidatePath;
-    } catch (error) {
-      if (isNodeError(error) && error.code === "EEXIST") {
-        continue;
-      }
-      throw error;
     }
+  } finally {
+    await discardStaging(staging);
   }
 
   throw new Error(`Could not allocate filename for ${filename}`);
 }
 
 async function linkFile(from: string, to: string): Promise<void> {
-  await fs.link(from, to);
+  const staging: Staging = { path: null };
   try {
+    await linkNoClobber(from, to, staging);
+    await finishMove(from, to, staging);
+  } finally {
+    await discardStaging(staging);
+  }
+}
+
+type Staging = { path: string | null };
+
+// Hard links cannot cross filesystems (EXDEV), and a child ZFS dataset is one. Copy beside the
+// destination first so the final link is same-filesystem and still refuses to clobber.
+async function linkNoClobber(from: string, to: string, staging: Staging): Promise<void> {
+  try {
+    await fs.link(staging.path ?? from, to);
+    return;
+  } catch (error) {
+    if (staging.path || !isNodeError(error) || error.code !== "EXDEV") {
+      throw error;
+    }
+  }
+  staging.path = await stageCopy(from, path.dirname(to));
+  await fs.link(staging.path, to);
+}
+
+async function stageCopy(from: string, directory: string): Promise<string> {
+  const staged = path.join(directory, `.${crypto.randomUUID()}.part`);
+  try {
+    await fs.copyFile(from, staged, fs.constants.COPYFILE_EXCL);
+    const handle = await fs.open(staged, "r+");
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    return staged;
+  } catch (error) {
+    await fs.unlink(staged).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function finishMove(from: string, to: string, staging: Staging): Promise<void> {
+  try {
+    if (staging.path) {
+      await fs.unlink(staging.path);
+      staging.path = null;
+    }
     await fs.unlink(from);
   } catch (error) {
     await fs.unlink(to).catch(() => undefined);
     throw error;
   }
+}
+
+async function discardStaging(staging: Staging): Promise<void> {
+  if (staging.path) {
+    await fs.unlink(staging.path).catch(() => undefined);
+  }
+}
+
+// SQLite fsyncs its commits; file data does not get the same treatment unless asked. For a directory this
+// makes the new name durable, which matters on ZFS where a transaction group can hold it for seconds.
+async function syncPath(target: string): Promise<void> {
+  const handle = await fs.open(target, "r");
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+function escapesRoot(root: string, absolutePath: string): boolean {
+  const relative = path.relative(root, absolutePath);
+  // Not startsWith(".."): "..notes.txt" is a legal filename inside the root.
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
+
+function uploadError(message: string, code: "UPLOAD_OFFSET_MISMATCH" | "UPLOAD_SIZE_MISMATCH"): Error {
+  return Object.assign(new Error(message), { code });
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

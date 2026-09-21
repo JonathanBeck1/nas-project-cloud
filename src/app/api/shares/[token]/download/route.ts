@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { verifyPassword } from "@/lib/server/auth/passwords";
 import { getDatabase } from "@/lib/server/db";
-import { createFileDownloadResponse } from "@/lib/server/downloadResponse";
+import { createFileDownloadResponse, includesFirstByte } from "@/lib/server/downloadResponse";
 import { createMetadataRepository } from "@/lib/server/metadata";
-import { trustedClientIp } from "@/lib/server/rateLimit";
+import { createRateLimiter, trustedClientIp } from "@/lib/server/rateLimit";
 import { hashShareToken } from "@/lib/server/shareLinks";
 import { createStorageService } from "@/lib/server/storage";
 import type { FileShareLink } from "@/lib/shared/types";
+
+const PASSWORD_ATTEMPTS_MAX = 10;
+const PASSWORD_ATTEMPTS_WINDOW_MS = 15 * 60_000;
 
 export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
   return downloadSharedFile(request, params);
@@ -35,6 +38,20 @@ async function downloadSharedFile(
       return NextResponse.json({ error: "password required" }, { status: 401 });
     }
 
+    // Keyed by share, not client: every guess costs a scrypt, and the share is what is being attacked.
+    const attempt = createRateLimiter().consume({
+      bucket: "share_password",
+      key: share.id,
+      max: PASSWORD_ATTEMPTS_MAX,
+      windowMs: PASSWORD_ATTEMPTS_WINDOW_MS
+    });
+    if (!attempt.allowed) {
+      return NextResponse.json(
+        { error: "too many requests", retryAfterSeconds: attempt.retryAfterSeconds },
+        { status: 429, headers: { "Retry-After": String(Math.max(1, attempt.retryAfterSeconds)) } }
+      );
+    }
+
     const passwordHash = repo.getFileSharePasswordHash(share.id);
     if (!passwordHash || !(await verifyPassword(password, passwordHash))) {
       return NextResponse.json({ error: "password required" }, { status: 401 });
@@ -46,19 +63,28 @@ async function downloadSharedFile(
     return NextResponse.json({ error: "share not found" }, { status: 404 });
   }
 
-  const storage = createStorageService();
-  const response = await createFileDownloadResponse(file, storage.absolutePathFor(file.storagePath), {
-    cacheControl: "no-store"
-  });
+  const absolutePath = await createStorageService()
+    .resolveReadPath(file.storagePath)
+    .catch(() => null);
+  const response = absolutePath
+    ? await createFileDownloadResponse(request, file, absolutePath, { cacheControl: "no-store" })
+    : null;
 
   if (!response) {
     return NextResponse.json({ error: "share not found" }, { status: 404 });
   }
 
-  repo.recordFileShareDownload(share.id, {
-    userAgent: request.headers.get("user-agent"),
-    ipAddress: trustedClientIp(request)
-  });
+  // A resumed transfer is the same download, so only a response that starts the file uses one up.
+  if (includesFirstByte(response)) {
+    const recorded = repo.recordFileShareDownload(share.id, {
+      userAgent: request.headers.get("user-agent"),
+      ipAddress: trustedClientIp(request)
+    });
+    if (!recorded) {
+      await response.body?.cancel();
+      return NextResponse.json({ error: "share not found" }, { status: 404 });
+    }
+  }
   return response;
 }
 

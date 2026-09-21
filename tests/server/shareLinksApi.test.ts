@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => {
     recordFileShareDownload: vi.fn()
   };
   const storage = {
-    absolutePathFor: vi.fn()
+    absolutePathFor: vi.fn(),
+    resolveReadPath: vi.fn()
   };
   const requireApiSession = vi.fn(async () => ({
     ok: true,
@@ -50,11 +51,17 @@ vi.mock("@/lib/server/auth/guards", () => ({
 
 vi.mock("@/lib/server/auth/passwords", () => ({
   hashPassword: mocks.hashPassword,
+  hashSharePassword: mocks.hashPassword,
   verifyPassword: mocks.verifyPassword
 }));
 
 vi.mock("@/lib/server/metadata", () => ({
   createMetadataRepository: vi.fn(() => mocks.repo)
+}));
+
+vi.mock("@/lib/server/rateLimit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/rateLimit")>()),
+  createRateLimiter: () => ({ consume: () => ({ allowed: true, remaining: 9 }), reset: vi.fn() })
 }));
 
 vi.mock("@/lib/server/storage", () => ({
@@ -64,6 +71,9 @@ vi.mock("@/lib/server/storage", () => ({
 describe("share links API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.storage.resolveReadPath.mockImplementation(async (relativePath: string) =>
+      mocks.storage.absolutePathFor(relativePath)
+    );
     mocks.repo.getFileById.mockReturnValue({
       id: "file_123",
       name: "manual.pdf",
@@ -91,7 +101,7 @@ describe("share links API", () => {
     mocks.repo.listFileShareLinks.mockReturnValue([]);
     mocks.repo.revokeFileShareLink.mockReturnValue(null);
     mocks.repo.updateFileShareLink.mockReturnValue(null);
-    mocks.repo.recordFileShareDownload.mockReturnValue(null);
+    mocks.repo.recordFileShareDownload.mockReturnValue({ id: "share_123" });
     mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(os.tmpdir(), relativePath));
   });
 
@@ -355,6 +365,41 @@ describe("share links API", () => {
     expect(response.headers.get("content-disposition")).toContain('filename="manual.pdf"');
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.text()).resolves.toBe("manual");
+  });
+
+  it("counts a share download only when the response includes the first byte", async () => {
+    const { GET } = await import("@/app/api/shares/[token]/download/route");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-share-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Inbox", "Browser", "manual.pdf"), "manual");
+    mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(dir, relativePath));
+    mocks.repo.getFileShareLinkByTokenHash.mockReturnValue({
+      id: "share_123",
+      fileId: "file_123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      maxDownloads: 5,
+      passwordProtected: false,
+      downloadCount: 0,
+      revokedAt: null
+    });
+    const get = (range: string) =>
+      GET(new Request("http://localhost/api/shares/share-token/download", { headers: { range } }), {
+        params: Promise.resolve({ token: "share-token" })
+      });
+
+    const resumed = await get("bytes=3-");
+    expect(resumed.status).toBe(206);
+    await expect(resumed.text()).resolves.toBe("ual");
+    expect(mocks.repo.recordFileShareDownload).not.toHaveBeenCalled();
+
+    const unsatisfiable = await get("bytes=99-");
+    expect(unsatisfiable.status).toBe(416);
+    expect(mocks.repo.recordFileShareDownload).not.toHaveBeenCalled();
+
+    const fromStart = await get("bytes=0-2");
+    expect(fromStart.status).toBe(206);
+    expect(mocks.repo.recordFileShareDownload).toHaveBeenCalledTimes(1);
   });
 
   it("requires the password before streaming a protected shared file", async () => {

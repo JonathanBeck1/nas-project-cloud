@@ -3,8 +3,9 @@ import { filesFromRowsWithTags, type FileRow } from "@/lib/server/metadata";
 import type { CloudFile, SmartViewKey } from "@/lib/shared/types";
 
 export const LARGE_FILE_BYTES = 1_073_741_824;
+export const SMART_VIEW_LIMIT = 200;
 
-export function listSmartViewFiles(db: AppDatabase, view: SmartViewKey): CloudFile[] {
+export function listSmartViewFiles(db: AppDatabase, view: SmartViewKey): { files: CloudFile[]; truncated: boolean } {
   const params: Record<string, string | number> = {};
   const clauses: Record<SmartViewKey, string> = {
     inbox: "project_id is null",
@@ -25,9 +26,9 @@ export function listSmartViewFiles(db: AppDatabase, view: SmartViewKey): CloudFi
 
   const rows = db
     .prepare<Record<string, string | number>, FileRow>(
-      `select * from files where status = 'active' and (${clauses[view]}) order by uploaded_at desc, name`
+      `select * from files where status = 'active' and (${clauses[view]}) order by uploaded_at desc, name, id limit ${SMART_VIEW_LIMIT + 1}`
     )
     .all(params);
 
-  return filesFromRowsWithTags(db, rows);
+  return { files: filesFromRowsWithTags(db, rows.slice(0, SMART_VIEW_LIMIT)), truncated: rows.length > SMART_VIEW_LIMIT };
 }

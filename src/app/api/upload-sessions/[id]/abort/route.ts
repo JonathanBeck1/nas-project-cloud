@@ -12,6 +12,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const repo = createMetadataRepository(getDatabase());
+  // SECURITY: not scoped to auth.userId. Harmless with a single owner; an IDOR if multi-user lands.
   const session = repo.getUploadSession(id);
   if (!session) {
     return NextResponse.json({ error: "upload session not found" }, { status: 404 });

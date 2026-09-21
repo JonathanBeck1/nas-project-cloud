@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiSession } from "@/lib/server/auth/guards";
-import { hashPassword } from "@/lib/server/auth/passwords";
+import { hashSharePassword } from "@/lib/server/auth/passwords";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { shareExpiresAt } from "@/lib/server/shareLinks";
@@ -31,6 +31,7 @@ export async function DELETE(
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
 
+  // SECURITY: not scoped to created_by_user_id. Harmless with a single owner; an IDOR if multi-user lands.
   const share = repo.revokeFileShareLink(file.id, shareId);
   return share
     ? NextResponse.json({ share })
@@ -66,12 +67,13 @@ export async function PATCH(
   }
 
   const input = parsed.data;
+  // SECURITY: not scoped to created_by_user_id. Harmless with a single owner; an IDOR if multi-user lands.
   const share = repo.updateFileShareLink(file.id, shareId, {
     ...(input.expiresInHours !== undefined ? { expiresAt: shareExpiresAt(input.expiresInHours) } : {}),
     ...(input.maxDownloads !== undefined ? { maxDownloads: input.maxDownloads } : {}),
     ...(input.label !== undefined ? { label: input.label } : {}),
     ...(input.password !== undefined
-      ? { passwordHash: input.password === null ? null : await hashPassword(input.password) }
+      ? { passwordHash: input.password === null ? null : await hashSharePassword(input.password) }
       : {})
   });
 

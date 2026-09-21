@@ -17,5 +17,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ view
     return NextResponse.json({ error: "Unknown smart view" }, { status: 404 });
   }
 
-  return NextResponse.json({ files: listSmartViewFiles(getDatabase(), smartView.key) });
+  return NextResponse.json(listSmartViewFiles(getDatabase(), smartView.key));
 }

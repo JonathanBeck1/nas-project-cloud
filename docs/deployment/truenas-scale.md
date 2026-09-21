@@ -30,6 +30,8 @@ Use `files` for the actual user file library:
   .previews/
 ```
 
+`Projects/`, `Archive/`, or any other folder under `files` can be its own child dataset if you want separate snapshots or quotas. Moves inside one dataset are instant hard links. A move that crosses datasets is copied and then linked into place, so it takes as long as the copy and briefly needs room for a second copy on the destination dataset. A child dataset needs the same UID 1001 ownership as `files`.
+
 Use `appdata` for SQLite metadata and sidecar files:
 
 ```text
@@ -67,7 +69,7 @@ chown -R 1001:1001 /mnt/OfficeNAS/nas-project-cloud/files /mnt/OfficeNAS/nas-pro
 
 Alternatively, use ACL Manager to grant read/write/execute on both `files` and `appdata` to the container workload user (UID 1001) or a shared apps group.
 
-Avoid mixing SMB edits and app writes in the same active upload folders until the ownership model is clear. SMB is fine for snapshots, inspection, and future import workflows.
+Symlinks inside `files` are only followed when they resolve to somewhere inside `files`; the app refuses to download, share, export, or preview through one that leaves it. Avoid mixing SMB edits and app writes in the same active upload folders until the ownership model is clear. SMB is fine for snapshots, inspection, and future import workflows.
 
 ## Compose App
 
@@ -109,7 +111,7 @@ Tag: 0.3.1
 Pull Policy: Always pull an image even if it is present on the host
 ```
 
-Use `latest` only when you intentionally want the newest `main` build. Use `0.3.1` for a repeatable install.
+Pin a release tag such as `0.3.1`. `latest` is rebuilt on every push to `main`, so with the "always pull" policy a restart can silently move you to an unreleased build. Use it only when you want that.
 
 ### Container Configuration
 
@@ -177,6 +179,8 @@ Memory: 2048 MiB minimum, 4096 MiB recommended if generating video/PDF previews
 ```
 
 Video and PDF previews use `ffmpeg` and `pdftoppm`; they are short-lived but can spike CPU and memory while processing large files.
+
+The compose file sets `mem_limit: 2g`, drops all Linux capabilities, sets `no-new-privileges`, and runs an init process as PID 1. If a preview job gets the container killed for memory, the job is counted: after the app restarts it is retried, and a file that takes the worker down three times is marked `failed` instead of looping. Raise `mem_limit` to `4g` if you store very large source images. Signing in also needs memory: each account password check uses about 128 MiB for a fraction of a second, and at most two run at once.
 
 ## First-Run Verification
 
@@ -307,17 +311,25 @@ It checks:
 
 - the storage mount can be written to and cleaned up
 - SQLite can answer a basic query
+- `ffmpeg` and `pdftoppm` are present
 
-The public response intentionally does not reveal host paths. A healthy response looks like:
+An anonymous caller gets only whether each check passed, plus the status code (`200` healthy, `503` not), which is all the compose healthcheck reads:
 
 ```json
 {
   "ok": true,
   "checks": {
     "storage": { "ok": true },
-    "database": { "ok": true }
+    "database": { "ok": true },
+    "previewTools": { "ffmpeg": { "ok": true }, "poppler": { "ok": true } }
   }
 }
+```
+
+Error messages and tool versions are added when the request carries a signed-in session (the Settings page does) or `Authorization: Bearer <NAS_CLOUD_MAINTENANCE_TOKEN>`. To see why a check is failing from a shell:
+
+```bash
+curl -s -H "Authorization: Bearer $NAS_CLOUD_MAINTENANCE_TOKEN" http://127.0.0.1:3000/api/health
 ```
 
 If this fails after deploying to TrueNAS, check dataset permissions first. The two most likely causes are:
@@ -331,10 +343,10 @@ The app exposes two maintenance routes that can be driven from a TrueNAS cron jo
 
 ```text
 POST /api/maintenance/previews        # process pending preview jobs
-POST /api/maintenance/upload-cleanup  # delete abandoned upload sessions older than 24h
+POST /api/maintenance/upload-cleanup  # delete abandoned uploads older than 24h; purge expired sessions, pairing codes, rate-limit rows
 ```
 
-> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process preview loop that ticks every 60 seconds while there is pending work and idles to every 5 minutes when the queue is empty. The cron approach below still works either way and is the safe choice if you run multiple replicas.
+> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process loop that ticks every 60 seconds while there is pending preview work, goes again after one second when a batch of 25 came back full, and idles to every 5 minutes when the queue is empty. The same loop runs the stale-upload cleanup and the purge of expired sessions, pairing codes, and rate-limit rows once an hour. The cron approach below still works either way and is the safe choice if you run multiple replicas; with the scheduler off, cron is the only thing that cleans up abandoned uploads.
 
 Both routes accept either:
 
@@ -393,6 +405,8 @@ Snapshot both datasets:
 /mnt/OfficeNAS/nas-project-cloud/files
 /mnt/OfficeNAS/nas-project-cloud/appdata
 ```
+
+`appdata` is not disposable. Re-indexing the `files` dataset (`npm run index:storage`, from a source checkout with both datasets mounted; the script is not in the Docker image) brings back file records, project membership inferred from `Projects/<slug>/`, and default categories. Tags, custom categories, share links, users, paired devices, and upload sessions exist only in SQLite and are lost without an `appdata` backup.
 
 The app enables SQLite WAL mode. Do not back up only `nas-cloud.sqlite` while the container is running. For the cleanest backup:
 

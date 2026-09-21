@@ -274,6 +274,68 @@ describe("AppShell", () => {
     expect(await screen.findByText(/first 200 results/i)).toBeVisible();
   });
 
+  it("loads the next page of files on demand and stops offering more at the end", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<typeof fetch>((input) => {
+      const url = String(input);
+      if (url === "/api/files?cursor=c1") {
+        return Promise.resolve(new Response(JSON.stringify({ files: [notesFile], nextCursor: null }), { status: 200 }));
+      }
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <AppShell initialData={{ files: [uploadedFile], nextCursor: "c1", projects: [], categories: [], tags: [] }} />
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Select manual.pdf" }));
+    await user.click(screen.getByRole("button", { name: "Load more files" }));
+
+    expect(await screen.findByRole("button", { name: "notes.txt" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "manual.pdf" })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "Select manual.pdf" })).toBeChecked();
+    expect(screen.queryByRole("button", { name: "Load more files" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the load-more control and explains when a page fails to load", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(() => Promise.resolve(new Response("{}", { status: 500 })))
+    );
+
+    render(
+      <AppShell initialData={{ files: [uploadedFile], nextCursor: "c1", projects: [], categories: [], tags: [] }} />
+    );
+    await user.click(screen.getByRole("button", { name: "Load more files" }));
+
+    expect(await screen.findByText("Could not load more files. Try again.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Load more files" })).toBeEnabled();
+  });
+
+  it("offers no more files when the first page was the last, or while searching", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(() =>
+        Promise.resolve(new Response(JSON.stringify({ files: [], truncated: false }), { status: 200 }))
+      )
+    );
+
+    const { unmount } = render(
+      <AppShell initialData={{ files: [uploadedFile], nextCursor: null, projects: [], categories: [], tags: [] }} />
+    );
+    expect(screen.queryByRole("button", { name: "Load more files" })).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <AppShell initialData={{ files: [uploadedFile], nextCursor: "c1", projects: [], categories: [], tags: [] }} />
+    );
+    await user.type(screen.getByRole("searchbox", { name: "Search files" }), "render");
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Load more files" })).not.toBeInTheDocument());
+  });
+
   it("toggles between grid and list view, persisting the choice in localStorage", async () => {
     const user = userEvent.setup();
     render(<AppShell initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);

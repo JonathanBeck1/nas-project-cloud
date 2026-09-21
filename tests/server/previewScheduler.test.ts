@@ -122,6 +122,56 @@ describe("preview scheduler", () => {
 
     await stopAndFlush(handle);
   });
+
+  it("schedules the next tick promptly after a full batch", async () => {
+    const runWorker = vi
+      .fn()
+      .mockResolvedValueOnce({ scanned: 25, processed: 25, failed: 0 })
+      .mockResolvedValue({ scanned: 0, processed: 0, failed: 0 });
+
+    const handle = startPreviewScheduler({ runWorker });
+
+    await vi.advanceTimersByTimeAsync(ACTIVE_MS);
+    expect(runWorker).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(runWorker).toHaveBeenCalledTimes(2);
+
+    await stopAndFlush(handle);
+  });
+
+  it("runs hourly maintenance on the first tick and then hourly", async () => {
+    const runWorker = vi.fn().mockResolvedValue({ scanned: 1, processed: 1, failed: 0 });
+    const runHourlyMaintenance = vi.fn().mockResolvedValue(undefined);
+
+    const handle = startPreviewScheduler({ runWorker, runHourlyMaintenance });
+
+    await vi.advanceTimersByTimeAsync(ACTIVE_MS);
+    expect(runHourlyMaintenance).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(ACTIVE_MS * 10);
+    expect(runHourlyMaintenance).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+    expect(runHourlyMaintenance).toHaveBeenCalledTimes(2);
+
+    await stopAndFlush(handle);
+  });
+
+  it("still runs the worker when hourly maintenance fails", async () => {
+    const error = new Error("cleanup boom");
+    const runWorker = vi.fn().mockResolvedValue({ scanned: 0, processed: 0, failed: 0 });
+    const runHourlyMaintenance = vi.fn().mockRejectedValue(error);
+    const onError = vi.fn();
+
+    const handle = startPreviewScheduler({ runWorker, runHourlyMaintenance, onError });
+
+    await vi.advanceTimersByTimeAsync(ACTIVE_MS);
+    expect(onError).toHaveBeenCalledWith(error);
+    expect(runWorker).toHaveBeenCalledTimes(1);
+
+    await stopAndFlush(handle);
+  });
 });
 
 async function stopAndFlush(handle: PreviewSchedulerHandle): Promise<void> {

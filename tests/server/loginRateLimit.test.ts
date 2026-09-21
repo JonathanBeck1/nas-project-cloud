@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   repo: {
     getUserByEmail: vi.fn(),
     createDevice: vi.fn(),
+    findDeviceByName: vi.fn(),
+    touchDevice: vi.fn(),
     createSession: vi.fn()
   },
   verifyPassword: vi.fn(),
@@ -16,7 +18,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/server/db", () => ({ getDatabase: vi.fn(() => mocks.db) }));
 vi.mock("@/lib/server/metadata", () => ({ createMetadataRepository: vi.fn(() => mocks.repo) }));
-vi.mock("@/lib/server/auth/passwords", () => ({ verifyPassword: mocks.verifyPassword }));
+vi.mock("@/lib/server/auth/passwords", () => ({
+  verifyPassword: mocks.verifyPassword,
+  hashPassword: vi.fn(),
+  needsRehash: () => false,
+  DUMMY_PASSWORD_HASH: "scrypt:dummy"
+}));
 vi.mock("@/lib/server/rateLimit", () => ({
   createRateLimiter: () => ({ consume: mocks.consume, reset: mocks.reset }),
   clientIpFromRequest: (...args: unknown[]) => mocks.clientIpFromRequest(...args)

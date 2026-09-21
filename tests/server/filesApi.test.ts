@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
   const repo = {
     bulkUpdateFiles: vi.fn(),
     listFiles: vi.fn(),
+    listFilesPage: vi.fn(),
     createFile: vi.fn(),
     getFileById: vi.fn(),
     getProjectById: vi.fn(),
@@ -21,7 +22,9 @@ const mocks = vi.hoisted(() => {
     writeUpload: vi.fn(),
     streamUpload: vi.fn(),
     absolutePathFor: vi.fn(),
+    resolveReadPath: vi.fn(),
     moveToProject: vi.fn(),
+    moveToInbox: vi.fn(),
     renameFile: vi.fn(),
     archiveFile: vi.fn(),
     restoreFile: vi.fn(),
@@ -70,6 +73,9 @@ vi.mock("@/lib/shared/fileTypes", () => ({
 describe("files API module", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.storage.resolveReadPath.mockImplementation(async (relativePath: string) =>
+      mocks.storage.absolutePathFor(relativePath)
+    );
     mocks.appConfig.maxUploadBytes = 10;
     mocks.appConfig.storageRoot = os.tmpdir();
     mocks.repo.bulkUpdateFiles.mockReturnValue([]);
@@ -138,22 +144,44 @@ describe("files API module", () => {
     }
   });
 
-  it("passes GET filters to the repository", async () => {
+  it("passes GET filters and paging to the repository", async () => {
     const { GET } = await import("@/app/api/files/route");
     const files = [{ id: "file_1" }];
-    mocks.repo.listFiles.mockReturnValue(files);
+    mocks.repo.listFilesPage.mockReturnValue({ files, nextCursor: "next" });
 
     const response = await GET(
-      new Request("http://localhost/api/files?query=bracket&projectId=proj_1&categoryId=cat_1")
+      new Request("http://localhost/api/files?query=bracket&projectId=proj_1&categoryId=cat_1&limit=50&cursor=abc")
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ files });
-    expect(mocks.repo.listFiles).toHaveBeenCalledWith({
-      query: "bracket",
-      projectId: "proj_1",
-      categoryId: "cat_1"
+    await expect(response.json()).resolves.toEqual({ files, nextCursor: "next" });
+    expect(mocks.repo.listFilesPage).toHaveBeenCalledWith(
+      { query: "bracket", projectId: "proj_1", categoryId: "cat_1" },
+      { limit: 50, cursor: "abc" }
+    );
+  });
+
+  it("pages with the default limit when none is given", async () => {
+    const { GET } = await import("@/app/api/files/route");
+    mocks.repo.listFilesPage.mockReturnValue({ files: [], nextCursor: null });
+
+    await GET(new Request("http://localhost/api/files?limit=lots"));
+
+    expect(mocks.repo.listFilesPage).toHaveBeenCalledWith(
+      { query: undefined, projectId: undefined, categoryId: undefined },
+      { limit: undefined, cursor: null }
+    );
+  });
+
+  it("answers a cursor it cannot decode with 400", async () => {
+    const { GET } = await import("@/app/api/files/route");
+    mocks.repo.listFilesPage.mockImplementation(() => {
+      throw Object.assign(new Error("invalid cursor"), { code: "INVALID_CURSOR" });
     });
+
+    const response = await GET(new Request("http://localhost/api/files?cursor=garbage"));
+
+    expect(response.status).toBe(400);
   });
 
   it("enqueues image previews when a direct upload creates image metadata", async () => {
@@ -680,20 +708,25 @@ describe("files API module", () => {
     expect(mocks.repo.updateFile).not.toHaveBeenCalled();
   });
 
-  it("does not move storage when clearing a file project on patch", async () => {
+  it("moves a file back to its device inbox when its project is cleared on patch", async () => {
     const { PATCH } = await import("@/app/api/files/[id]/route");
     mocks.repo.getFileById.mockReturnValue({
       id: "file_123",
       name: "bracket.stl",
       projectId: "proj_123",
+      sourceDevice: "Windows-PC",
       status: "active",
       storagePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
+    mocks.storage.moveToInbox.mockResolvedValue({
+      absolutePath: "/storage/Inbox/Windows-PC/bracket.stl",
+      relativePath: "Inbox/Windows-PC/bracket.stl"
     });
     mocks.repo.updateFile.mockReturnValue({
       id: "file_123",
       name: "bracket.stl",
       projectId: null,
-      storagePath: "Projects/print-parts/Inbox/bracket.stl"
+      storagePath: "Inbox/Windows-PC/bracket.stl"
     });
 
     const response = await PATCH(
@@ -705,12 +738,73 @@ describe("files API module", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.storage.moveToProject).not.toHaveBeenCalled();
+    expect(mocks.storage.moveToInbox).toHaveBeenCalledWith({
+      currentRelativePath: "Projects/print-parts/Inbox/bracket.stl",
+      sourceDevice: "Windows-PC",
+      filename: "bracket.stl"
+    });
     expect(mocks.repo.updateFile).toHaveBeenCalledWith(
       "file_123",
-      { projectId: null },
+      { projectId: null, storagePath: "Inbox/Windows-PC/bracket.stl" },
       { storagePath: "Projects/print-parts/Inbox/bracket.stl", status: "active" }
     );
+  });
+
+  it("does not move a file that has no project when its project is cleared", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      projectId: null,
+      sourceDevice: "Windows-PC",
+      status: "active",
+      storagePath: "Inbox/Windows-PC/bracket.stl"
+    });
+    mocks.repo.updateFile.mockReturnValue({ id: "file_123", name: "bracket.stl", projectId: null });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: null })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.storage.moveToInbox).not.toHaveBeenCalled();
+  });
+
+  it("puts the file back in its project when the metadata update fails after detaching", async () => {
+    const { PATCH } = await import("@/app/api/files/[id]/route");
+    mocks.repo.getFileById.mockReturnValue({
+      id: "file_123",
+      name: "bracket.stl",
+      projectId: "proj_123",
+      sourceDevice: "Windows-PC",
+      status: "active",
+      storagePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
+    mocks.storage.moveToInbox.mockResolvedValue({
+      absolutePath: "/storage/Inbox/Windows-PC/bracket.stl",
+      relativePath: "Inbox/Windows-PC/bracket.stl"
+    });
+    mocks.repo.updateFile.mockImplementation(() => {
+      throw new Error("database is locked");
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/files/file_123", {
+        method: "PATCH",
+        body: JSON.stringify({ projectId: null })
+      }),
+      { params: Promise.resolve({ id: "file_123" }) }
+    );
+
+    expect(response.status).toBe(500);
+    expect(mocks.storage.restoreFile).toHaveBeenCalledWith({
+      currentRelativePath: "Inbox/Windows-PC/bracket.stl",
+      targetRelativePath: "Projects/print-parts/Inbox/bracket.stl"
+    });
   });
 
   it("archives a file by moving storage and updating metadata", async () => {

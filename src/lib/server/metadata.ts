@@ -253,8 +253,22 @@ type ListFilesFilters = {
   query?: string;
   projectId?: string | null;
   categoryId?: string | null;
+  status?: FileStatus;
   includeArchived?: boolean;
 };
+
+type ListFilesPageOptions = {
+  limit?: number;
+  cursor?: string | null;
+};
+
+export type FilesPage = {
+  files: CloudFile[];
+  nextCursor: string | null;
+};
+
+export const FILES_PAGE_DEFAULT_LIMIT = 100;
+export const FILES_PAGE_MAX_LIMIT = 500;
 
 export const SEARCH_FILES_LIMIT = 200;
 
@@ -347,6 +361,9 @@ type ListUploadSessionsFilters = {
   limit?: number;
 };
 
+const MAX_PREVIEW_ATTEMPTS = 3;
+// At least the longest rate-limit window any route uses (device pairing: 24 hours).
+const RATE_LIMIT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_UPLOAD_SESSIONS_LIMIT = 100;
 const MAX_UPLOAD_SESSIONS_LIMIT = 200;
 
@@ -580,6 +597,7 @@ export function createMetadataRepository(db: AppDatabase) {
     recordFileShareDownload(id: string, input: RecordFileShareDownloadInput = {}): FileShareLink | null {
       const now = new Date().toISOString();
       const record = db.transaction(() => {
+        // The cap and revocation are re-checked in the statement itself, so concurrent requests cannot both take the last download.
         const result = db
           .prepare<[string, string, string]>(`
             update file_share_links
@@ -587,6 +605,8 @@ export function createMetadataRepository(db: AppDatabase) {
                 last_accessed_at = ?,
                 updated_at = ?
             where id = ?
+              and revoked_at is null
+              and (max_downloads is null or download_count < max_downloads)
           `)
           .run(now, now, id);
 
@@ -912,32 +932,48 @@ export function createMetadataRepository(db: AppDatabase) {
       });
     },
 
+    countActiveFilesByProject(): Map<string, number> {
+      const rows = db
+        .prepare<[], { project_id: string; count: number }>(`
+          select project_id, count(*) as count
+          from files
+          where status = 'active' and project_id is not null
+          group by project_id
+        `)
+        .all();
+      return new Map(rows.map((row) => [row.project_id, row.count]));
+    },
+
     listFiles(filters: ListFilesFilters = {}): CloudFile[] {
-      const where: string[] = [];
-      const params: Record<string, string | null> = {};
-
-      if (!filters.includeArchived) {
-        where.push("status = 'active'");
-      }
-
-      if (filters.query) {
-        where.push("(name like @query or storage_path like @query)");
-        params.query = `%${filters.query}%`;
-      }
-
-      if (filters.projectId !== undefined) {
-        where.push(filters.projectId === null ? "project_id is null" : "project_id = @projectId");
-        params.projectId = filters.projectId;
-      }
-
-      if (filters.categoryId !== undefined) {
-        where.push(filters.categoryId === null ? "category_id is null" : "category_id = @categoryId");
-        params.categoryId = filters.categoryId;
-      }
-
-      const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name`;
+      const { where, params } = fileListWhere(filters);
+      const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name, id`;
       const files = db.prepare<Record<string, string | null>, FileRow>(sql).all(params);
       return filesFromRowsWithTags(db, files);
+    },
+
+    listFilesPage(filters: ListFilesFilters = {}, options: ListFilesPageOptions = {}): FilesPage {
+      const limit = Math.max(1, Math.min(Math.floor(options.limit ?? FILES_PAGE_DEFAULT_LIMIT), FILES_PAGE_MAX_LIMIT));
+      const { where, params } = fileListWhere(filters);
+      const pageParams: Record<string, string | number | null> = { ...params, limit: limit + 1 };
+
+      if (options.cursor) {
+        const cursor = decodeFilesCursor(options.cursor);
+        // The leading bound is redundant but lets SQLite seek into files_listing_idx instead of scanning to the cursor.
+        where.push(
+          "uploaded_at <= @u and (uploaded_at < @u or (uploaded_at = @u and (name > @n or (name = @n and id > @i))))"
+        );
+        Object.assign(pageParams, cursor);
+      }
+
+      const sql = `select * from files${where.length ? ` where ${where.join(" and ")}` : ""} order by uploaded_at desc, name, id limit @limit`;
+      const rows = db.prepare<Record<string, string | number | null>, FileRow>(sql).all(pageParams);
+      const pageRows = rows.slice(0, limit);
+      const last = pageRows[pageRows.length - 1];
+
+      return {
+        files: filesFromRowsWithTags(db, pageRows),
+        nextCursor: rows.length > limit && last ? encodeFilesCursor(last) : null
+      };
     },
 
     searchFiles(filters: SearchFilesFilters = {}): SearchFilesResult {
@@ -950,8 +986,10 @@ export function createMetadataRepository(db: AppDatabase) {
 
       const trimmedQuery = filters.query?.trim();
       if (trimmedQuery) {
-        where.push("(files.name like @query or files.storage_path like @query or files.extension like @query)");
-        params.query = `%${trimmedQuery}%`;
+        where.push(
+          "(files.name like @query escape '\\' or files.storage_path like @query escape '\\' or files.extension like @query escape '\\')"
+        );
+        params.query = likeContains(trimmedQuery);
       }
 
       if (filters.projectId !== undefined) {
@@ -1133,6 +1171,33 @@ export function createMetadataRepository(db: AppDatabase) {
       });
     },
 
+    claimPreviewJob(fileId: string, kind: FilePreviewKind): boolean {
+      const result = db
+        .prepare<[string, string, FilePreviewKind]>(`
+          update file_previews
+          set status = 'processing', attempts = attempts + 1, updated_at = ?
+          where file_id = ? and kind = ? and status = 'pending'
+        `)
+        .run(new Date().toISOString(), fileId, kind);
+      return result.changes === 1;
+    },
+
+    // A row still 'processing' at boot means the process died mid-job; a file that keeps doing that is a poison pill.
+    requeueStalePreviewJobs(): { requeued: number; failed: number } {
+      const now = new Date().toISOString();
+      const failed = db
+        .prepare<[string, string, number]>(`
+          update file_previews
+          set status = 'failed', error = ?, updated_at = ?
+          where status = 'processing' and attempts >= ?
+        `)
+        .run(`preview worker did not survive ${MAX_PREVIEW_ATTEMPTS} attempts on this file`, now, MAX_PREVIEW_ATTEMPTS);
+      const requeued = db
+        .prepare<[string]>("update file_previews set status = 'pending', updated_at = ? where status = 'processing'")
+        .run(now);
+      return { requeued: requeued.changes, failed: failed.changes };
+    },
+
     countFilePreviewsByStatus(): Record<FilePreviewStatus, number> {
       const rows = db
         .prepare<[], { status: FilePreviewStatus; count: number }>(`
@@ -1144,6 +1209,7 @@ export function createMetadataRepository(db: AppDatabase) {
 
       const counts: Record<FilePreviewStatus, number> = {
         pending: 0,
+        processing: 0,
         ready: 0,
         failed: 0,
         skipped: 0,
@@ -1176,7 +1242,7 @@ export function createMetadataRepository(db: AppDatabase) {
       const result = db
         .prepare<[string]>(`
           update file_previews
-          set status = 'pending', error = null, updated_at = ?
+          set status = 'pending', error = null, attempts = 0, updated_at = ?
           where status = 'failed'
         `)
         .run(now);
@@ -1262,6 +1328,36 @@ export function createMetadataRepository(db: AppDatabase) {
       return userWithoutPasswordHash(user);
     },
 
+    // Inserts only into an empty users table, in one statement, so concurrent setups cannot both win.
+    createFirstOwner(input: Omit<CreateUserInput, "role">): User | null {
+      const now = new Date().toISOString();
+      const user = {
+        id: `user_${nanoid(12)}`,
+        email: input.email,
+        name: input.name,
+        passwordHash: input.passwordHash,
+        role: "owner" as const,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      const result = db.prepare(`
+        insert into users (id, email, name, password_hash, role, created_at, updated_at)
+        select @id, @email, @name, @passwordHash, @role, @createdAt, @updatedAt
+        where not exists (select 1 from users)
+      `).run(user);
+
+      return result.changes === 1 ? userWithoutPasswordHash(user) : null;
+    },
+
+    updateUserPasswordHash(userId: string, passwordHash: string): void {
+      db.prepare<[string, string, string]>("update users set password_hash = ?, updated_at = ? where id = ?").run(
+        passwordHash,
+        new Date().toISOString(),
+        userId
+      );
+    },
+
     getUserByEmail(email: string): UserWithPasswordHash | null {
       const row = db.prepare<[string], UserRow>("select * from users where email = ? limit 1").get(email);
       return row ? userWithPasswordHashFromRow(row) : null;
@@ -1284,6 +1380,18 @@ export function createMetadataRepository(db: AppDatabase) {
       `).run(device);
 
       return device;
+    },
+
+    findDeviceByName(userId: string, name: string, kind: TrustedDeviceKind): TrustedDevice | null {
+      const row = db
+        .prepare<[string, string, TrustedDeviceKind], DeviceRow>(`
+          select * from devices
+          where user_id = ? and name = ? and kind = ?
+          order by coalesce(last_seen_at, created_at) desc
+          limit 1
+        `)
+        .get(userId, name, kind);
+      return row ? deviceFromRow(row) : null;
     },
 
     listDevices(userId: string): TrustedDevice[] {
@@ -1362,16 +1470,33 @@ export function createMetadataRepository(db: AppDatabase) {
         createdAt: new Date().toISOString()
       };
 
-      db.prepare(`
-        insert into device_pairing_codes (
-          id, user_id, code_hash, device_name, device_kind, expires_at, consumed_at, created_at
-        )
-        values (
-          @id, @userId, @codeHash, @deviceName, @deviceKind, @expiresAt, @consumedAt, @createdAt
-        )
-      `).run(code);
+      db.transaction(() => {
+        // code_hash is unique over only a million codes, so a dead row would eventually block a fresh code.
+        deleteDeadPairingCodes(db, code.createdAt);
+        db.prepare(`
+          insert into device_pairing_codes (
+            id, user_id, code_hash, device_name, device_kind, expires_at, consumed_at, created_at
+          )
+          values (
+            @id, @userId, @codeHash, @deviceName, @deviceKind, @expiresAt, @consumedAt, @createdAt
+          )
+        `).run(code);
+      })();
 
       return code;
+    },
+
+    purgeExpiredAuthState(): { sessions: number; pairingCodes: number; rateLimitEvents: number } {
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const rateLimitCutoff = new Date(now.getTime() - RATE_LIMIT_RETENTION_MS).toISOString();
+      return {
+        sessions: db.prepare<[string]>("delete from sessions where expires_at < ?").run(nowIso).changes,
+        pairingCodes: deleteDeadPairingCodes(db, nowIso),
+        // Across every key: the limiter only purges the key it is asked about, so one-off keys were kept forever.
+        rateLimitEvents: db.prepare<[string]>("delete from rate_limit_events where occurred_at < ?").run(rateLimitCutoff)
+          .changes
+      };
     },
 
     getDevicePairingCodeByHash(codeHash: string): DevicePairingCode | null {
@@ -1623,6 +1748,65 @@ function uniqueSlug(db: AppDatabase, tableName: "projects" | "tags" | "categorie
   return candidate;
 }
 
+function deleteDeadPairingCodes(db: AppDatabase, nowIso: string): number {
+  return db
+    .prepare<[string]>("delete from device_pairing_codes where consumed_at is not null or expires_at < ?")
+    .run(nowIso).changes;
+}
+
+// % and _ are wildcards in LIKE; without this, searching "100%" matches every file.
+function likeContains(text: string): string {
+  return `%${text.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
+function fileListWhere(filters: ListFilesFilters): { where: string[]; params: Record<string, string | null> } {
+  const where: string[] = [];
+  const params: Record<string, string | null> = {};
+
+  if (filters.status) {
+    where.push("status = @status");
+    params.status = filters.status;
+  } else if (!filters.includeArchived) {
+    where.push("status = 'active'");
+  }
+
+  if (filters.query) {
+    where.push("(name like @query escape '\\' or storage_path like @query escape '\\')");
+    params.query = likeContains(filters.query);
+  }
+
+  if (filters.projectId !== undefined) {
+    where.push(filters.projectId === null ? "project_id is null" : "project_id = @projectId");
+    params.projectId = filters.projectId;
+  }
+
+  if (filters.categoryId !== undefined) {
+    where.push(filters.categoryId === null ? "category_id is null" : "category_id = @categoryId");
+    params.categoryId = filters.categoryId;
+  }
+
+  return { where, params };
+}
+
+type FilesCursor = { u: string; n: string; i: string };
+
+function encodeFilesCursor(row: FileRow): string {
+  const cursor: FilesCursor = { u: row.uploaded_at, n: row.name, i: row.id };
+  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+}
+
+function decodeFilesCursor(value: string): FilesCursor {
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<FilesCursor>;
+    if (typeof parsed.u === "string" && typeof parsed.n === "string" && typeof parsed.i === "string") {
+      return { u: parsed.u, n: parsed.n, i: parsed.i };
+    }
+  } catch {
+    // fall through
+  }
+  throw Object.assign(new Error("invalid cursor"), { code: "INVALID_CURSOR" });
+}
+
 export function filesFromRowsWithTags(db: AppDatabase, rows: FileRow[]): CloudFile[] {
   if (rows.length === 0) {
     return [];
@@ -1630,16 +1814,17 @@ export function filesFromRowsWithTags(db: AppDatabase, rows: FileRow[]): CloudFi
 
   const tagsByFileId = new Map<string, Tag[]>();
   const previewsByFileId = new Map<string, FilePreview>();
-  const placeholders = rows.map(() => "?").join(", ");
+  // One JSON parameter: a placeholder per row hits SQLite's 32,766 bound-variable limit.
+  const fileIds = JSON.stringify(rows.map((row) => row.id));
   const tagRows = db
-    .prepare<string[], TagRow & { file_id: string }>(`
+    .prepare<[string], TagRow & { file_id: string }>(`
       select file_tags.file_id, tags.id, tags.name, tags.slug
       from file_tags
       inner join tags on tags.id = file_tags.tag_id
-      where file_tags.file_id in (${placeholders})
+      where file_tags.file_id in (select value from json_each(?))
       order by tags.name
     `)
-    .all(...rows.map((row) => row.id));
+    .all(fileIds);
 
   for (const row of tagRows) {
     const tags = tagsByFileId.get(row.file_id) ?? [];
@@ -1648,12 +1833,12 @@ export function filesFromRowsWithTags(db: AppDatabase, rows: FileRow[]): CloudFi
   }
 
   const previewRows = db
-    .prepare<string[], FilePreviewRow>(`
+    .prepare<[string], FilePreviewRow>(`
       select * from file_previews
-      where status = 'ready' and kind = 'image' and file_id in (${placeholders})
+      where status = 'ready' and kind = 'image' and file_id in (select value from json_each(?))
       order by updated_at desc
     `)
-    .all(...rows.map((row) => row.id));
+    .all(fileIds);
 
   for (const row of previewRows) {
     if (!previewsByFileId.has(row.file_id)) {

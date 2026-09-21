@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
-import { verifyPassword } from "@/lib/server/auth/passwords";
+import { DUMMY_PASSWORD_HASH, hashPassword, needsRehash, verifyPassword } from "@/lib/server/auth/passwords";
 import { createSessionToken, hashSessionToken, sessionExpiresAt } from "@/lib/server/auth/sessions";
 import { withSessionCookie } from "@/lib/server/auth/http";
 import { clientIpFromRequest, createRateLimiter } from "@/lib/server/rateLimit";
@@ -48,19 +48,25 @@ export async function POST(request: Request) {
 
   const repo = createMetadataRepository(getDatabase());
   const user = repo.getUserByEmail(email);
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  // Derive even for an unknown email, so response time does not reveal which accounts exist.
+  const valid = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+  if (!user || !valid) {
     return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
+  }
+
+  if (needsRehash(user.passwordHash)) {
+    repo.updateUserPasswordHash(user.id, await hashPassword(password));
   }
 
   // Successful login — clear any throttling state for this identity.
   limiter.reset("login_email", email);
   limiter.reset("login_ip", ip);
 
-  const device = repo.createDevice({
-    userId: user.id,
-    name: deviceName,
-    kind: "browser"
-  });
+  // One row per named browser, not one per login. Revoking a device deletes its row, so the next login starts a new one.
+  const device =
+    repo.findDeviceByName(user.id, deviceName, "browser") ??
+    repo.createDevice({ userId: user.id, name: deviceName, kind: "browser" });
+  repo.touchDevice(device.id);
   const token = createSessionToken();
   repo.createSession({
     userId: user.id,

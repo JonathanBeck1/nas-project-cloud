@@ -12,8 +12,12 @@ import { renderPdfFirstPage } from "./pdf";
 import { probePoppler } from "./poppler";
 import { generateVideoPoster } from "./video";
 
+// One libvips thread keeps peak memory predictable under the container's memory limit.
+sharp.concurrency(1);
+
 type PreviewRepo = {
   listPendingPreviewJobs?: (limit?: number) => PreviewJob[];
+  claimPreviewJob?: (fileId: string, kind: FilePreview["kind"]) => boolean;
   upsertFilePreview: (input: {
     fileId: string;
     kind: FilePreview["kind"];
@@ -28,6 +32,7 @@ type PreviewRepo = {
 
 type PreviewStorage = {
   absolutePathFor: (relativePath: string) => string;
+  resolveReadPath?: (relativePath: string) => Promise<string>;
 };
 
 type ProcessPreviewJobInput = {
@@ -62,8 +67,11 @@ export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJo
     return;
   }
 
-  const absolutePath = storage.absolutePathFor(job.file.storagePath);
+  let absolutePath: string;
   try {
+    absolutePath = storage.resolveReadPath
+      ? await storage.resolveReadPath(job.file.storagePath)
+      : storage.absolutePathFor(job.file.storagePath);
     const stats = await fs.stat(absolutePath);
     if (!stats.isFile()) {
       throw new Error("storage path is not a file");
@@ -247,11 +255,21 @@ async function generatePdfFirstPage({
   }
 }
 
-export async function runPreviewWorker({
+let inFlight: Promise<PreviewWorkerResult> | null = null;
+
+// The scheduler and the maintenance endpoint share this run, so only one batch decodes images at a time.
+export function runPreviewWorker(input: RunPreviewWorkerInput = {}): Promise<PreviewWorkerResult> {
+  inFlight ??= runBatch(input).finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function runBatch({
   repo = createMetadataRepository(getDatabase()),
   storage = createStorageService(),
   limit = 25
-}: RunPreviewWorkerInput = {}): Promise<PreviewWorkerResult> {
+}: RunPreviewWorkerInput): Promise<PreviewWorkerResult> {
   if (!repo.listPendingPreviewJobs) {
     return { scanned: 0, processed: 0, failed: 0 };
   }
@@ -264,6 +282,10 @@ export async function runPreviewWorker({
   };
 
   for (const job of jobs) {
+    // Claimed before any decoding so a job that kills the process is counted, not retried forever.
+    if (repo.claimPreviewJob && !repo.claimPreviewJob(job.file.id, job.preview.kind)) {
+      continue;
+    }
     try {
       await processPreviewJob({ job, repo, storage });
       result.processed += 1;

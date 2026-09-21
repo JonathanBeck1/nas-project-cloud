@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { AppDatabase } from "@/lib/server/db";
-import { createMetadataRepository } from "@/lib/server/metadata";
+import { createMetadataRepository, slugify } from "@/lib/server/metadata";
 import { classifyFile } from "@/lib/shared/fileTypes";
 import type { FileFamily, FileStatus } from "@/lib/shared/types";
 
@@ -74,8 +74,18 @@ export async function scanStorageRoot(input: ScanStorageRootInput): Promise<Scan
   const storageRoot = path.resolve(input.storageRoot);
   const repo = createMetadataRepository(input.db);
   const exists = input.db.prepare<[string], { id: string }>("select id from files where storage_path = ? limit 1");
+  const projectBySlug = input.db.prepare<[string], { id: string }>("select id from projects where slug = ? limit 1");
   let scanned = 0;
   let indexed = 0;
+
+  const projectIdForStoragePath = (storagePath: string): string | null => {
+    const slug = /^Projects\/([^/]+)\//.exec(storagePath)?.[1];
+    // A folder made over SMB may not be slug-shaped; createProject would then mint a new slug for every file in it.
+    if (!slug || slugify(slug) !== slug) {
+      return null;
+    }
+    return projectBySlug.get(slug)?.id ?? repo.createProject({ name: projectNameFromSlug(slug) }).id;
+  };
 
   for await (const filePath of walkFiles(storageRoot)) {
     scanned += 1;
@@ -95,6 +105,7 @@ export async function scanStorageRoot(input: ScanStorageRootInput): Promise<Scan
       sizeBytes: stats.size,
       checksum: await sha256File(filePath),
       storagePath,
+      projectId: projectIdForStoragePath(storagePath),
       categoryId: categoryForStoragePath(storagePath, classification.family),
       sourceDevice: sourceDeviceForStoragePath(storagePath),
       status: lifecycle.status,
@@ -106,7 +117,7 @@ export async function scanStorageRoot(input: ScanStorageRootInput): Promise<Scan
   return { scanned, indexed };
 }
 
-async function* walkFiles(directory: string): AsyncGenerator<string> {
+async function* walkFiles(directory: string, isRoot = true): AsyncGenerator<string> {
   let entries;
   try {
     entries = await fs.readdir(directory, { withFileTypes: true });
@@ -118,9 +129,13 @@ async function* walkFiles(directory: string): AsyncGenerator<string> {
   }
 
   for (const entry of entries) {
+    // Root dot-entries are the app's own: .uploads, .previews, the health probe.
+    if (isRoot && entry.name.startsWith(".")) {
+      continue;
+    }
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
-      yield* walkFiles(entryPath);
+      yield* walkFiles(entryPath, false);
     } else if (entry.isFile()) {
       yield entryPath;
     }
@@ -129,6 +144,13 @@ async function* walkFiles(directory: string): AsyncGenerator<string> {
 
 function toStoragePath(storageRoot: string, filePath: string): string {
   return path.relative(storageRoot, filePath).split(path.sep).join("/");
+}
+
+function projectNameFromSlug(slug: string): string {
+  return slug
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function sourceDeviceForStoragePath(storagePath: string): string {

@@ -53,6 +53,8 @@ function readStoredViewMode(): FileGridMode {
 
 export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialData?.nextCursor ?? null);
+  const [loadMoreStatus, setLoadMoreStatus] = useState<"idle" | "loading" | "error">("idle");
   const [projects, setProjects] = useState<Project[]>(initialData?.projects ?? []);
   const [categories] = useState<Category[]>(initialData?.categories ?? []);
   const [tags] = useState<Tag[]>(initialData?.tags ?? []);
@@ -147,6 +149,25 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const searchErrorMessage = isQueryActive && searchStatus === "error" ? searchError : null;
   const selectedFile = visibleFiles.find((file) => file.id === selectedFileId) ?? null;
   const selectedBulkFiles = files.filter((file) => selectedFileIds.includes(file.id));
+
+  async function handleLoadMoreFiles() {
+    if (!nextCursor || loadMoreStatus === "loading") {
+      return;
+    }
+    setLoadMoreStatus("loading");
+    try {
+      const response = await fetch(`/api/files?cursor=${encodeURIComponent(nextCursor)}`);
+      if (!response.ok) {
+        throw new Error("Load more failed");
+      }
+      const page = (await response.json()) as { files?: CloudFile[]; nextCursor?: string | null };
+      setFiles((currentFiles) => [...currentFiles, ...(page.files ?? [])]);
+      setNextCursor(page.nextCursor ?? null);
+      setLoadMoreStatus("idle");
+    } catch {
+      setLoadMoreStatus("error");
+    }
+  }
   const selectedBulkDownloadHref =
     selectedFileIds.length > 0 ? bulkDownloadUrl(selectedFileIds) : undefined;
 
@@ -514,6 +535,24 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                       onSelectFile={(file) => setSelectedFileId(file.id)}
                       onToggleSelected={handleToggleSelectedFile}
                     />
+                    {nextCursor && !isQueryActive ? (
+                      <div className="mt-4 flex flex-col items-center gap-2">
+                        {loadMoreStatus === "error" ? (
+                          <p role="status" className="text-sm font-medium text-red-700">
+                            Could not load more files. Try again.
+                          </p>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={handleLoadMoreFiles}
+                          disabled={loadMoreStatus === "loading"}
+                          aria-label="Load more files"
+                          className="rounded-md border border-line bg-panel px-4 py-2 text-sm font-semibold text-ink shadow-panel transition hover:border-muted disabled:opacity-60"
+                        >
+                          {loadMoreStatus === "loading" ? "Loading…" : "Load more"}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </section>

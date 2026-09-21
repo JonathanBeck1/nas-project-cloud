@@ -104,6 +104,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         filename: requestedName ?? file.name
       });
       update.storagePath = moved.relativePath;
+    } else if (file.projectId) {
+      // Leaving a project moves the bytes out of Projects/<slug>/ too, so the folder on disk keeps matching the app.
+      moved = await storage.moveToInbox({
+        currentRelativePath: file.storagePath,
+        sourceDevice: file.sourceDevice,
+        filename: requestedName ?? file.name
+      });
+      update.storagePath = moved.relativePath;
     }
   }
 

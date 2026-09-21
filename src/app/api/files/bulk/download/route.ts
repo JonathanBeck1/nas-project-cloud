@@ -28,6 +28,7 @@ export async function GET(request: Request) {
   const repo = createMetadataRepository(getDatabase());
   const storage = createStorageService();
   const files: ZipFile[] = [];
+  const missing: string[] = [];
 
   for (const id of fileIds) {
     const file = repo.getFileById(id);
@@ -35,19 +36,27 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "file not found" }, { status: 404 });
     }
 
-    try {
-      const absolutePath = storage.absolutePathFor(file.storagePath);
-      const details = await stat(absolutePath);
-      if (!details.isFile()) {
-        return NextResponse.json({ error: "file not found" }, { status: 404 });
-      }
+    const absolutePath = await readableFile(storage, file.storagePath);
+    if (absolutePath) {
       files.push({ file, absolutePath });
-    } catch {
-      return NextResponse.json({ error: "file not found" }, { status: 404 });
+    } else {
+      missing.push(file.name);
     }
   }
 
-  return createZipDownloadResponse(files, "nas-project-cloud-files.zip");
+  return createZipDownloadResponse(files, "nas-project-cloud-files.zip", missing);
+}
+
+async function readableFile(
+  storage: ReturnType<typeof createStorageService>,
+  storagePath: string
+): Promise<string | null> {
+  try {
+    const absolutePath = await storage.resolveReadPath(storagePath);
+    return (await stat(absolutePath)).isFile() ? absolutePath : null;
+  } catch {
+    return null;
+  }
 }
 
 function uniqueFileIds(ids: string[]): string[] {

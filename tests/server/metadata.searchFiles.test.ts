@@ -189,6 +189,22 @@ describe("metadata.searchFiles", () => {
     ).toEqual([active.id, archived.id].sort());
   });
 
+  it("treats % and _ in the query as literal characters", () => {
+    const repo = freshRepo();
+    const base = { extension: "pdf", family: "document" as const, mimeType: "application/pdf", sizeBytes: 1, checksum: "x", sourceDevice: "d" };
+    const percent = repo.createFile({ ...base, name: "100% done.pdf", storagePath: "Inbox/d/100% done.pdf" });
+    const underscore = repo.createFile({ ...base, name: "final_v2.pdf", storagePath: "Inbox/d/final_v2.pdf" });
+    repo.createFile({ ...base, name: "finalXv2.pdf", storagePath: "Inbox/d/finalXv2.pdf" });
+    const backslash = repo.createFile({ ...base, name: "back\\slash.pdf", storagePath: "Inbox/d/back-slash.pdf" });
+
+    expect(repo.searchFiles({ query: "100%" }).files.map((file) => file.id)).toEqual([percent.id]);
+    expect(repo.searchFiles({ query: "%" }).files.map((file) => file.id)).toEqual([percent.id]);
+    expect(repo.searchFiles({ query: "final_v2" }).files.map((file) => file.id)).toEqual([underscore.id]);
+    expect(repo.searchFiles({ query: "back\\slash" }).files.map((file) => file.id)).toEqual([backslash.id]);
+    expect(repo.listFiles({ query: "100%" }).map((file) => file.id)).toEqual([percent.id]);
+    expect(repo.listFiles({ query: "final_v2" }).map((file) => file.id)).toEqual([underscore.id]);
+  });
+
   it("caps results at 200 and reports truncated", () => {
     const repo = freshRepo();
     for (let i = 0; i < SEARCH_FILES_LIMIT + 5; i += 1) {

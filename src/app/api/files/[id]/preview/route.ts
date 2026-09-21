@@ -27,7 +27,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   let size: number;
 
   try {
-    absolutePath = storage.absolutePathFor(file.preview.previewPath);
+    absolutePath = await storage.resolveReadPath(file.preview.previewPath);
     const details = await stat(absolutePath);
     if (!details.isFile()) {
       return NextResponse.json({ error: "preview not found" }, { status: 404 });

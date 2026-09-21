@@ -2,6 +2,8 @@ import { runPreviewWorker, type PreviewWorkerResult } from "./worker";
 
 const ACTIVE_INTERVAL_MS = 60_000;
 const IDLE_INTERVAL_MS = 5 * 60_000;
+const FULL_BATCH_DELAY_MS = 1_000;
+const HOURLY_MAINTENANCE_INTERVAL_MS = 60 * 60_000;
 const BATCH_LIMIT = 25;
 
 type RunPreviewWorkerFn = (input?: { limit?: number }) => Promise<PreviewWorkerResult>;
@@ -10,6 +12,7 @@ type SchedulerInternals = {
   setTimeout: typeof globalThis.setTimeout;
   clearTimeout: typeof globalThis.clearTimeout;
   runWorker: RunPreviewWorkerFn;
+  runHourlyMaintenance?: () => Promise<unknown>;
   onError?: (error: unknown) => void;
 };
 
@@ -27,7 +30,9 @@ let activeHandle: PreviewSchedulerHandle | null = null;
  *
  * The loop is single-flight: a tick that's already running blocks the
  * next tick from overlapping. When a tick finds zero pending jobs it
- * sleeps for IDLE_INTERVAL_MS; otherwise ACTIVE_INTERVAL_MS.
+ * sleeps for IDLE_INTERVAL_MS, after a full batch FULL_BATCH_DELAY_MS,
+ * otherwise ACTIVE_INTERVAL_MS. Hourly maintenance (stale uploads, expired
+ * auth state) rides along on the same loop.
  */
 export function startPreviewScheduler(
   internals: Partial<SchedulerInternals> = {}
@@ -44,12 +49,19 @@ export function startPreviewScheduler(
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
   let inFlight: Promise<PreviewWorkerResult | null> | null = null;
+  let lastMaintenanceAt: number | null = null;
 
   const tick = async (): Promise<PreviewWorkerResult | null> => {
     if (stopped) return null;
     if (inFlight) return inFlight;
 
     inFlight = (async () => {
+      const maintenanceDue =
+        lastMaintenanceAt === null || Date.now() - lastMaintenanceAt >= HOURLY_MAINTENANCE_INTERVAL_MS;
+      if (internals.runHourlyMaintenance && maintenanceDue) {
+        lastMaintenanceAt = Date.now();
+        await internals.runHourlyMaintenance().catch(onError);
+      }
       try {
         return await runWorker({ limit: BATCH_LIMIT });
       } catch (error) {
@@ -69,8 +81,7 @@ export function startPreviewScheduler(
     if (stopped) return;
     timer = setTimeoutFn(async () => {
       const result = await tick();
-      const nextDelay = result && result.scanned > 0 ? ACTIVE_INTERVAL_MS : IDLE_INTERVAL_MS;
-      schedule(nextDelay);
+      schedule(delayAfter(result));
     }, delayMs);
   };
 
@@ -101,6 +112,13 @@ export function startPreviewScheduler(
 
   activeHandle = handle;
   return handle;
+}
+
+function delayAfter(result: PreviewWorkerResult | null): number {
+  if (!result || result.scanned === 0) {
+    return IDLE_INTERVAL_MS;
+  }
+  return result.scanned >= BATCH_LIMIT ? FULL_BATCH_DELAY_MS : ACTIVE_INTERVAL_MS;
 }
 
 /** For tests: drop the singleton so a fresh scheduler can boot. */

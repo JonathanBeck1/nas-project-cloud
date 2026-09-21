@@ -21,23 +21,36 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const storage = createStorageService();
   const files: ZipDownloadFile[] = [];
+  const missing: string[] = [];
+  const projectRoot = `Projects/${project.slug}/Inbox/`;
 
   for (const file of repo.listFiles({ projectId: id })) {
     if (file.status !== "active") {
       continue;
     }
 
-    try {
-      const absolutePath = storage.absolutePathFor(file.storagePath);
-      const details = await stat(absolutePath);
-      if (!details.isFile()) {
-        return NextResponse.json({ error: "file not found" }, { status: 404 });
-      }
-      files.push({ file, absolutePath });
-    } catch {
-      return NextResponse.json({ error: "file not found" }, { status: 404 });
+    // Uploads keep their folder structure under the project, so the export does too.
+    const entryPath = file.storagePath.startsWith(projectRoot) ? file.storagePath.slice(projectRoot.length) : file.name;
+    const absolutePath = await readableFile(storage, file.storagePath);
+    // SMB edits are not reconciled, so one renamed file must not sink the whole export.
+    if (absolutePath) {
+      files.push({ file, absolutePath, entryPath });
+    } else {
+      missing.push(entryPath);
     }
   }
 
-  return createZipDownloadResponse(files, `${project.slug}.zip`);
+  return createZipDownloadResponse(files, `${project.slug}.zip`, missing);
+}
+
+async function readableFile(
+  storage: ReturnType<typeof createStorageService>,
+  storagePath: string
+): Promise<string | null> {
+  try {
+    const absolutePath = await storage.resolveReadPath(storagePath);
+    return (await stat(absolutePath)).isFile() ? absolutePath : null;
+  } catch {
+    return null;
+  }
 }

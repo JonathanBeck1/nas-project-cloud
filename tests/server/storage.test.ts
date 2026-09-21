@@ -272,16 +272,17 @@ describe("storage service", () => {
     await expect(
       storage.appendUploadChunk({
         tempRelativePath: temp.relativePath,
-        offset: 3,
+        offset: 12,
         bytes: Buffer.from("bad")
       })
-    ).rejects.toThrow("Upload chunk offset mismatch");
+    ).rejects.toMatchObject({ message: "Upload chunk offset mismatch", code: "UPLOAD_OFFSET_MISMATCH" });
 
     const completed = await storage.completeUploadSession({
       tempRelativePath: temp.relativePath,
       target: { kind: "inbox", sourceDevice: "Browser" },
       filename: "movie.webm",
-      mimeType: "video/webm"
+      mimeType: "video/webm",
+      sizeBytes: 11
     });
 
     expect(completed.relativePath).toBe("Inbox/Browser/movie.webm");
@@ -289,6 +290,60 @@ describe("storage service", () => {
     expect(completed.mimeType).toBe("video/webm");
     expect(fs.readFileSync(path.join(dir, completed.relativePath), "utf8")).toBe("hello world");
     expect(fs.existsSync(path.join(dir, temp.relativePath))).toBe(false);
+  });
+
+  it("keeps the temp file intact when the same chunk arrives twice at once", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const temp = await storage.createUploadTempPath("upload_race");
+    const chunk = Buffer.alloc(1024 * 1024, 7);
+
+    await Promise.allSettled([
+      storage.appendUploadChunk({ tempRelativePath: temp.relativePath, offset: 0, bytes: chunk }),
+      storage.appendUploadChunk({ tempRelativePath: temp.relativePath, offset: 0, bytes: chunk })
+    ]);
+
+    expect(fs.readFileSync(temp.absolutePath).equals(chunk)).toBe(true);
+  });
+
+  it("rewrites a resent chunk in place", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const temp = await storage.createUploadTempPath("upload_resend");
+    await storage.appendUploadChunk({ tempRelativePath: temp.relativePath, offset: 0, bytes: Buffer.from("hello ") });
+    await storage.appendUploadChunk({ tempRelativePath: temp.relativePath, offset: 6, bytes: Buffer.from("world") });
+
+    const resent = await storage.appendUploadChunk({
+      tempRelativePath: temp.relativePath,
+      offset: 6,
+      bytes: Buffer.from("world")
+    });
+
+    expect(resent.receivedBytes).toBe(11);
+    expect(fs.readFileSync(temp.absolutePath, "utf8")).toBe("hello world");
+  });
+
+  it("refuses to complete an upload whose temp file is the wrong size", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+    const temp = await storage.createUploadTempPath("upload_short");
+    await storage.appendUploadChunk({ tempRelativePath: temp.relativePath, offset: 0, bytes: Buffer.from("hello") });
+
+    await expect(
+      storage.completeUploadSession({
+        tempRelativePath: temp.relativePath,
+        target: { kind: "inbox", sourceDevice: "Browser" },
+        filename: "movie.webm",
+        mimeType: "video/webm",
+        sizeBytes: 11
+      })
+    ).rejects.toMatchObject({ code: "UPLOAD_SIZE_MISMATCH" });
+
+    expect(fs.existsSync(temp.absolutePath)).toBe(true);
+    expect(fs.existsSync(path.join(dir, "Inbox", "Browser", "movie.webm"))).toBe(false);
   });
 
   it("aborts temp upload files without allowing path escape", async () => {
@@ -318,6 +373,94 @@ describe("storage service", () => {
     expect(() => storage.absolutePathFor(siblingPrefixEscape)).toThrow(
       "Storage path escapes configured root"
     );
+  });
+
+  async function storedName(filename: string): Promise<string> {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const stored = await createStorageService(dir).writeUpload({
+      target: { kind: "inbox", sourceDevice: "Browser" },
+      filename,
+      mimeType: "application/octet-stream",
+      bytes: Buffer.from("x")
+    });
+    return path.basename(stored.relativePath);
+  }
+
+  it("shortens names the filesystem would reject, on a character boundary, keeping the extension", async () => {
+    const ascii = await storedName(`${"a".repeat(300)}.stl`);
+    const multibyte = await storedName(`${"é".repeat(200)}.step`);
+    const emoji = await storedName(`${"📐".repeat(100)}.3mf`);
+
+    for (const name of [ascii, multibyte, emoji]) {
+      expect(Buffer.byteLength(name)).toBeLessThanOrEqual(240);
+      expect(name).not.toContain("\uFFFD");
+    }
+    expect(ascii.endsWith(".stl")).toBe(true);
+    expect(multibyte.endsWith(".step")).toBe(true);
+    expect(emoji.endsWith(".3mf")).toBe(true);
+  });
+
+  it.each([
+    ["CON", "_CON"],
+    ["nul.txt", "_nul.txt"],
+    ["COM1.stl", "_COM1.stl"],
+    ["lpt9.tar.gz", "_lpt9.tar.gz"],
+    ["console.log", "console.log"]
+  ])("keeps %s usable from Windows as %s", async (input, expected) => {
+    expect(await storedName(input)).toBe(expected);
+  });
+
+  it.each([
+    ["report. . ", "report"],
+    ["notes.txt.", "notes.txt"],
+    ["   ", "upload.bin"],
+    ["...", "upload.bin"]
+  ])("strips trailing dots and spaces from %j", async (input, expected) => {
+    expect(await storedName(input)).toBe(expected);
+  });
+
+  it("refuses to read through a symlink that leaves the storage root", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const root = path.join(dir, "root");
+    const secret = path.join(dir, "secret.txt");
+    fs.writeFileSync(secret, "outside-root");
+    fs.mkdirSync(path.join(root, "Inbox", "dev"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "outside-dir"));
+    fs.writeFileSync(path.join(dir, "outside-dir", "note.txt"), "outside-root");
+    fs.symlinkSync(secret, path.join(root, "Inbox", "dev", "link.txt"));
+    fs.symlinkSync(path.join(dir, "outside-dir"), path.join(root, "Inbox", "linked-dir"));
+    const storage = createStorageService(root);
+
+    await expect(storage.fileDetails("Inbox/dev/link.txt")).rejects.toThrow("escapes configured root");
+    await expect(storage.resolveReadPath("Inbox/dev/link.txt")).rejects.toThrow("escapes configured root");
+    await expect(storage.resolveReadPath("Inbox/linked-dir/note.txt")).rejects.toThrow("escapes configured root");
+  });
+
+  it("reads through a symlink that stays inside the storage root", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, "Inbox", "dev"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Inbox", "dev", "real.txt"), "inside");
+    fs.symlinkSync(path.join(dir, "Inbox", "dev", "real.txt"), path.join(dir, "Inbox", "dev", "alias.txt"));
+    const storage = createStorageService(dir);
+
+    const resolved = await storage.resolveReadPath("Inbox/dev/alias.txt");
+
+    expect(fs.readFileSync(resolved, "utf8")).toBe("inside");
+    expect(path.basename(resolved)).toBe("real.txt");
+  });
+
+  it("accepts names that merely start with two dots", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-storage-"));
+    createdDirs.push(dir);
+    const storage = createStorageService(dir);
+
+    expect(storage.absolutePathFor("..notes.txt")).toBe(path.join(dir, "..notes.txt"));
+    expect(storage.absolutePathFor("Inbox/..hidden/file.txt")).toBe(path.join(dir, "Inbox", "..hidden", "file.txt"));
+    expect(() => storage.absolutePathFor("../outside.txt")).toThrow("escapes configured root");
+    expect(() => storage.absolutePathFor("..")).toThrow("escapes configured root");
   });
 
   it("streamUpload pipes the body to a temp file and moves it into the target", async () => {
@@ -371,7 +514,8 @@ describe("storage service", () => {
       target: { kind: "project", projectSlug: "Garden Shed" },
       filename: "movie.webm",
       relativePath: "Shoot A/../Exports/movie.webm",
-      mimeType: "video/webm"
+      mimeType: "video/webm",
+      sizeBytes: 5
     });
 
     expect(stored.relativePath).toBe("Projects/Garden Shed/Inbox/Shoot A/Exports/movie.webm");
