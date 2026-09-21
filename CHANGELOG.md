@@ -127,6 +127,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Login no longer reveals which emails exist.** An unknown email skipped
   the password derivation and answered measurably faster. It now spends the
   same derivation.
+- **Only one owner can be created.** Setup checked for an existing user,
+  then hashed the password, then inserted, so two simultaneous requests
+  could both become owner. The insert now only succeeds into an empty users
+  table and the loser gets `409`.
 - **Share-link passwords are rate limited.** Password attempts were
   unlimited and each one costs a scrypt. A share now allows 10 attempts per
   15 minutes and then answers `429` with `Retry-After`. Requests without a

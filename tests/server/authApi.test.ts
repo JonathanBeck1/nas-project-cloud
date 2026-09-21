@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   db: {},
   repo: {
     countUsers: vi.fn(),
-    createUser: vi.fn(),
+    createFirstOwner: vi.fn(),
     getUserByEmail: vi.fn(),
     createDevice: vi.fn(),
     createSession: vi.fn(),
@@ -39,7 +39,7 @@ describe("auth API", () => {
     mocks.repo.countUsers.mockReturnValue(0);
     mocks.hashPassword.mockResolvedValue("password-hash");
     mocks.verifyPassword.mockResolvedValue(true);
-    mocks.repo.createUser.mockReturnValue({ id: "user_1", email: "owner@example.local", name: "Owner", role: "owner" });
+    mocks.repo.createFirstOwner.mockReturnValue({ id: "user_1", email: "owner@example.local", name: "Owner", role: "owner" });
     mocks.repo.createDevice.mockReturnValue({ id: "device_1" });
     mocks.repo.createSession.mockReturnValue({ id: "session_1" });
   });

@@ -1326,6 +1326,28 @@ export function createMetadataRepository(db: AppDatabase) {
       return userWithoutPasswordHash(user);
     },
 
+    // Inserts only into an empty users table, in one statement, so concurrent setups cannot both win.
+    createFirstOwner(input: Omit<CreateUserInput, "role">): User | null {
+      const now = new Date().toISOString();
+      const user = {
+        id: `user_${nanoid(12)}`,
+        email: input.email,
+        name: input.name,
+        passwordHash: input.passwordHash,
+        role: "owner" as const,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      const result = db.prepare(`
+        insert into users (id, email, name, password_hash, role, created_at, updated_at)
+        select @id, @email, @name, @passwordHash, @role, @createdAt, @updatedAt
+        where not exists (select 1 from users)
+      `).run(user);
+
+      return result.changes === 1 ? userWithoutPasswordHash(user) : null;
+    },
+
     updateUserPasswordHash(userId: string, passwordHash: string): void {
       db.prepare<[string, string, string]>("update users set password_hash = ?, updated_at = ? where id = ?").run(
         passwordHash,

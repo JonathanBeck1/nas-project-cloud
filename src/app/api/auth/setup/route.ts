@@ -25,12 +25,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "owner already exists" }, { status: 409 });
   }
 
-  const user = repo.createUser({
-    email,
-    name,
-    passwordHash: await hashPassword(password),
-    role: "owner"
-  });
+  // The check above only saves a derivation; this insert is what decides, because hashing yields to other requests.
+  const user = repo.createFirstOwner({ email, name, passwordHash: await hashPassword(password) });
+  if (!user) {
+    return NextResponse.json({ error: "owner already exists" }, { status: 409 });
+  }
   const device = repo.createDevice({
     userId: user.id,
     name: deviceName,
