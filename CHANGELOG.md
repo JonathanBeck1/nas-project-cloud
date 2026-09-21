@@ -107,6 +107,12 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   Listings are ordered by `uploaded_at desc, name, id`, so files that tie on
   time and name now have a stable order. The web UI does not call this
   endpoint; third-party clients need to follow `nextCursor`.
+- **Signing in reuses your device.** Every login added a row to Trusted
+  devices. A login now reuses the browser device with the same name for the
+  same user and updates its last-seen time. Two browsers that share a name
+  therefore share one device, and revoking it signs both out; give them
+  different names at sign-in to keep them apart. Paired devices are not
+  affected.
 - **The workspace loads files a page at a time.** The home page renders
   the newest 100 files and a "Load more" button fetches the next page. It
   used to serialize every active file into the page (about 80 MB of HTML at

@@ -62,11 +62,11 @@ export async function POST(request: Request) {
   limiter.reset("login_email", email);
   limiter.reset("login_ip", ip);
 
-  const device = repo.createDevice({
-    userId: user.id,
-    name: deviceName,
-    kind: "browser"
-  });
+  // One row per named browser, not one per login. Revoking a device deletes its row, so the next login starts a new one.
+  const device =
+    repo.findDeviceByName(user.id, deviceName, "browser") ??
+    repo.createDevice({ userId: user.id, name: deviceName, kind: "browser" });
+  repo.touchDevice(device.id);
   const token = createSessionToken();
   repo.createSession({
     userId: user.id,

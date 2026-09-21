@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
     createFirstOwner: vi.fn(),
     getUserByEmail: vi.fn(),
     createDevice: vi.fn(),
+    findDeviceByName: vi.fn(),
+    touchDevice: vi.fn(),
     createSession: vi.fn(),
     getSessionByTokenHash: vi.fn(),
     deleteSession: vi.fn(),

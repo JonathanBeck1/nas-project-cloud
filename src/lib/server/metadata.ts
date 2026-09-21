@@ -1382,6 +1382,18 @@ export function createMetadataRepository(db: AppDatabase) {
       return device;
     },
 
+    findDeviceByName(userId: string, name: string, kind: TrustedDeviceKind): TrustedDevice | null {
+      const row = db
+        .prepare<[string, string, TrustedDeviceKind], DeviceRow>(`
+          select * from devices
+          where user_id = ? and name = ? and kind = ?
+          order by coalesce(last_seen_at, created_at) desc
+          limit 1
+        `)
+        .get(userId, name, kind);
+      return row ? deviceFromRow(row) : null;
+    },
+
     listDevices(userId: string): TrustedDevice[] {
       return db
         .prepare<[string], DeviceRow>("select * from devices where user_id = ? order by created_at desc")

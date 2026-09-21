@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   repo: {
     getUserByEmail: vi.fn(),
     createDevice: vi.fn(),
+    findDeviceByName: vi.fn(),
+    touchDevice: vi.fn(),
     createSession: vi.fn()
   },
   verifyPassword: vi.fn(),
