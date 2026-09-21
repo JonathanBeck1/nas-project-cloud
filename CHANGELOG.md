@@ -20,6 +20,13 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   project ZIP export all failed with "too many SQL variables" beyond
   SQLite's limit. Tags and previews are now fetched with a single parameter.
 
+- **Moves work across filesystems.** Move, rename, archive, restore, and
+  upload completion all hard-link the file into place, which fails with
+  `EXDEV` when `Projects/` or `Archive/` is a child ZFS dataset. They now
+  fall back to a copy staged in the destination folder and linked into
+  place, so an existing file is still never overwritten and the source is
+  removed only after the destination is complete.
+
 ### Changed
 
 - **Recovery docs are explicit.** README and the TrueNAS guide state what a

@@ -30,6 +30,8 @@ Use `files` for the actual user file library:
   .previews/
 ```
 
+`Projects/`, `Archive/`, or any other folder under `files` can be its own child dataset if you want separate snapshots or quotas. Moves inside one dataset are instant hard links. A move that crosses datasets is copied and then linked into place, so it takes as long as the copy and briefly needs room for a second copy on the destination dataset. A child dataset needs the same UID 1001 ownership as `files`.
+
 Use `appdata` for SQLite metadata and sidecar files:
 
 ```text

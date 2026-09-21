@@ -392,36 +392,89 @@ async function linkIntoAvailablePath(
   from: string
 ): Promise<string> {
   const parsed = path.parse(filename);
-  for (let index = 1; index < 10_000; index += 1) {
-    const candidateName = index === 1 ? filename : `${parsed.name}-${index}${parsed.ext}`;
-    const candidatePath = path.join(directory, candidateName);
-    try {
-      await fs.link(from, candidatePath);
+  const staging: Staging = { path: null };
+  try {
+    for (let index = 1; index < 10_000; index += 1) {
+      const candidateName = index === 1 ? filename : `${parsed.name}-${index}${parsed.ext}`;
+      const candidatePath = path.join(directory, candidateName);
       try {
-        await fs.unlink(from);
+        await linkNoClobber(from, candidatePath, staging);
       } catch (error) {
-        await fs.unlink(candidatePath).catch(() => undefined);
+        if (isNodeError(error) && error.code === "EEXIST") {
+          continue;
+        }
         throw error;
       }
+      await finishMove(from, candidatePath, staging);
       return candidatePath;
-    } catch (error) {
-      if (isNodeError(error) && error.code === "EEXIST") {
-        continue;
-      }
-      throw error;
     }
+  } finally {
+    await discardStaging(staging);
   }
 
   throw new Error(`Could not allocate filename for ${filename}`);
 }
 
 async function linkFile(from: string, to: string): Promise<void> {
-  await fs.link(from, to);
+  const staging: Staging = { path: null };
   try {
+    await linkNoClobber(from, to, staging);
+    await finishMove(from, to, staging);
+  } finally {
+    await discardStaging(staging);
+  }
+}
+
+type Staging = { path: string | null };
+
+// Hard links cannot cross filesystems (EXDEV), and a child ZFS dataset is one. Copy beside the
+// destination first so the final link is same-filesystem and still refuses to clobber.
+async function linkNoClobber(from: string, to: string, staging: Staging): Promise<void> {
+  try {
+    await fs.link(staging.path ?? from, to);
+    return;
+  } catch (error) {
+    if (staging.path || !isNodeError(error) || error.code !== "EXDEV") {
+      throw error;
+    }
+  }
+  staging.path = await stageCopy(from, path.dirname(to));
+  await fs.link(staging.path, to);
+}
+
+async function stageCopy(from: string, directory: string): Promise<string> {
+  const staged = path.join(directory, `.${crypto.randomUUID()}.part`);
+  try {
+    await fs.copyFile(from, staged, fs.constants.COPYFILE_EXCL);
+    const handle = await fs.open(staged, "r+");
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    return staged;
+  } catch (error) {
+    await fs.unlink(staged).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function finishMove(from: string, to: string, staging: Staging): Promise<void> {
+  try {
+    if (staging.path) {
+      await fs.unlink(staging.path);
+      staging.path = null;
+    }
     await fs.unlink(from);
   } catch (error) {
     await fs.unlink(to).catch(() => undefined);
     throw error;
+  }
+}
+
+async function discardStaging(staging: Staging): Promise<void> {
+  if (staging.path) {
+    await fs.unlink(staging.path).catch(() => undefined);
   }
 }
 
