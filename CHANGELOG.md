@@ -7,6 +7,18 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Unreleased
 
+### Added
+
+- **Resumable downloads.** File and share-link downloads support single
+  HTTP `Range` requests (`bytes=a-b`, `bytes=a-`, `bytes=-n`) with `206`,
+  answer `416` with `Content-Range: bytes */size` when unsatisfiable, and
+  send `Accept-Ranges`, `ETag`, and `Last-Modified`. `If-Range` is
+  honored; multi-range requests get the whole file. The `ETag` combines the
+  stored SHA-256 with size and mtime, so a file edited in place over SMB
+  does not validate a resume. A share link counts a download only when the
+  response includes the first byte, so resuming does not use up
+  `maxDownloads`; a link that has reached its cap still refuses resumes.
+
 ### Fixed
 
 - **`npm run index:storage` and `npm run previews:generate` run again.** Both

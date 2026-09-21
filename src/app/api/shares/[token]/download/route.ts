@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyPassword } from "@/lib/server/auth/passwords";
 import { getDatabase } from "@/lib/server/db";
-import { createFileDownloadResponse } from "@/lib/server/downloadResponse";
+import { createFileDownloadResponse, includesFirstByte } from "@/lib/server/downloadResponse";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { trustedClientIp } from "@/lib/server/rateLimit";
 import { hashShareToken } from "@/lib/server/shareLinks";
@@ -47,7 +47,7 @@ async function downloadSharedFile(
   }
 
   const storage = createStorageService();
-  const response = await createFileDownloadResponse(file, storage.absolutePathFor(file.storagePath), {
+  const response = await createFileDownloadResponse(request, file, storage.absolutePathFor(file.storagePath), {
     cacheControl: "no-store"
   });
 
@@ -55,10 +55,13 @@ async function downloadSharedFile(
     return NextResponse.json({ error: "share not found" }, { status: 404 });
   }
 
-  repo.recordFileShareDownload(share.id, {
-    userAgent: request.headers.get("user-agent"),
-    ipAddress: trustedClientIp(request)
-  });
+  // A resumed transfer is the same download, so only a response that starts the file uses one up.
+  if (includesFirstByte(response)) {
+    repo.recordFileShareDownload(share.id, {
+      userAgent: request.headers.get("user-agent"),
+      ipAddress: trustedClientIp(request)
+    });
+  }
   return response;
 }
 

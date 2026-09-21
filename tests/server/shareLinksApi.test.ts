@@ -357,6 +357,41 @@ describe("share links API", () => {
     await expect(response.text()).resolves.toBe("manual");
   });
 
+  it("counts a share download only when the response includes the first byte", async () => {
+    const { GET } = await import("@/app/api/shares/[token]/download/route");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-share-"));
+    createdDirs.push(dir);
+    fs.mkdirSync(path.join(dir, "Inbox", "Browser"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Inbox", "Browser", "manual.pdf"), "manual");
+    mocks.storage.absolutePathFor.mockImplementation((relativePath: string) => path.join(dir, relativePath));
+    mocks.repo.getFileShareLinkByTokenHash.mockReturnValue({
+      id: "share_123",
+      fileId: "file_123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      maxDownloads: 5,
+      passwordProtected: false,
+      downloadCount: 0,
+      revokedAt: null
+    });
+    const get = (range: string) =>
+      GET(new Request("http://localhost/api/shares/share-token/download", { headers: { range } }), {
+        params: Promise.resolve({ token: "share-token" })
+      });
+
+    const resumed = await get("bytes=3-");
+    expect(resumed.status).toBe(206);
+    await expect(resumed.text()).resolves.toBe("ual");
+    expect(mocks.repo.recordFileShareDownload).not.toHaveBeenCalled();
+
+    const unsatisfiable = await get("bytes=99-");
+    expect(unsatisfiable.status).toBe(416);
+    expect(mocks.repo.recordFileShareDownload).not.toHaveBeenCalled();
+
+    const fromStart = await get("bytes=0-2");
+    expect(fromStart.status).toBe(206);
+    expect(mocks.repo.recordFileShareDownload).toHaveBeenCalledTimes(1);
+  });
+
   it("requires the password before streaming a protected shared file", async () => {
     const { GET, POST } = await import("@/app/api/shares/[token]/download/route");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-share-"));

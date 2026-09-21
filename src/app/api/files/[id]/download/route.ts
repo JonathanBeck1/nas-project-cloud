@@ -20,7 +20,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 
   const storage = createStorageService();
-  const response = await createFileDownloadResponse(file, storage.absolutePathFor(file.storagePath));
+  const response = await createFileDownloadResponse(request, file, storage.absolutePathFor(file.storagePath));
 
   return response ?? NextResponse.json({ error: "file not found" }, { status: 404 });
 }
