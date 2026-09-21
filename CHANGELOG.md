@@ -191,6 +191,32 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   playlist posing as a video cannot pull in network or concat sources.
   `sharp` is limited to one libvips thread to keep peak memory predictable.
 
+### Migration notes
+
+- **Upgrading a v0.3.1 database needs no manual step.** On first start the
+  app adds `file_previews.attempts` and the index `files_listing_idx`.
+  Nothing is dropped or renamed. Take the usual stopped-app snapshot of
+  `appdata` first, because an older image will not know the `processing`
+  preview status if you roll back while jobs are in flight (they are
+  requeued by the newer image at boot, and ignored by the older one).
+- **Passwords keep working.** v0.3.1 hashes verify as before and are
+  upgraded on each account's next successful sign-in. That sign-in and
+  every later one needs about 128 MiB for a fraction of a second.
+- **`GET /api/files` is paginated.** Third-party clients must follow
+  `nextCursor`; without it they now see only the first 100 files.
+- **Chunks over 32 MiB are rejected.** The web client sends 8 MiB.
+- **`/api/health` detail needs credentials.** Monitoring that parsed error
+  text or tool versions anonymously must send the maintenance token. The
+  status code is unchanged.
+- **Compose changes are opt-in.** `mem_limit`, `cap_drop`,
+  `no-new-privileges`, and `init` only apply if you re-paste
+  `docker-compose.truenas.yml`. They were not run under Docker during
+  development; if the app fails to start, remove `cap_drop` first.
+- **Expect one-time effects on first boot:** expired sessions, dead pairing
+  codes, and rate-limit rows older than 24 hours are deleted, and files
+  removed from a project from now on move to `Inbox/<device>/`. Files
+  detached before the upgrade stay where they are.
+
 ## [0.3.1] - 2026-09-19
 
 Security patch release. It closes a rate-limit bypass that left device
