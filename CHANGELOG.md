@@ -7,6 +7,20 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Unreleased
 
+### Fixed
+
+- **`npm run index:storage` and `npm run previews:generate` run again.** Both
+  crashed on startup with a top-level `await` error. A test now executes them.
+- **Re-indexing no longer ingests the app's own files.** Root dot-entries
+  (`.uploads/`, `.previews/`, the health probe) are skipped, and files under
+  `Projects/<slug>/` are attached to that project, which is created if needed.
+
+### Changed
+
+- **Recovery docs are explicit.** README and the TrueNAS guide state what a
+  re-index restores, what only an `appdata` backup restores, and that the
+  script is not in the Docker image.
+
 ## [0.3.1] - 2026-09-19
 
 Security patch release. It closes a rate-limit bypass that left device

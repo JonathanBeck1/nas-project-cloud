@@ -394,6 +394,8 @@ Snapshot both datasets:
 /mnt/OfficeNAS/nas-project-cloud/appdata
 ```
 
+`appdata` is not disposable. Re-indexing the `files` dataset (`npm run index:storage`, from a source checkout with both datasets mounted; the script is not in the Docker image) brings back file records, project membership inferred from `Projects/<slug>/`, and default categories. Tags, custom categories, share links, users, paired devices, and upload sessions exist only in SQLite and are lost without an `appdata` backup.
+
 The app enables SQLite WAL mode. Do not back up only `nas-cloud.sqlite` while the container is running. For the cleanest backup:
 
 1. Stop the app.

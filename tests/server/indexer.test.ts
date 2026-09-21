@@ -85,4 +85,92 @@ describe("scanStorageRoot", () => {
       db.close();
     }
   });
+
+  it("skips the app's internal root entries and rebuilds project membership", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-index-"));
+    createdDirs.push(dir);
+    const storageRoot = path.join(dir, "storage");
+    fs.mkdirSync(path.join(storageRoot, ".previews", "images"), { recursive: true });
+    fs.mkdirSync(path.join(storageRoot, ".uploads"), { recursive: true });
+    fs.mkdirSync(path.join(storageRoot, "Projects", "garden-shed", "Inbox"), { recursive: true });
+    fs.writeFileSync(path.join(storageRoot, ".previews", "images", "file_abc.webp"), "thumb");
+    fs.writeFileSync(path.join(storageRoot, ".uploads", "upload_inflight.part"), "partial");
+    fs.writeFileSync(path.join(storageRoot, ".nas-cloud-healthcheck"), "ok");
+    fs.writeFileSync(path.join(storageRoot, "Projects", "garden-shed", "Inbox", "bracket.stl"), "solid");
+
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const result = await scanStorageRoot({ db, storageRoot });
+      const repo = createMetadataRepository(db);
+      const files = repo.listFiles({ includeArchived: true });
+      const projects = repo.listProjects();
+
+      expect(result).toEqual({ scanned: 1, indexed: 1 });
+      expect(files).toHaveLength(1);
+      expect(projects).toHaveLength(1);
+      expect(projects[0]).toMatchObject({ slug: "garden-shed", name: "Garden Shed" });
+      expect(files[0]).toMatchObject({ name: "bracket.stl", projectId: projects[0].id });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("attaches files to an existing project instead of creating a duplicate", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-index-"));
+    createdDirs.push(dir);
+    const storageRoot = path.join(dir, "storage");
+    fs.mkdirSync(path.join(storageRoot, "Projects", "garden-shed", "Inbox"), { recursive: true });
+    fs.writeFileSync(path.join(storageRoot, "Projects", "garden-shed", "Inbox", "bracket.stl"), "solid");
+
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const repo = createMetadataRepository(db);
+      const project = repo.createProject({ name: "Garden shed" });
+      await scanStorageRoot({ db, storageRoot });
+
+      expect(repo.listProjects()).toHaveLength(1);
+      expect(repo.listFiles()[0].projectId).toBe(project.id);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("leaves files unattached when a Projects folder name is not a slug", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-index-"));
+    createdDirs.push(dir);
+    const storageRoot = path.join(dir, "storage");
+    fs.mkdirSync(path.join(storageRoot, "Projects", "My Stuff"), { recursive: true });
+    fs.writeFileSync(path.join(storageRoot, "Projects", "My Stuff", "a.stl"), "solid");
+    fs.writeFileSync(path.join(storageRoot, "Projects", "My Stuff", "b.stl"), "solid");
+
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const result = await scanStorageRoot({ db, storageRoot });
+      const repo = createMetadataRepository(db);
+
+      expect(result.indexed).toBe(2);
+      expect(repo.listProjects()).toEqual([]);
+      expect(repo.listFiles().map((file) => file.projectId)).toEqual([null, null]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("still indexes dot-directories nested inside user folders", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-index-"));
+    createdDirs.push(dir);
+    const storageRoot = path.join(dir, "storage");
+    fs.mkdirSync(path.join(storageRoot, "Inbox", "Mac", ".config"), { recursive: true });
+    fs.writeFileSync(path.join(storageRoot, "Inbox", "Mac", ".config", "settings.txt"), "kept");
+
+    const db = createDatabase(path.join(dir, "test.sqlite"));
+    try {
+      const result = await scanStorageRoot({ db, storageRoot });
+
+      expect(result.indexed).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
 });

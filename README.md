@@ -69,7 +69,7 @@ Next.js 15 App Router, React 19, TypeScript, Tailwind CSS, [Radix UI](https://ww
                   └──────────────────┘   └────────────────────┘
 ```
 
-Files are the source of truth. SQLite is a metadata index that can be rebuilt from the storage tree with `npm run index:storage`.
+Files are the source of truth for file contents, but SQLite holds more than an index. `npm run index:storage` rebuilds file records from the storage tree: each file, its project (inferred from `Projects/<slug>/`), and a default category. It cannot restore tags, custom categories, share links, users, devices, or upload sessions, so back up `appdata` alongside `files`. The script runs from a source checkout; the published Docker image does not include it.
 
 ## Quick start (development)
 
@@ -131,7 +131,7 @@ npm run typecheck     # tsc --noEmit
 npm run lint          # eslint .
 npm run build         # production build
 npm run test:e2e      # Playwright (boots its own dev server on :3100)
-npm run index:storage # rebuild the metadata index from disk
+npm run index:storage # re-add files and inferred projects from disk (source checkout only)
 npm run previews:generate # process pending preview jobs
 npm run screenshots   # regenerate docs/screenshots/*.png
 ```
