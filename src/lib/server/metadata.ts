@@ -986,8 +986,10 @@ export function createMetadataRepository(db: AppDatabase) {
 
       const trimmedQuery = filters.query?.trim();
       if (trimmedQuery) {
-        where.push("(files.name like @query or files.storage_path like @query or files.extension like @query)");
-        params.query = `%${trimmedQuery}%`;
+        where.push(
+          "(files.name like @query escape '\\' or files.storage_path like @query escape '\\' or files.extension like @query escape '\\')"
+        );
+        params.query = likeContains(trimmedQuery);
       }
 
       if (filters.projectId !== undefined) {
@@ -1740,6 +1742,11 @@ function deleteDeadPairingCodes(db: AppDatabase, nowIso: string): number {
     .run(nowIso).changes;
 }
 
+// % and _ are wildcards in LIKE; without this, searching "100%" matches every file.
+function likeContains(text: string): string {
+  return `%${text.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
 function fileListWhere(filters: ListFilesFilters): { where: string[]; params: Record<string, string | null> } {
   const where: string[] = [];
   const params: Record<string, string | null> = {};
@@ -1752,8 +1759,8 @@ function fileListWhere(filters: ListFilesFilters): { where: string[]; params: Re
   }
 
   if (filters.query) {
-    where.push("(name like @query or storage_path like @query)");
-    params.query = `%${filters.query}%`;
+    where.push("(name like @query escape '\\' or storage_path like @query escape '\\')");
+    params.query = likeContains(filters.query);
   }
 
   if (filters.projectId !== undefined) {

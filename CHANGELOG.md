@@ -80,6 +80,8 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   reserved names (`CON`, `NUL`, `COM1`, ...) get a leading underscore, and
   trailing dots and spaces are removed, since Windows cannot open either
   over SMB. The name shown in the app is unchanged.
+- **`%` and `_` in a search are literal.** They were passed to `LIKE` as
+  wildcards, so searching `100%` matched every file.
 - **A malformed cookie is no longer a 500.** Bad percent-encoding in the
   session or CSRF cookie threw while decoding. The request is now treated
   as unauthenticated (`401`) or as failing the CSRF check (`403`).
