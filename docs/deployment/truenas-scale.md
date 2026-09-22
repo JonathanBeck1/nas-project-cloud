@@ -343,6 +343,7 @@ The app exposes two maintenance routes that can be driven from a TrueNAS cron jo
 
 ```text
 POST /api/maintenance/previews        # process pending preview jobs
+POST /api/maintenance/reindex         # rebuild the file index from the storage tree
 POST /api/maintenance/upload-cleanup  # delete abandoned uploads older than 24h; purge expired sessions, pairing codes, rate-limit rows
 ```
 
@@ -406,7 +407,7 @@ Snapshot both datasets:
 /mnt/OfficeNAS/nas-project-cloud/appdata
 ```
 
-`appdata` is not disposable. Re-indexing the `files` dataset (`npm run index:storage`, from a source checkout with both datasets mounted; the script is not in the Docker image) brings back file records, project membership inferred from `Projects/<slug>/`, and default categories. Tags, custom categories, share links, users, paired devices, and upload sessions exist only in SQLite and are lost without an `appdata` backup.
+`appdata` is not disposable. Re-indexing the `files` dataset (`POST /api/maintenance/reindex` on the running container, or `npm run index:storage` from a source checkout with both datasets mounted -- the script itself is not in the Docker image) brings back file records, project membership inferred from `Projects/<slug>/`, and default categories. Tags, custom categories, share links, users, paired devices, and upload sessions exist only in SQLite and are lost without an `appdata` backup.
 
 The app enables SQLite WAL mode. Do not back up only `nas-cloud.sqlite` while the container is running. For the cleanest backup:
 
