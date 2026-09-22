@@ -1,13 +1,36 @@
 version: 2
 updates:
+  # One PR a week for npm, minor and patch only. Major bumps are left to a person:
+  # Node must stay on 22 to match the image, Next on 15, React on 19.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    groups:
+      npm-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
 
   # Actions are pinned by commit SHA; Dependabot moves the SHA and the version comment together.
+  # A major bump usually changes the action's Node runtime, so those are reviewed by hand too.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"

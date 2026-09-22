@@ -30,5 +30,8 @@ describe("CI supply chain", () => {
 
     expect(dependabot).toContain('package-ecosystem: "npm"');
     expect(dependabot).toContain('package-ecosystem: "github-actions"');
+    // Grouped and no majors, so a config change cannot bring back one PR per dependency.
+    expect(dependabot.match(/^\s+groups:$/gm)).toHaveLength(2);
+    expect(dependabot.match(/version-update:semver-major/g)).toHaveLength(2);
   });
 });
