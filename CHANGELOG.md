@@ -9,6 +9,14 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`POST /api/maintenance/reindex`.** Rebuilds the file index from the storage
+  tree on a deployed instance, authenticated by session or
+  `NAS_CLOUD_MAINTENANCE_TOKEN` like the other maintenance routes. Until now the
+  only way to reindex was `npm run index:storage` from a source checkout with
+  both datasets mounted -- the published image ships neither `scripts/` nor
+  `src/` and prunes `tsx`, so a running container had no recovery path at all.
+  Concurrent callers join the scan already in progress instead of starting a
+  second walk over the same tree.
 - **Resumable downloads.** File and share-link downloads support single
   HTTP `Range` requests (`bytes=a-b`, `bytes=a-`, `bytes=-n`) with `206`,
   answer `416` with `Content-Range: bytes */size` when unsatisfiable, and
