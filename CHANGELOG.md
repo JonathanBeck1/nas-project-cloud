@@ -162,6 +162,12 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Supply chain.** Every GitHub Action is pinned to a commit SHA, published
   images carry build provenance and an SBOM, and Dependabot watches npm and
   the pinned actions weekly.
+- **The image publish job no longer runs npm.** Installing dependencies ran
+  their install scripts in the same job that holds the token allowed to push
+  images, so a compromised dependency could have published `:latest`. Tests
+  and the build now run in a separate job with read-only permissions, the
+  publish job only builds and pushes the image, and no checkout leaves its
+  token in `.git/config`.
 - **`/api/health` no longer leaks detail to anonymous callers.** It
   returned raw error messages, which can contain absolute paths, and the
   `ffmpeg` and `poppler` versions to anyone. Anonymous callers now get only
