@@ -9,6 +9,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A security policy and a code of conduct.** `SECURITY.md` explains how to
+  report a vulnerability privately and what the threat model covers.
+  CONTRIBUTING no longer asks people to email an address it never gave, and
+  the issue chooser links to Discussions for questions.
 - **`POST /api/maintenance/reindex`.** Rebuilds the file index from the storage
   tree on a deployed instance, authenticated by session or
   `NAS_CLOUD_MAINTENANCE_TOKEN` like the other maintenance routes. Until now the

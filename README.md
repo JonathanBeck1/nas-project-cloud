@@ -217,7 +217,7 @@ This is a working project, not a polished release. The internal design specs and
 
 ## Contributing
 
-Issues and PRs are welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the verification gate, branch conventions, and schema-change rules. Bug and feature templates live under [`.github/ISSUE_TEMPLATE/`](./.github/ISSUE_TEMPLATE/). Security issues should be reported privately via [GitHub Security Advisories](https://github.com/JonathanBeck1/nas-project-cloud/security/advisories/new).
+Issues and PRs are welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the verification gate, branch conventions, and schema-change rules. Bug and feature templates live under [`.github/ISSUE_TEMPLATE/`](./.github/ISSUE_TEMPLATE/). Security issues should be reported privately, as described in [`SECURITY.md`](./SECURITY.md). Questions and ideas are welcome in [Discussions](https://github.com/JonathanBeck1/nas-project-cloud/discussions), and everyone follows the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## License
 
