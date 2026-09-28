@@ -33,6 +33,7 @@ type PreviewRepo = {
 type PreviewStorage = {
   absolutePathFor: (relativePath: string) => string;
   resolveReadPath?: (relativePath: string) => Promise<string>;
+  containedPath?: (relativePath: string) => Promise<string>;
 };
 
 type ProcessPreviewJobInput = {
@@ -82,6 +83,19 @@ export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJo
       kind: job.preview.kind,
       status: "failed",
       error: error instanceof Error ? error.message : "source file missing"
+    });
+    return;
+  }
+
+  // .previews is in the files dataset too; refuse to write thumbnails through a symlinked folder there.
+  try {
+    await storage.containedPath?.(path.posix.join(".previews", "images", `${job.file.id}.webp`));
+  } catch (error) {
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "failed",
+      error: error instanceof Error ? error.message : "preview folder is not usable"
     });
     return;
   }
