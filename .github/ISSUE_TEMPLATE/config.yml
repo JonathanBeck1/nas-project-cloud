@@ -3,3 +3,6 @@ contact_links:
   - name: Security report
     url: https://github.com/JonathanBeck1/nas-project-cloud/security/advisories/new
     about: Please report security vulnerabilities privately, not as a public issue.
+  - name: Question or idea
+    url: https://github.com/JonathanBeck1/nas-project-cloud/discussions
+    about: Ask a question or float an idea in Discussions before opening an issue.
