@@ -18,6 +18,28 @@ describe("CI supply chain", () => {
     }
   });
 
+  it.each(workflows)("%s does not leave the job token in .git/config", (name) => {
+    const workflow = read("workflows", name);
+    const checkouts = workflow.match(/uses: actions\/checkout@/g) ?? [];
+
+    expect(checkouts.length).toBeGreaterThan(0);
+    expect(workflow.match(/persist-credentials: false/g) ?? []).toHaveLength(checkouts.length);
+  });
+
+  it("keeps npm away from the job that can push images", () => {
+    const publish = read("workflows", "docker-publish.yml");
+    const topLevel = publish.slice(0, publish.indexOf("\njobs:"));
+    const publishJob = publish.slice(publish.indexOf("\n  publish:"));
+    const verifyJob = publish.slice(publish.indexOf("\n  verify:"), publish.indexOf("\n  publish:"));
+
+    expect(topLevel).not.toContain("packages: write");
+    expect(verifyJob).not.toContain("packages: write");
+    expect(verifyJob).toContain("run: npm ci");
+    expect(publishJob).toContain("needs: verify");
+    expect(publishJob).toContain("packages: write");
+    expect(publishJob).not.toMatch(/run: npm|setup-node/);
+  });
+
   it("publishes the image with provenance and an SBOM", () => {
     const publish = read("workflows", "docker-publish.yml");
 
