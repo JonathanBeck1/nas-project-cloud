@@ -149,6 +149,14 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- **Writes no longer follow symlinks planted in the files dataset.** The
+  health probe wrote a fixed file at the storage root every 30 seconds, and
+  chunk uploads and preview thumbnails wrote to predictable paths under
+  `.uploads/` and `.previews/`. A symlink placed at any of those, for example
+  over SMB, made the app overwrite whatever it pointed to, including its own
+  database. The probe now uses a unique name opened exclusively, chunks are
+  opened with `O_NOFOLLOW`, and thumbnails are written to a fresh file and
+  renamed into place.
 - **Supply chain.** Every GitHub Action is pinned to a commit SHA, published
   images carry build provenance and an SBOM, and Dependabot watches npm and
   the pinned actions weekly.

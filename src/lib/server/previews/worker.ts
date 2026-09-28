@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { nanoid } from "nanoid";
-import sharp from "sharp";
+import sharp, { type OutputInfo, type Sharp } from "sharp";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
@@ -99,6 +99,21 @@ export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJo
   await generatePdfFirstPage({ job, repo, storage, absolutePath });
 }
 
+// .previews lives in the files dataset and preview names are predictable, so a symlink planted at one must be
+// replaced, not written through: write a fresh file, then rename it over the final path.
+async function writePreview(image: Sharp, absolutePreviewPath: string): Promise<OutputInfo> {
+  const { data, info } = await image.toBuffer({ resolveWithObject: true });
+  const staged = `${absolutePreviewPath}.${nanoid(8)}.tmp`;
+  await fs.writeFile(staged, data, { flag: "wx" });
+  try {
+    await fs.rename(staged, absolutePreviewPath);
+  } catch (error) {
+    await fs.unlink(staged).catch(() => undefined);
+    throw error;
+  }
+  return info;
+}
+
 function skippedReason(family: PreviewJob["file"]["family"]): string {
   if (family === "document") {
     return "preview generation is only supported for PDF documents in v0.3";
@@ -117,11 +132,13 @@ async function generateImageThumbnail({
   await fs.mkdir(path.dirname(absolutePreviewPath), { recursive: true });
 
   try {
-    const info = await sharp(absolutePath)
-      .rotate()
-      .resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toFile(absolutePreviewPath);
+    const info = await writePreview(
+      sharp(absolutePath)
+        .rotate()
+        .resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 82 }),
+      absolutePreviewPath
+    );
 
     repo.upsertFilePreview({
       fileId: job.file.id,
@@ -171,11 +188,13 @@ async function generateVideoPosterFrame({
       outputJpegPath: tempFramePath
     });
 
-    const info = await sharp(tempFramePath)
-      .rotate()
-      .resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toFile(absolutePreviewPath);
+    const info = await writePreview(
+      sharp(tempFramePath)
+        .rotate()
+        .resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 82 }),
+      absolutePreviewPath
+    );
 
     repo.upsertFilePreview({
       fileId: job.file.id,
@@ -228,11 +247,13 @@ async function generatePdfFirstPage({
       outputPngPath: tempPagePath
     });
 
-    const info = await sharp(tempPagePath)
-      .rotate()
-      .resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toFile(absolutePreviewPath);
+    const info = await writePreview(
+      sharp(tempPagePath)
+        .rotate()
+        .resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 82 }),
+      absolutePreviewPath
+    );
 
     repo.upsertFilePreview({
       fileId: job.file.id,

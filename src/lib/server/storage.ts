@@ -192,18 +192,17 @@ export function createStorageService(root = appConfig.storageRoot) {
 
     async appendUploadChunk(input: AppendUploadChunkInput): Promise<{ receivedBytes: number }> {
       const absolutePath = absolutePathFor(input.tempRelativePath);
-      const stats = await fs.stat(absolutePath);
-      if (!stats.isFile()) {
-        throw new Error("Upload temp path is not a file");
-      }
-
-      if (input.offset > stats.size) {
-        throw uploadError("Upload chunk offset mismatch", "UPLOAD_OFFSET_MISMATCH");
-      }
-
-      // Positional, not append: a resent chunk rewrites the same bytes instead of growing the file.
-      const handle = await fs.open(absolutePath, "r+");
+      // O_NOFOLLOW: .uploads is in the files dataset, where a symlink could replace the temp file.
+      const handle = await fs.open(absolutePath, fs.constants.O_RDWR | fs.constants.O_NOFOLLOW);
       try {
+        const stats = await handle.stat();
+        if (!stats.isFile()) {
+          throw new Error("Upload temp path is not a file");
+        }
+        if (input.offset > stats.size) {
+          throw uploadError("Upload chunk offset mismatch", "UPLOAD_OFFSET_MISMATCH");
+        }
+        // Positional, not append: a resent chunk rewrites the same bytes instead of growing the file.
         await handle.write(input.bytes, 0, input.bytes.length, input.offset);
       } finally {
         await handle.close();

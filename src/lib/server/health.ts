@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { appConfig, type AppConfig } from "./config";
@@ -65,11 +66,12 @@ export async function checkHealth(options: HealthCheckOptions = {}): Promise<Hea
 }
 
 async function checkStorage(storageRoot: string): Promise<HealthCheck> {
-  const probePath = path.join(storageRoot, ".nas-cloud-healthcheck");
+  // A fixed name opened without O_EXCL would follow a symlink planted there over SMB and truncate its target.
+  const probePath = path.join(storageRoot, `.nas-cloud-healthcheck-${crypto.randomUUID()}`);
 
   try {
     await fs.access(storageRoot);
-    await fs.writeFile(probePath, `ok ${new Date().toISOString()}\n`);
+    await fs.writeFile(probePath, `ok ${new Date().toISOString()}\n`, { flag: "wx" });
     await fs.rm(probePath, { force: true });
     return { ok: true, path: storageRoot };
   } catch (error) {
