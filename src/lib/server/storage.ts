@@ -503,18 +503,24 @@ async function linkNoClobber(from: string, to: string, staging: Staging): Promis
 
 async function stageCopy(from: string, directory: string): Promise<string> {
   const staged = path.join(directory, `.${crypto.randomUUID()}.part`);
+  // The source sits in the files dataset, where it could have been swapped for a symlink (O_NOFOLLOW) or a
+  // FIFO, whose open would otherwise block before the isFile check below (O_NONBLOCK; no effect on files).
+  const source = await fs.open(from, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
   try {
-    await fs.copyFile(from, staged, fs.constants.COPYFILE_EXCL);
-    const handle = await fs.open(staged, "r+");
-    try {
-      await handle.sync();
-    } finally {
-      await handle.close();
+    if (!(await source.stat()).isFile()) {
+      throw new Error("Storage path is not a file");
     }
+    // A stream copy, not fs.copyFile: libuv chmods the copy, which restricted-ACL ZFS datasets refuse with
+    // EPERM. The new file should take the destination folder's ACL anyway.
+    const target = await fs.open(staged, "wx");
+    // Each stream closes its handle when done; flush fsyncs the copy before that.
+    await pipeline(source.createReadStream(), target.createWriteStream({ flush: true }));
     return staged;
   } catch (error) {
     await fs.unlink(staged).catch(() => undefined);
     throw error;
+  } finally {
+    await source.close();
   }
 }
 

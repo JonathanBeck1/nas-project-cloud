@@ -29,6 +29,11 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Moves across datasets work on SMB-preset datasets.** The cross-dataset
+  fallback copied with `fs.copyFile`, which then tries to `chmod` the copy.
+  Datasets with restricted NFSv4 ACLs, the TrueNAS SMB preset, refuse that
+  with `EPERM`, so uploads and moves into a child dataset failed. The copy is
+  now a plain stream copy that takes the destination folder's permissions.
 - **`npm run index:storage` and `npm run previews:generate` run again.** Both
   crashed on startup with a top-level `await` error. A test now executes them.
 - **Re-indexing no longer ingests the app's own files.** Root dot-entries
@@ -149,6 +154,11 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- **A move across datasets no longer copies a symlink that replaced the
+  file.** If a file had been swapped for a symlink in the files dataset,
+  moving it to a child dataset copied whatever the link pointed to, such as
+  the app database, into a folder readable over SMB. The source is now
+  opened with `O_NOFOLLOW` and must be a regular file.
 - **Supply chain.** Every GitHub Action is pinned to a commit SHA, published
   images carry build provenance and an SBOM, and Dependabot watches npm and
   the pinned actions weekly.
