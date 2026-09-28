@@ -96,11 +96,54 @@ export function createStorageService(root = appConfig.storageRoot) {
     return realPath;
   };
 
+  // Mutations resolve paths lexically, so a folder swapped for a symlink (Inbox/laptop -> /data) would let a
+  // move, delete, or upload act outside the root. Check where the folder an operation acts in really is.
+  // A folder can be swapped between this check and the operation; Node has no openat() to close that window.
+  const assertContainedDirectory = async (directory: string) => {
+    let realRoot: string;
+    try {
+      realRoot = await fs.realpath(storageRoot);
+    } catch (error) {
+      if (isNodeError(error) && error.code === "ENOENT") {
+        return;
+      }
+      throw error;
+    }
+    // A folder that doesn't exist yet will be created under its nearest existing ancestor, so check that.
+    for (let current = directory; ; current = path.dirname(current)) {
+      try {
+        if (escapesRoot(realRoot, await fs.realpath(current))) {
+          throw new Error("Storage path escapes configured root");
+        }
+        return;
+      } catch (error) {
+        if (!isNodeError(error) || error.code !== "ENOENT" || current === path.dirname(current)) {
+          throw error;
+        }
+      }
+    }
+  };
+  const containedPath = async (relativePath: string) => {
+    const absolutePath = absolutePathFor(relativePath);
+    await assertContainedDirectory(path.dirname(absolutePath));
+    return absolutePath;
+  };
+  // What a move takes must be a regular file: a symlink swapped in for it would be copied across datasets,
+  // and on macOS even link() follows it.
+  const containedSource = async (relativePath: string) => {
+    const absolutePath = await containedPath(relativePath);
+    if (!(await fs.lstat(absolutePath)).isFile()) {
+      throw new Error("Storage path is not a file");
+    }
+    return absolutePath;
+  };
+
   return {
     async writeUpload(input: WriteUploadInput): Promise<StoredFile> {
       const safeName = sanitizeFilename(input.filename);
       const relativeDirectory = targetDirectory(input.target);
       const absoluteDirectory = path.join(storageRoot, relativeDirectory);
+      await assertContainedDirectory(absoluteDirectory);
       await fs.mkdir(absoluteDirectory, { recursive: true });
 
       const absolutePath = await nextAvailablePath(absoluteDirectory, safeName);
@@ -119,6 +162,7 @@ export function createStorageService(root = appConfig.storageRoot) {
     },
 
     absolutePathFor,
+    containedPath,
     resolveReadPath,
 
     /**
@@ -128,7 +172,7 @@ export function createStorageService(root = appConfig.storageRoot) {
      */
     async streamUpload(input: StreamUploadInput): Promise<StoredFile> {
       const tempRelative = path.join(".uploads", `direct-${crypto.randomUUID()}.part`);
-      const tempAbsolute = absolutePathFor(tempRelative);
+      const tempAbsolute = await containedPath(tempRelative);
       await fs.mkdir(path.dirname(tempAbsolute), { recursive: true });
 
       const source =
@@ -160,10 +204,12 @@ export function createStorageService(root = appConfig.storageRoot) {
       }
 
       try {
+        const directory = path.join(storageRoot, targetDirectory(input.target), safeRelativeDirectory(input.relativePath));
+        await assertContainedDirectory(directory);
         const moved = await moveIntoDirectory({
           storageRoot,
           from: tempAbsolute,
-          directory: path.join(storageRoot, targetDirectory(input.target), safeRelativeDirectory(input.relativePath)),
+          directory,
           filename: input.filename
         });
         await syncPath(path.dirname(moved.absolutePath));
@@ -181,7 +227,7 @@ export function createStorageService(root = appConfig.storageRoot) {
 
     async createUploadTempPath(sessionId: string): Promise<{ absolutePath: string; relativePath: string }> {
       const relativePath = path.join(".uploads", `${sanitizePathSegment(sessionId)}.part`);
-      const absolutePath = absolutePathFor(relativePath);
+      const absolutePath = await containedPath(relativePath);
       await fs.mkdir(path.dirname(absolutePath), { recursive: true });
       await fs.writeFile(absolutePath, Buffer.alloc(0), { flag: "wx" });
       return {
@@ -212,7 +258,7 @@ export function createStorageService(root = appConfig.storageRoot) {
     },
 
     async completeUploadSession(input: CompleteUploadSessionInput): Promise<StoredFile> {
-      const from = absolutePathFor(input.tempRelativePath);
+      const from = await containedSource(input.tempRelativePath);
       if ((await fs.stat(from)).size !== input.sizeBytes) {
         throw uploadError("Upload temp file size mismatch", "UPLOAD_SIZE_MISMATCH");
       }
@@ -220,6 +266,7 @@ export function createStorageService(root = appConfig.storageRoot) {
       await syncPath(from);
       const relativeDirectory = targetDirectory(input.target);
       const directory = path.join(storageRoot, relativeDirectory, safeRelativeDirectory(input.relativePath ?? undefined));
+      await assertContainedDirectory(directory);
       const absolutePath = await moveIntoDirectory({
         storageRoot,
         from,
@@ -253,13 +300,14 @@ export function createStorageService(root = appConfig.storageRoot) {
     async moveToProject(
       input: MoveToProjectInput
     ): Promise<{ absolutePath: string; relativePath: string }> {
-      const from = absolutePathFor(input.currentRelativePath);
+      const from = await containedSource(input.currentRelativePath);
       const directory = path.join(
         storageRoot,
         "Projects",
         sanitizePathSegment(input.projectSlug),
         "Inbox"
       );
+      await assertContainedDirectory(directory);
       return moveIntoDirectory({
         storageRoot,
         from,
@@ -271,8 +319,9 @@ export function createStorageService(root = appConfig.storageRoot) {
     async moveToInbox(
       input: MoveToInboxInput
     ): Promise<{ absolutePath: string; relativePath: string }> {
-      const from = absolutePathFor(input.currentRelativePath);
+      const from = await containedSource(input.currentRelativePath);
       const directory = path.join(storageRoot, "Inbox", sanitizePathSegment(input.sourceDevice));
+      await assertContainedDirectory(directory);
       return moveIntoDirectory({
         storageRoot,
         from,
@@ -284,7 +333,7 @@ export function createStorageService(root = appConfig.storageRoot) {
     async renameFile(
       input: RenameFileInput
     ): Promise<{ absolutePath: string; relativePath: string }> {
-      const from = absolutePathFor(input.currentRelativePath);
+      const from = await containedSource(input.currentRelativePath);
       const filename = sanitizeFilename(input.filename);
       if (path.basename(from) === filename) {
         return {
@@ -305,10 +354,11 @@ export function createStorageService(root = appConfig.storageRoot) {
       input: ArchiveFileInput
     ): Promise<{ absolutePath: string; relativePath: string }> {
       const now = input.now ?? new Date();
-      const from = absolutePathFor(input.currentRelativePath);
+      const from = await containedSource(input.currentRelativePath);
       const year = String(now.getUTCFullYear());
       const month = String(now.getUTCMonth() + 1).padStart(2, "0");
       const directory = path.join(storageRoot, "Archive", year, month);
+      await assertContainedDirectory(directory);
       return moveIntoDirectory({
         storageRoot,
         from,
@@ -320,8 +370,8 @@ export function createStorageService(root = appConfig.storageRoot) {
     async restoreFile(
       input: RestoreFileInput
     ): Promise<{ absolutePath: string; relativePath: string }> {
-      const from = absolutePathFor(input.currentRelativePath);
-      const to = absolutePathFor(input.targetRelativePath);
+      const from = await containedSource(input.currentRelativePath);
+      const to = await containedPath(input.targetRelativePath);
       await fs.mkdir(path.dirname(to), { recursive: true });
       await linkFile(from, to);
       return {
@@ -331,11 +381,11 @@ export function createStorageService(root = appConfig.storageRoot) {
     },
 
     async deleteFile(relativePath: string): Promise<void> {
-      await fs.unlink(absolutePathFor(relativePath));
+      await fs.unlink(await containedPath(relativePath));
     },
 
     async abortUploadSession(tempRelativePath: string): Promise<void> {
-      await fs.unlink(absolutePathFor(tempRelativePath));
+      await fs.unlink(await containedPath(tempRelativePath));
     }
   };
 }

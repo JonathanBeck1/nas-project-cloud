@@ -149,6 +149,15 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- **Moves, deletes and uploads stay inside the storage root when a folder is
+  a symlink.** Paths were checked only lexically, so replacing a folder in
+  the files dataset with a symlink (for example `Inbox/laptop` pointing at
+  `/data`) let the app move, copy or delete files outside the root. That
+  included linking the database into a shared folder and then unlinking the
+  original. Every storage operation and preview write now checks the real
+  location of the folder it acts in and refuses anything outside the root,
+  and a move refuses a source that is not a regular file. A symlinked
+  folder that stays inside the root still works.
 - **Supply chain.** Every GitHub Action is pinned to a commit SHA, published
   images carry build provenance and an SBOM, and Dependabot watches npm and
   the pinned actions weekly.
