@@ -502,6 +502,29 @@ describe("AppShell", () => {
     expect(screen.queryByText("2 selected")).not.toBeInTheDocument();
   });
 
+  it("bulk sets a category without moving files out of their project", async () => {
+    const user = userEvent.setup();
+    const inProject = { ...uploadedFile, projectId: "proj_123", storagePath: "Projects/printer-upgrade/Inbox/manual.pdf" };
+    const fetchMock = vi.fn<typeof fetch>((_input, init) =>
+      Promise.resolve(
+        new Response(JSON.stringify({ file: { ...inProject, ...JSON.parse(String(init?.body)) } }), { status: 200 })
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell initialData={{ files: [inProject], projects: [project], categories: [cadCategory], tags: [] }} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select manual.pdf" }));
+    await user.selectOptions(screen.getByLabelText("Category for selected files"), "cat_cad");
+    await user.click(screen.getByRole("button", { name: "Apply organization" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/file_manual",
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ categoryId: "cat_cad" }) })
+    );
+  });
+
   it("updates project assignment and keeps the selected file open", async () => {
     const user = userEvent.setup();
     const updatedFile = {
