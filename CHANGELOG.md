@@ -114,6 +114,18 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   as unauthenticated (`401`) or as failing the CSRF check (`403`).
 - **Names starting with two dots are accepted.** `..notes.txt` was rejected
   as escaping the storage root because the check was `startsWith("..")`.
+- **Video and PDF thumbnails show up.** Poster frames and first-page PDF
+  thumbnails were generated but never attached to files, because the file
+  list only picked up finished image previews. Every preview kind now
+  appears, along with pending and failed states. Permanent "skipped" and
+  "unsupported" states get no chip, iPhone HEIC photos (which the bundled
+  image library cannot decode) are recorded as unsupported instead of
+  failed, and documents other than PDFs are no longer queued for a preview
+  that could never exist.
+- **Re-indexed files get previews.** Files added by a reindex, or imported
+  before this change, were never queued for a preview. Each scan now queues
+  missing previews for images, videos and PDFs without touching ones that
+  already exist.
 - **PDF previews are capped at 1024 px.** `pdftoppm` rendered at a fixed
   150 dpi, so a large-format page (an A0 plot is 4967 x 7021 px) or a
   hostile one could exhaust memory. Pages are now scaled to 1024 px.

@@ -299,7 +299,8 @@ function readyPreviewUrl(file: CloudFile): string | null {
 }
 
 function previewStatusLabel(file: CloudFile): string | null {
-  if (!file.preview || file.preview.status === "ready") {
+  // Skipped and unsupported are permanent and expected (a .docx, a missing ffmpeg), so they get no chip.
+  if (!file.preview || ["ready", "skipped", "unsupported"].includes(file.preview.status)) {
     return null;
   }
 
@@ -309,9 +310,6 @@ function previewStatusLabel(file: CloudFile): string | null {
 function previewStatusClass(status: FilePreviewStatus | undefined): string {
   if (status === "failed") {
     return "rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 font-medium text-red-700";
-  }
-  if (status === "skipped" || status === "unsupported") {
-    return "rounded-md border border-line bg-surface px-1.5 py-0.5 font-medium text-muted";
   }
   return "rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700";
 }

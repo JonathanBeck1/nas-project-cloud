@@ -4,19 +4,27 @@ import type { CloudFile, FileFamily } from "@/lib/shared/types";
 
 describe("preview enqueue", () => {
   it.each([
-    ["image", "image"],
-    ["video", "video"],
-    ["document", "document"]
-  ] as const)("queues %s files with the matching preview kind", (family, kind) => {
+    ["image", "png", "image"],
+    ["video", "mp4", "video"],
+    ["document", "pdf", "document"]
+  ] as const)("queues %s files with the matching preview kind", (family, extension, kind) => {
     const repo = { upsertFilePreview: vi.fn() };
 
-    enqueuePreviewForFile(repo, fileFixture(family));
+    enqueuePreviewForFile(repo, fileFixture(family, extension));
 
     expect(repo.upsertFilePreview).toHaveBeenCalledWith({
       fileId: `file_${family}`,
       kind,
       status: "pending"
     });
+  });
+
+  it.each(["docx", "txt", "csv"])("does not queue a .%s document, which has no preview pipeline", (extension) => {
+    const repo = { upsertFilePreview: vi.fn() };
+
+    enqueuePreviewForFile(repo, fileFixture("document", extension));
+
+    expect(repo.upsertFilePreview).not.toHaveBeenCalled();
   });
 
   it("does not queue non-preview file families", () => {
@@ -28,11 +36,11 @@ describe("preview enqueue", () => {
   });
 });
 
-function fileFixture(family: FileFamily): CloudFile {
+function fileFixture(family: FileFamily, extension: string = family): CloudFile {
   return {
     id: `file_${family}`,
-    name: `asset.${family}`,
-    extension: family,
+    name: `asset.${extension}`,
+    extension,
     family,
     mimeType: "application/octet-stream",
     sizeBytes: 10,

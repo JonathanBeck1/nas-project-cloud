@@ -55,7 +55,8 @@ vi.mock("@/lib/server/storage", () => ({
   createStorageService: vi.fn(() => mocks.storage)
 }));
 
-vi.mock("@/lib/shared/fileTypes", () => ({
+vi.mock("@/lib/shared/fileTypes", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/shared/fileTypes")>()),
   classifyFile: mocks.classifyFile
 }));
 

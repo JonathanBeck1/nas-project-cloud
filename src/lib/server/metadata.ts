@@ -25,6 +25,7 @@ import type {
   UserRole,
   UserWithPasswordHash
 } from "@/lib/shared/types";
+import { previewKindForFile } from "@/lib/shared/fileTypes";
 
 type CategoryRow = {
   id: string;
@@ -1171,6 +1172,22 @@ export function createMetadataRepository(db: AppDatabase) {
       });
     },
 
+    // Queues what the upload routes queue (the previewKindForFile rule) for files indexed from disk.
+    // ON CONFLICT DO NOTHING never resets a preview that already exists.
+    queueMissingPreviews(): number {
+      const now = new Date().toISOString();
+      return db
+        .prepare<{ now: string }>(`
+          insert into file_previews (file_id, kind, status, created_at, updated_at)
+          select id, family, 'pending', @now, @now
+          from files
+          where status = 'active'
+            and (family in ('image', 'video') or (family = 'document' and lower(extension) = 'pdf'))
+          on conflict(file_id, kind) do nothing
+        `)
+        .run({ now }).changes;
+    },
+
     claimPreviewJob(fileId: string, kind: FilePreviewKind): boolean {
       const result = db
         .prepare<[string, string, FilePreviewKind]>(`
@@ -1835,13 +1852,17 @@ export function filesFromRowsWithTags(db: AppDatabase, rows: FileRow[]): CloudFi
   const previewRows = db
     .prepare<[string], FilePreviewRow>(`
       select * from file_previews
-      where status = 'ready' and kind = 'image' and file_id in (select value from json_each(?))
+      where file_id in (select value from json_each(?))
       order by updated_at desc
     `)
     .all(fileIds);
 
+  // Every status, so the UI can show pending and failed previews. Only the file's current kind: a rename can
+  // change the family and leave a row of the old kind behind.
+  const fileById = new Map(rows.map((row) => [row.id, row]));
   for (const row of previewRows) {
-    if (!previewsByFileId.has(row.file_id)) {
+    const file = fileById.get(row.file_id);
+    if (!previewsByFileId.has(row.file_id) && file && row.kind === previewKindForFile(file)) {
       previewsByFileId.set(row.file_id, filePreviewFromRow(row));
     }
   }

@@ -124,6 +124,12 @@ describe("FileGrid", () => {
     expect(screen.getByText("Preview failed")).toBeVisible();
   });
 
+  it.each(["skipped", "unsupported"] as const)("shows no chip for a %s preview", (status) => {
+    render(<FileGrid files={[{ ...previewFixture, preview: { ...previewFixture.preview!, status, previewPath: null } }]} />);
+
+    expect(screen.queryByText(/^Preview /)).not.toBeInTheDocument();
+  });
+
   it("falls back to a file icon when no preview exists", () => {
     render(<FileGrid files={[fixture]} />);
 
