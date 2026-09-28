@@ -83,12 +83,12 @@ Key settings:
 - File dataset mount: `/mnt/OfficeNAS/nas-project-cloud/files:/mnt/nas-cloud`
 - App metadata mount: `/mnt/OfficeNAS/nas-project-cloud/appdata:/data`
 - Healthcheck: `GET /api/health`
-- Image: `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or the pinned release `ghcr.io/jonathanbeck1/nas-project-cloud:0.3.1`
+- Image: `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or the pinned release `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`
 
 Recommended TrueNAS Install via YAML flow:
 
 1. Build and publish the image first, for example to GitHub Container Registry.
-2. Confirm the compose file points at `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or a pinned release tag such as `ghcr.io/jonathanbeck1/nas-project-cloud:0.3.1`.
+2. Confirm the compose file points at `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or a pinned release tag such as `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`.
 3. Paste the compose YAML into TrueNAS SCALE's custom app YAML flow.
 4. Start the app and wait for the healthcheck to turn healthy.
 5. Browse to `http://<truenas-hostname-or-ip>:3000`.
@@ -107,11 +107,11 @@ nas-project-cloud
 
 ```text
 Repository: ghcr.io/jonathanbeck1/nas-project-cloud
-Tag: 0.3.1
+Tag: 0.4.0
 Pull Policy: Always pull an image even if it is present on the host
 ```
 
-Pin a release tag such as `0.3.1`. `latest` is rebuilt on every push to `main`, so with the "always pull" policy a restart can silently move you to an unreleased build. Use it only when you want that.
+Pin a release tag such as `0.4.0`. `latest` is rebuilt on every push to `main`, so with the "always pull" policy a restart can silently move you to an unreleased build. Use it only when you want that.
 
 ### Container Configuration
 
@@ -222,7 +222,7 @@ The first page should redirect to `/setup`. Create the owner account, then uploa
 Check these first:
 
 - Repository is `ghcr.io/jonathanbeck1/nas-project-cloud`.
-- Tag is `0.3.1` or `latest`.
+- Tag is `0.4.0` or `latest`.
 - The GitHub Container Registry package is public, or TrueNAS has pull credentials configured.
 - TrueNAS has outbound internet access and working DNS.
 
@@ -280,11 +280,11 @@ ghcr.io/jonathanbeck1/nas-project-cloud:latest
 ghcr.io/jonathanbeck1/nas-project-cloud:<commit-sha>
 ```
 
-When a semver tag is pushed, for example `v0.3.1`, it also publishes:
+When a semver tag is pushed, for example `v0.4.0`, it also publishes:
 
 ```text
-ghcr.io/jonathanbeck1/nas-project-cloud:0.3.1
-ghcr.io/jonathanbeck1/nas-project-cloud:0.3
+ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0
+ghcr.io/jonathanbeck1/nas-project-cloud:0.4
 ```
 
 TrueNAS pulls the `latest` tag from the compose file. If the package is private in GitHub Container Registry, configure image pull credentials in TrueNAS or make the package public. For the first LAN-only install, a public package is the simplest path.
@@ -397,6 +397,15 @@ Tips:
 - Use `127.0.0.1:3000` (the loopback interface) so the request never leaves the NAS.
 - Export `NAS_CLOUD_MAINTENANCE_TOKEN` in the TrueNAS cron environment, or hard-code the bearer value into the cron command itself if you prefer not to expose it in the parent shell.
 - Every successful run returns JSON. A non-2xx response indicates the token did not match (`401`) or the worker hit an unexpected error.
+
+## Upgrading
+
+1. Read the release's migration notes in [CHANGELOG.md](../../CHANGELOG.md).
+2. Stop the app and take snapshots of both `files` and `appdata` (see Backups And Snapshots below).
+3. Change the image tag, for example from `0.3.1` to `0.4.0`, and start the app. Schema changes are applied automatically on first start.
+4. Check `/api/health`, then sign in.
+
+To roll back, stop the app and restore the `appdata` snapshot as well as changing the tag back. Starting an older image on a newer database is not supported. For 0.4.0 in particular, the first sign-in rewrites the password hash in a format 0.3.x cannot read.
 
 ## Backups And Snapshots
 
