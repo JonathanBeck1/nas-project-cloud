@@ -250,7 +250,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     }
   };
 
-  const handleAssignSelectedFiles = async (input: { projectId: string | null; categoryId: string | null }) => {
+  const handleAssignSelectedFiles = async (input: { projectId?: string | null; categoryId?: string | null }) => {
     if (selectedBulkFiles.length === 0) {
       return;
     }
@@ -261,9 +261,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
 
     try {
       const updatedFiles = await Promise.all(
-        selectedBulkFiles.map((file) =>
-          updateFileAssignment(file.id, { projectId: input.projectId, categoryId: input.categoryId })
-        )
+        selectedBulkFiles.map((file) => updateFileAssignment(file.id, input))
       );
       const updatedFilesById = new Map(updatedFiles.map((file) => [file.id, file]));
 
