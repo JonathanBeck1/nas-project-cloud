@@ -133,11 +133,15 @@ async function generateImageThumbnail({
       error: null
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "image thumbnail generation failed";
+    // The bundled libvips has no HEVC decoder, so iPhone HEIC photos can't be previewed. That is expected, not a
+    // failure, and the raw error carries an absolute path.
+    const unsupported = message.includes("compression format has not been built in");
     repo.upsertFilePreview({
       fileId: job.file.id,
       kind: job.preview.kind,
-      status: "failed",
-      error: error instanceof Error ? error.message : "image thumbnail generation failed"
+      status: unsupported ? "unsupported" : "failed",
+      error: unsupported ? `${job.file.extension.toUpperCase()} images need a decoder the preview tools don't include` : message
     });
   }
 }

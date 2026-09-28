@@ -462,7 +462,7 @@ describe("metadata repository", () => {
       });
 
       expect(repo.getFilePreview(file.id, "image")).toEqual(pending);
-      expect(repo.listPendingPreviewJobs()).toEqual([{ file, preview: pending }]);
+      expect(repo.listPendingPreviewJobs()).toEqual([{ file: { ...file, preview: pending }, preview: pending }]);
 
       const ready = repo.upsertFilePreview({
         fileId: file.id,

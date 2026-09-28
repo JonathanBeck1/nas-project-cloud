@@ -29,6 +29,18 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Video and PDF thumbnails show up.** Poster frames and first-page PDF
+  thumbnails were generated but never attached to files, because the file
+  list only picked up finished image previews. Every preview kind now
+  appears, along with pending and failed states. Permanent "skipped" and
+  "unsupported" states get no chip, iPhone HEIC photos (which the bundled
+  image library cannot decode) are recorded as unsupported instead of
+  failed, and documents other than PDFs are no longer queued for a preview
+  that could never exist.
+- **Re-indexed files get previews.** Files added by a reindex, or imported
+  before this change, were never queued for a preview. Each scan now queues
+  missing previews for images, videos and PDFs without touching ones that
+  already exist.
 - **`npm run index:storage` and `npm run previews:generate` run again.** Both
   crashed on startup with a top-level `await` error. A test now executes them.
 - **Re-indexing no longer ingests the app's own files.** Root dot-entries
