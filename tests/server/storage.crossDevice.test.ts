@@ -15,6 +15,9 @@ afterEach(() => {
   }
 });
 
+// A refused move may stop before the destination folder is created, which is just as good as leaving it empty.
+const filesIn = (folder: string) => (fs.existsSync(folder) ? fs.readdirSync(folder) : []);
+
 function crossDeviceError(): NodeJS.ErrnoException {
   return Object.assign(new Error("EXDEV: cross-device link not permitted"), { code: "EXDEV" });
 }
@@ -150,7 +153,7 @@ describe("storage moves across filesystems", () => {
       })
     ).rejects.toThrow();
 
-    expect(fs.readdirSync(path.join(dir, "Projects", "print-parts", "Inbox"))).toEqual([]);
+    expect(filesIn(path.join(dir, "Projects", "print-parts", "Inbox"))).toEqual([]);
     expect(fs.lstatSync(stored.absolutePath).isSymbolicLink()).toBe(true);
   });
 
@@ -170,7 +173,7 @@ describe("storage moves across filesystems", () => {
       })
     ).rejects.toThrow("not a file");
 
-    expect(fs.readdirSync(path.join(dir, "Projects", "print-parts", "Inbox"))).toEqual([]);
+    expect(filesIn(path.join(dir, "Projects", "print-parts", "Inbox"))).toEqual([]);
   }, 2_000);
 
   it("restores a file to its exact path across filesystems", async () => {
