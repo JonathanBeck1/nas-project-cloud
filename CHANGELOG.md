@@ -149,6 +149,13 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- **Public routes no longer buffer request bodies of any size.** Route
+  handlers have no body limit of their own, so a single large POST to login,
+  setup, pairing, or a share link could hold gigabytes in memory and get the
+  container killed. These routes now read at most 64 KiB and answer `413`
+  past it. The share download reads its body only after the token matches a
+  password-protected share, and accepts JSON or the share page's form, not
+  multipart.
 - **Supply chain.** Every GitHub Action is pinned to a commit SHA, published
   images carry build provenance and an SBOM, and Dependabot watches npm and
   the pinned actions weekly.

@@ -4,9 +4,14 @@ import { createMetadataRepository } from "@/lib/server/metadata";
 import { hashPassword } from "@/lib/server/auth/passwords";
 import { createSessionToken, hashSessionToken, sessionExpiresAt } from "@/lib/server/auth/sessions";
 import { withSessionCookie } from "@/lib/server/auth/http";
+import { SMALL_BODY_MAX_BYTES, bodyTooLarge, parseJsonObject, readLimitedBody } from "@/lib/server/requestBody";
 
 export async function POST(request: Request) {
-  const body = await jsonBody(request);
+  const raw = await readLimitedBody(request, SMALL_BODY_MAX_BYTES);
+  if (!raw) {
+    return bodyTooLarge(SMALL_BODY_MAX_BYTES);
+  }
+  const body = parseJsonObject(raw);
   if (!body) {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
@@ -44,14 +49,6 @@ export async function POST(request: Request) {
   });
 
   return withSessionCookie(NextResponse.json({ user }, { status: 201 }), token);
-}
-
-async function jsonBody(request: Request): Promise<Record<string, unknown> | null> {
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
 }
 
 function stringValue(value: unknown): string {

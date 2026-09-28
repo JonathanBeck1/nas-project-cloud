@@ -5,13 +5,18 @@ import { DUMMY_PASSWORD_HASH, hashPassword, needsRehash, verifyPassword } from "
 import { createSessionToken, hashSessionToken, sessionExpiresAt } from "@/lib/server/auth/sessions";
 import { withSessionCookie } from "@/lib/server/auth/http";
 import { clientIpFromRequest, createRateLimiter } from "@/lib/server/rateLimit";
+import { SMALL_BODY_MAX_BYTES, bodyTooLarge, parseJsonObject, readLimitedBody } from "@/lib/server/requestBody";
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_PER_EMAIL_MAX = 10;
 const LOGIN_PER_IP_MAX = 60;
 
 export async function POST(request: Request) {
-  const body = await jsonBody(request);
+  const raw = await readLimitedBody(request, SMALL_BODY_MAX_BYTES);
+  if (!raw) {
+    return bodyTooLarge(SMALL_BODY_MAX_BYTES);
+  }
+  const body = parseJsonObject(raw);
   if (!body) {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
@@ -98,14 +103,6 @@ function rateLimited(retryAfterSeconds: number) {
       headers: { "Retry-After": String(Math.max(1, retryAfterSeconds)) }
     }
   );
-}
-
-async function jsonBody(request: Request): Promise<Record<string, unknown> | null> {
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
 }
 
 function stringValue(value: unknown): string {

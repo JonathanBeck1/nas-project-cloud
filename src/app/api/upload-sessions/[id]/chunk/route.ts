@@ -1,8 +1,8 @@
-import { Buffer } from "node:buffer";
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
+import { readLimitedBody } from "@/lib/server/requestBody";
 import { createStorageService } from "@/lib/server/storage";
 import { withUploadSessionLock } from "@/lib/server/uploadSessionLock";
 
@@ -44,7 +44,7 @@ async function handleChunk(request: Request, id: string) {
     );
   }
 
-  const bytes = await readChunk(request);
+  const bytes = await readLimitedBody(request, MAX_CHUNK_BYTES);
   if (!bytes) {
     return chunkTooLarge();
   }
@@ -82,29 +82,6 @@ async function handleChunk(request: Request, id: string) {
   }
 
   return NextResponse.json({ session: advanced });
-}
-
-// A chunked-encoding request has no content-length, so the cap is enforced while reading too.
-async function readChunk(request: Request): Promise<Buffer | null> {
-  if (!request.body) {
-    return Buffer.alloc(0);
-  }
-
-  const parts: Uint8Array[] = [];
-  let total = 0;
-  const reader = request.body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      return Buffer.concat(parts, total);
-    }
-    total += value.length;
-    if (total > MAX_CHUNK_BYTES) {
-      await reader.cancel();
-      return null;
-    }
-    parts.push(value);
-  }
 }
 
 function chunkTooLarge() {
