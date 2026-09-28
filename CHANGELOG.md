@@ -168,6 +168,13 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a boolean per check and the same `200`/`503` status, so container
   healthchecks are unaffected. A signed-in session or the maintenance token
   still gets the full detail.
+- **Public routes no longer buffer request bodies of any size.** Route
+  handlers have no body limit of their own, so a single large POST to login,
+  setup, pairing, or a share link could hold gigabytes in memory and get the
+  container killed. These routes now read at most 64 KiB and answer `413`
+  past it. The share download reads its body only after the token matches a
+  password-protected share, and accepts JSON or the share page's form, not
+  multipart.
 - **Security headers on every response.** `X-Frame-Options: DENY`,
   `X-Content-Type-Options: nosniff`, a `Permissions-Policy`, and
   `Referrer-Policy: no-referrer` (share tokens live in the URL path) are

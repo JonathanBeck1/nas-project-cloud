@@ -7,6 +7,7 @@ import { createRateLimiter, trustedClientIp } from "@/lib/server/rateLimit";
 import { hashShareToken } from "@/lib/server/shareLinks";
 import { createStorageService } from "@/lib/server/storage";
 import type { FileShareLink } from "@/lib/shared/types";
+import { SMALL_BODY_MAX_BYTES, bodyTooLarge, parseJsonObject, readLimitedBody } from "@/lib/server/requestBody";
 
 const PASSWORD_ATTEMPTS_MAX = 10;
 const PASSWORD_ATTEMPTS_WINDOW_MS = 15 * 60_000;
@@ -16,15 +17,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
-  const payload = await readPasswordPayload(request);
-  return downloadSharedFile(request, params, payload.password);
+  return downloadSharedFile(request, params, true);
 }
 
-async function downloadSharedFile(
-  request: Request,
-  params: Promise<{ token: string }>,
-  password?: string
-) {
+// The body is read only once the token names a password-protected share, so anonymous callers cannot make
+// the server buffer anything by posting to a made-up token.
+async function downloadSharedFile(request: Request, params: Promise<{ token: string }>, hasPasswordBody = false) {
   const { token } = await params;
   const repo = createMetadataRepository(getDatabase());
   const share = repo.getFileShareLinkByTokenHash(hashShareToken(token));
@@ -34,6 +32,11 @@ async function downloadSharedFile(
   }
 
   if (share.passwordProtected) {
+    const payload = hasPasswordBody ? await readPasswordPayload(request) : {};
+    if (!payload) {
+      return bodyTooLarge(SMALL_BODY_MAX_BYTES);
+    }
+    const password = payload.password;
     if (!password) {
       return NextResponse.json({ error: "password required" }, { status: 401 });
     }
@@ -88,28 +91,20 @@ async function downloadSharedFile(
   return response;
 }
 
-async function readPasswordPayload(request: Request): Promise<{ password?: string }> {
+// JSON, or the urlencoded form the share page posts. null means the body passed the size cap.
+async function readPasswordPayload(request: Request): Promise<{ password?: string } | null> {
   const contentType = request.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
-    try {
-      const payload = (await request.json()) as { password?: unknown };
-      return typeof payload.password === "string" ? { password: payload.password } : {};
-    } catch {
-      return {};
-    }
+  const isJson = contentType.includes("application/json");
+  if (!isJson && !contentType.includes("application/x-www-form-urlencoded")) {
+    return {};
   }
 
-  if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
-    try {
-      const formData = await request.formData();
-      const password = formData.get("password");
-      return typeof password === "string" ? { password } : {};
-    } catch {
-      return {};
-    }
+  const raw = await readLimitedBody(request, SMALL_BODY_MAX_BYTES);
+  if (!raw) {
+    return null;
   }
-
-  return {};
+  const password = isJson ? parseJsonObject(raw)?.password : new URLSearchParams(raw.toString("utf8")).get("password");
+  return typeof password === "string" ? { password } : {};
 }
 
 function isShareUsable(share: FileShareLink): boolean {
