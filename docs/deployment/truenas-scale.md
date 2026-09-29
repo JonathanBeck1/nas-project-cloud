@@ -83,12 +83,12 @@ Key settings:
 - File dataset mount: `/mnt/OfficeNAS/nas-project-cloud/files:/mnt/nas-cloud`
 - App metadata mount: `/mnt/OfficeNAS/nas-project-cloud/appdata:/data`
 - Healthcheck: `GET /api/health`
-- Image: `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or the pinned release `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`
+- Image: the pinned release `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`
 
 Recommended TrueNAS Install via YAML flow:
 
 1. Build and publish the image first, for example to GitHub Container Registry.
-2. Confirm the compose file points at `ghcr.io/jonathanbeck1/nas-project-cloud:latest` or a pinned release tag such as `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`.
+2. Confirm the compose file points at a release tag such as `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`.
 3. Paste the compose YAML into TrueNAS SCALE's custom app YAML flow.
 4. Start the app and wait for the healthcheck to turn healthy.
 5. Browse to `http://<truenas-hostname-or-ip>:3000`.
@@ -111,7 +111,7 @@ Tag: 0.4.0
 Pull Policy: Always pull an image even if it is present on the host
 ```
 
-Pin a release tag such as `0.4.0`. `latest` is rebuilt on every push to `main`, so with the "always pull" policy a restart can silently move you to an unreleased build. Use it only when you want that.
+Pin a release tag such as `0.4.0`. `latest` moves to each new release as soon as it is tagged, so with the "always pull" policy a restart can upgrade you before you have read the migration notes or taken a snapshot. `edge` is rebuilt on every push to `main` and is only for trying unreleased changes.
 
 ### Container Configuration
 
@@ -222,7 +222,7 @@ The first page should redirect to `/setup`. Create the owner account, then uploa
 Check these first:
 
 - Repository is `ghcr.io/jonathanbeck1/nas-project-cloud`.
-- Tag is `0.4.0` or `latest`.
+- Tag is a published release such as `0.4.0`, or `latest`.
 - The GitHub Container Registry package is public, or TrueNAS has pull credentials configured.
 - TrueNAS has outbound internet access and working DNS.
 
@@ -273,21 +273,26 @@ npm run build
 docker build and push
 ```
 
-When the workflow runs on `main` or through a manual `workflow_dispatch`, it publishes:
+When the workflow runs on `main`, from a push or a manual `workflow_dispatch`, it publishes:
 
 ```text
+ghcr.io/jonathanbeck1/nas-project-cloud:edge
+ghcr.io/jonathanbeck1/nas-project-cloud:sha-<full-commit-sha>
+```
+
+When a release tag `vX.Y.Z` is pushed, it publishes:
+
+```text
+ghcr.io/jonathanbeck1/nas-project-cloud:X.Y.Z
+ghcr.io/jonathanbeck1/nas-project-cloud:X.Y
+ghcr.io/jonathanbeck1/nas-project-cloud:vX.Y.Z
 ghcr.io/jonathanbeck1/nas-project-cloud:latest
-ghcr.io/jonathanbeck1/nas-project-cloud:<commit-sha>
+ghcr.io/jonathanbeck1/nas-project-cloud:sha-<full-commit-sha>
 ```
 
-When a semver tag is pushed, for example `v0.4.0`, it also publishes:
+A prerelease tag such as `vX.Y.Z-rc.1` publishes only `X.Y.Z-rc.1` and its `sha-` tag, and does not move `X.Y` or `latest`. A `v*` tag that is not a valid version publishes only its `sha-` tag. A newer run for the same branch or tag cancels a publish that is still running.
 
-```text
-ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0
-ghcr.io/jonathanbeck1/nas-project-cloud:0.4
-```
-
-TrueNAS pulls the `latest` tag from the compose file. If the package is private in GitHub Container Registry, configure image pull credentials in TrueNAS or make the package public. For the first LAN-only install, a public package is the simplest path.
+TrueNAS pulls whatever tag the compose file pins. If the package is private in GitHub Container Registry, configure image pull credentials in TrueNAS or make the package public. For the first LAN-only install, a public package is the simplest path.
 
 Local or external Compose mode from a repo checkout:
 

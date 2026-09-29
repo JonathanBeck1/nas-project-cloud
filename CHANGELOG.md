@@ -7,6 +7,23 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Unreleased
 
+### Changed
+
+- **`:latest` now means the newest release.** It was rebuilt on every push
+  to `main`, and the compose file pulled it, so a TrueNAS app set to "always
+  pull" could move onto unreleased code on its next restart. Pushes to
+  `main` now publish `:edge`, only a release tag moves `:latest` (not a
+  prerelease or any other `v*` tag), and the compose file pins the current
+  release. A newer publish for the same branch or tag cancels one still
+  running, so two quick pushes to `main` can no longer leave `:edge` on the
+  older build.
+
+### Migration notes
+
+- **Unreleased builds are on `:edge`.** If you pulled `:latest` to follow
+  `main`, switch to `:edge`. If you pulled it for releases, nothing changes,
+  though pinning a version is still the safer choice.
+
 ## [0.4.0] - 2026-09-28
 
 The hardening release. An external audit of 0.3.1 and a follow-up review

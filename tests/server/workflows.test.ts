@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const workflowsDir = path.join(process.cwd(), ".github", "workflows");
 const workflows = fs.readdirSync(workflowsDir).filter((name) => name.endsWith(".yml"));
 const read = (...segments: string[]) => fs.readFileSync(path.join(process.cwd(), ".github", ...segments), "utf8");
+const readRepo = (file: string) => fs.readFileSync(path.join(process.cwd(), file), "utf8");
 
 describe("CI supply chain", () => {
   it.each(workflows)("%s pins every action to a commit SHA with its version in a comment", (name) => {
@@ -55,5 +56,44 @@ describe("CI supply chain", () => {
     // Grouped and no majors, so a config change cannot bring back one PR per dependency.
     expect(dependabot.match(/^\s+groups:$/gm)).toHaveLength(2);
     expect(dependabot.match(/version-update:semver-major/g)).toHaveLength(2);
+  });
+});
+
+describe("release channels", () => {
+  const publish = read("workflows", "docker-publish.yml");
+  const { version } = JSON.parse(readRepo("package.json")) as { version: string };
+
+  it("moves latest only on release tags and publishes main as edge", () => {
+    const tags = publish.slice(publish.indexOf("tags: |"), publish.indexOf("- name: Build and publish image"));
+
+    expect(tags).not.toMatch(/latest/);
+    expect(tags).toContain("type=edge,branch=main");
+    expect(tags).toContain("type=semver,pattern={{version}}");
+    // Equal-priority entries keep their order, and the first becomes the image's version label.
+    expect(tags.indexOf("pattern={{version}}")).toBeLessThan(tags.indexOf("pattern=v{{version}}"));
+    // type=ref,event=tag would set latest for any v* tag that isn't valid semver, such as v0.5.
+    expect(tags).not.toContain("type=ref");
+    // latest comes from the default flavor (latest=auto) via the semver tags, which skip prereleases.
+    expect(publish).not.toMatch(/^\s+flavor:/m);
+  });
+
+  it("never runs two publishes for the same ref at once", () => {
+    expect(publish).toMatch(/^concurrency:\n  group: publish-\$\{\{ github\.ref \}\}\n  cancel-in-progress: true$/m);
+  });
+
+  it("pins the compose file and install docs to the current release", () => {
+    const image = `ghcr.io/jonathanbeck1/nas-project-cloud:${version}`.replace(/\./g, "\\.");
+    const docs = ["README.md", "docs/deployment/truenas-scale.md", "docker/docker-compose.truenas.yml"].map(readRepo).join("\n");
+    const pins = [...docs.matchAll(/nas-project-cloud:(\d+\.\d+\.\d+)|^Tag: (\S+)$/gm)].map((match) => match[1] ?? match[2]);
+
+    expect(readRepo("docker/docker-compose.truenas.yml")).toMatch(new RegExp(`^\\s+image: ${image}$`, "m"));
+    expect(pins.length).toBeGreaterThan(2);
+    expect(new Set(pins)).toEqual(new Set([version]));
+  });
+
+  it("lists the current release line as supported in SECURITY.md", () => {
+    const [major, minor] = version.split(".");
+
+    expect(readRepo("SECURITY.md")).toContain(`| Latest release line (currently ${major}.${minor}.x) | Yes |`);
   });
 });

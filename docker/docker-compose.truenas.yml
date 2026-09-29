@@ -1,7 +1,7 @@
 services:
   nas-project-cloud:
-    # :latest is rebuilt on every push to main. Pin a release tag (for example :0.4.0) for a repeatable install.
-    image: ghcr.io/jonathanbeck1/nas-project-cloud:latest
+    # A release pin. Read the release notes and snapshot appdata before changing it; :edge is unreleased main.
+    image: ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0
     container_name: nas-project-cloud
     restart: unless-stopped
     # PID 1 in the image is npm, which neither forwards signals nor reaps ffmpeg/pdftoppm children.

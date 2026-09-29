@@ -24,7 +24,7 @@ Tools like Nextcloud and OpenCloud are general-purpose. Tools like LocalSend are
 - **Preview pipeline** — automatic 384 px webp previews for images, video poster frames via `ffmpeg`, and first-page PDF previews via `poppler-utils`, streamed from authenticated routes.
 - **Trusted-device auth** — owner bootstrap on first run, scrypt password hashing, HTTP-only session cookie, route guards on every API and page, and pairing-code device trust.
 - **TrueNAS-ready** — Dockerfile, `docker-compose.truenas.yml`, deployment guide, and `/api/health` readiness check that exercises the storage mount, database, and preview binaries.
-- **CI/CD** — GitHub Actions builds and publishes `ghcr.io/jonathanbeck1/nas-project-cloud:latest` on every push to `main`, after running unit, type, lint, and build checks.
+- **CI/CD** — GitHub Actions runs unit, type, lint, and build checks, then publishes `ghcr.io/jonathanbeck1/nas-project-cloud`: `:edge` on every push to `main`, and the version tags plus `:latest` when a release is tagged.
 
 ## Screenshots
 
@@ -103,7 +103,7 @@ The full guide lives at [`docs/deployment/truenas-scale.md`](./docs/deployment/t
 
 2. Make them writable by UID/GID `1001` (the container's `nextjs` user) or by an apps group it can join.
 
-3. Paste [`docker/docker-compose.truenas.yml`](./docker/docker-compose.truenas.yml) into TrueNAS SCALE's custom-app YAML flow. Update the host volume paths to match your pool. The compose file pulls `ghcr.io/jonathanbeck1/nas-project-cloud:latest`; pin `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0` if you want a stable release tag.
+3. Paste [`docker/docker-compose.truenas.yml`](./docker/docker-compose.truenas.yml) into TrueNAS SCALE's custom-app YAML flow. Update the host volume paths to match your pool. The compose file pins the current release, `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`. `:latest` moves to each new release, and `:edge` is unreleased `main`.
 
 4. Wait for `/api/health` to turn green. Browse to `http://<truenas>:3000`, finish owner setup, and you're done.
 
