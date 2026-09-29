@@ -60,7 +60,11 @@ Templates for both live under `.github/ISSUE_TEMPLATE/`.
 
 ## Security
 
-If you find a security issue, please email the maintainer instead of opening a public issue. Do not file CVE-style reports through the issue tracker.
+Report vulnerabilities privately, as described in [SECURITY.md](./SECURITY.md). Please don't open public issues for them.
+
+## Code of conduct
+
+Everyone taking part in the project follows the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## License
 
