@@ -1185,7 +1185,7 @@ export function createMetadataRepository(db: AppDatabase) {
             and (
               family in ('image', 'video')
               or (family = 'document' and lower(extension) = 'pdf')
-              or (family = 'cad' and lower(extension) = '3mf')
+              or (family = 'cad' and lower(extension) in ('3mf', 'gcode'))
             )
           on conflict(file_id, kind) do nothing
         `)

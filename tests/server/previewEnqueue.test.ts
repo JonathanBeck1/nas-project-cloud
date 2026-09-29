@@ -7,7 +7,8 @@ describe("preview enqueue", () => {
     ["image", "png", "image"],
     ["video", "mp4", "video"],
     ["document", "pdf", "document"],
-    ["cad", "3mf", "cad"]
+    ["cad", "3mf", "cad"],
+    ["cad", "gcode", "cad"]
   ] as const)("queues %s files with the matching preview kind", (family, extension, kind) => {
     const repo = { upsertFilePreview: vi.fn() };
 
