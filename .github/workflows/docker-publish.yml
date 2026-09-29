@@ -11,6 +11,12 @@ on:
 permissions:
   contents: read
 
+# A newer run for the same branch or tag cancels an older one, so two quick pushes can't finish out of order.
+# Release tags don't share a group: tag one release at a time, and never re-run an older release's publish, or latest moves back to it.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # npm ci runs dependency install scripts, so it runs here, where the token cannot push images.
   verify:
@@ -73,12 +79,13 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ghcr.io/${{ github.repository }}
+          # Only a valid semver release tag sets latest (flavor latest=auto). Prereleases and other v* tags don't.
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=tag
+            type=edge,branch=main
             type=sha,format=long
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern=v{{version}}
 
       - name: Build and publish image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
