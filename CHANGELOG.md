@@ -207,6 +207,15 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Login no longer reveals which emails exist.** An unknown email skipped
   the password derivation and answered measurably faster. It now spends the
   same derivation.
+- **Moves, deletes and uploads stay inside the storage root when a folder is
+  a symlink.** Paths were checked only lexically, so replacing a folder in
+  the files dataset with a symlink (for example `Inbox/laptop` pointing at
+  `/data`) let the app move, copy or delete files outside the root. That
+  included linking the database into a shared folder and then unlinking the
+  original. Every storage operation and preview write now checks the real
+  location of the folder it acts in and refuses anything outside the root,
+  and a move refuses a source that is not a regular file. A symlinked
+  folder that stays inside the root still works.
 - **Reads cannot follow a symlink out of the storage root.** Path
   containment was lexical, so a symlink placed over SMB could point a
   download, share link, ZIP export, or preview at anything the container can
