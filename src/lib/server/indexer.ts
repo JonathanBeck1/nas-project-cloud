@@ -114,6 +114,7 @@ export async function scanStorageRoot(input: ScanStorageRootInput): Promise<Scan
     indexed += 1;
   }
 
+  repo.queueMissingPreviews();
   return { scanned, indexed };
 }
 

@@ -1,4 +1,5 @@
-import type { CloudFile, FilePreview, FilePreviewKind } from "@/lib/shared/types";
+import { previewKindForFile } from "@/lib/shared/fileTypes";
+import type { CloudFile, FilePreview } from "@/lib/shared/types";
 
 type PreviewQueueRepository = {
   upsertFilePreview: (input: {
@@ -19,17 +20,4 @@ export function enqueuePreviewForFile(repo: PreviewQueueRepository, file: CloudF
     kind,
     status: "pending"
   });
-}
-
-function previewKindForFile(file: CloudFile): FilePreviewKind | null {
-  if (file.family === "image") {
-    return "image";
-  }
-  if (file.family === "video") {
-    return "video";
-  }
-  if (file.family === "document") {
-    return "document";
-  }
-  return null;
 }
