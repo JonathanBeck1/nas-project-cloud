@@ -1182,7 +1182,11 @@ export function createMetadataRepository(db: AppDatabase) {
           select id, family, 'pending', @now, @now
           from files
           where status = 'active'
-            and (family in ('image', 'video') or (family = 'document' and lower(extension) = 'pdf'))
+            and (
+              family in ('image', 'video')
+              or (family = 'document' and lower(extension) = 'pdf')
+              or (family = 'cad' and lower(extension) = '3mf')
+            )
           on conflict(file_id, kind) do nothing
         `)
         .run({ now }).changes;

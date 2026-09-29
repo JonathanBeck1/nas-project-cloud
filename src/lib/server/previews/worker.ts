@@ -8,6 +8,7 @@ import { createMetadataRepository } from "@/lib/server/metadata";
 import { createStorageService } from "@/lib/server/storage";
 import type { FilePreview, PreviewJob } from "@/lib/shared/types";
 import { probeFfmpeg } from "./ffmpeg";
+import { readEmbeddedThumbnail } from "./embeddedThumbnail";
 import { renderPdfFirstPage } from "./pdf";
 import { probePoppler } from "./poppler";
 import { generateVideoPoster } from "./video";
@@ -56,7 +57,8 @@ export type PreviewWorkerResult = {
 
 export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJobInput): Promise<void> {
   const isPdf = job.file.family === "document" && job.file.extension.toLowerCase() === "pdf";
-  const isSupported = job.file.family === "image" || job.file.family === "video" || isPdf;
+  const isThreeMf = job.file.family === "cad" && job.file.extension.toLowerCase() === "3mf";
+  const isSupported = job.file.family === "image" || job.file.family === "video" || isPdf || isThreeMf;
 
   if (!isSupported) {
     repo.upsertFilePreview({
@@ -107,6 +109,11 @@ export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJo
 
   if (job.file.family === "video") {
     await generateVideoPosterFrame({ job, repo, storage, absolutePath });
+    return;
+  }
+
+  if (isThreeMf) {
+    await generateEmbeddedThumbnail({ job, repo, storage, absolutePath });
     return;
   }
 
@@ -233,6 +240,50 @@ async function generateVideoPosterFrame({
     });
   } finally {
     await fs.unlink(tempFramePath).catch(() => undefined);
+  }
+}
+
+async function generateEmbeddedThumbnail({
+  job,
+  repo,
+  storage,
+  absolutePath
+}: ProcessPreviewJobInput & { absolutePath: string }) {
+  const previewPath = path.posix.join(".previews", "images", `${job.file.id}.webp`);
+  const absolutePreviewPath = storage.absolutePathFor(previewPath);
+  await fs.mkdir(path.dirname(absolutePreviewPath), { recursive: true });
+
+  try {
+    const thumbnail = await readEmbeddedThumbnail(absolutePath);
+    if (!thumbnail) {
+      repo.upsertFilePreview({ fileId: job.file.id, kind: job.preview.kind, status: "skipped", error: "no embedded thumbnail" });
+      return;
+    }
+
+    const info = await writePreview(
+      sharp(thumbnail)
+        .rotate()
+        .resize({ width: 384, height: 384, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 82 }),
+      absolutePreviewPath
+    );
+
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "ready",
+      previewPath,
+      width: info.width,
+      height: info.height,
+      error: null
+    });
+  } catch (error) {
+    repo.upsertFilePreview({
+      fileId: job.file.id,
+      kind: job.preview.kind,
+      status: "failed",
+      error: `could not make a preview from this 3MF: ${error instanceof Error ? error.message : "unknown error"}`
+    });
   }
 }
 

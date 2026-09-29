@@ -13,6 +13,13 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   their image, video or PDF preview, and the file type icon when there is
   no preview. The view toggle is now on project pages as well as the home
   page, and the choice carries between them.
+- **3MF thumbnails.** 3MF projects now show the plate image the slicer saved
+  inside the file, so a print project looks like the print in the grid and
+  gallery. Nothing is rendered: the preview worker reads the thumbnail the
+  package declares, or the usual Bambu Studio, OrcaSlicer, PrusaSlicer and
+  Cura locations, and turns it into the same 384 px preview as a photo. A
+  3MF without one is recorded as skipped. Reindexing queues existing 3MF
+  files too.
 
 ### Changed
 
