@@ -27,7 +27,7 @@ import type { Category, CloudFile, FileShareLink, Project, Tag } from "@/lib/sha
 import type { WorkspaceData } from "@/lib/server/workspaceData";
 import type { CreateShareLinkOptions, UpdateShareLinkOptions } from "./DetailDrawer";
 import type { ProjectDialogInput } from "./ProjectDialog";
-import type { FileGridMode } from "./FileGrid";
+import { useViewMode } from "./ViewModeToggle";
 
 type AppShellProps = {
   initialData?: WorkspaceData;
@@ -35,21 +35,8 @@ type AppShellProps = {
 };
 
 const SEARCH_DEBOUNCE_MS = 200;
-const VIEW_MODE_STORAGE_KEY = "nas-cloud:viewMode";
 
 type SearchStatus = "idle" | "loading" | "success" | "error";
-
-function readStoredViewMode(): FileGridMode {
-  if (typeof window === "undefined") {
-    return "grid";
-  }
-  try {
-    const raw = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    return raw === "list" ? "list" : "grid";
-  } catch {
-    return "grid";
-  }
-}
 
 export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
@@ -64,22 +51,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const [searchTruncated, setSearchTruncated] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
-  const [viewMode, setViewMode] = useState<FileGridMode>("grid");
-
-  useEffect(() => {
-    setViewMode(readStoredViewMode());
-  }, []);
-
-  const handleViewModeChange = (mode: FileGridMode) => {
-    setViewMode(mode);
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
-      } catch {
-        // localStorage can be unavailable (private mode, quota); fall back gracefully.
-      }
-    }
-  };
+  const [viewMode, setViewMode] = useViewMode();
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [fileActionMessage, setFileActionMessage] = useState("");
@@ -407,7 +379,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
             uploadInputId="workspace-file-upload"
             isSearching={isSearching}
             viewMode={viewMode}
-            onChangeViewMode={handleViewModeChange}
+            onChangeViewMode={setViewMode}
           />
 
           <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 lg:px-6">

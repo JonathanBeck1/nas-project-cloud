@@ -4,7 +4,7 @@ import { Box, Download, File, FileImage, FileVideo, Play } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CloudFile, FileFamily, FilePreviewStatus } from "@/lib/shared/types";
 
-export type FileGridMode = "grid" | "list";
+export type FileGridMode = "grid" | "gallery" | "list";
 
 type FileGridProps = {
   files: CloudFile[];
@@ -93,6 +93,19 @@ export function FileGrid({
 }: FileGridProps) {
   if (files.length === 0) {
     return emptyState(emptyMessage);
+  }
+
+  if (mode === "gallery") {
+    return (
+      <GalleryView
+        files={files}
+        selectedFileId={selectedFileId}
+        selectedFileIds={selectedFileIds}
+        selectionMode={selectionMode}
+        onSelectFile={onSelectFile}
+        onToggleSelected={onToggleSelected}
+      />
+    );
   }
 
   if (mode === "list") {
@@ -186,6 +199,90 @@ export function FileGrid({
 
 type ListViewProps = Required<Pick<FileGridProps, "files">> &
   Pick<FileGridProps, "selectedFileId" | "selectedFileIds" | "selectionMode" | "onSelectFile" | "onToggleSelected">;
+
+function GalleryView({
+  files,
+  selectedFileId = null,
+  selectedFileIds = [],
+  selectionMode = "single",
+  onSelectFile,
+  onToggleSelected
+}: ListViewProps) {
+  return (
+    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]" aria-label="Files">
+      {files.map((file, index) => {
+        const Icon = familyIcons[file.family] ?? File;
+        const isSelected = selectedFileIds.includes(file.id);
+        const isActive = selectedFileId === file.id || isSelected;
+        const previewUrl = readyPreviewUrl(file);
+        const statusLabel = previewStatusLabel(file);
+
+        return (
+          <li
+            key={file.id}
+            className={[
+              "relative min-w-0 overflow-hidden rounded-md border bg-panel shadow-panel transition hover:border-muted",
+              isActive ? "border-accent ring-2 ring-accent/20" : "border-line"
+            ].join(" ")}
+          >
+            {selectionMode === "multiple" ? (
+              <span className="absolute right-2 top-2 z-10 grid place-items-center rounded bg-panel/90 p-1 shadow-panel">
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${file.name}`}
+                  checked={isSelected}
+                  onChange={() => onToggleSelected?.(file.id)}
+                  className="h-4 w-4 rounded border-line text-accent focus:ring-accent"
+                />
+              </span>
+            ) : null}
+            <button
+              type="button"
+              aria-label={file.name}
+              aria-pressed={selectedFileId === file.id}
+              title={file.name}
+              onClick={() => onSelectFile?.(file)}
+              // Inset, because the tile clips anything drawn outside it.
+              className="block w-full min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+            >
+              <div className="relative aspect-[4/3] w-full border-b border-line bg-surface">
+                {previewUrl ? (
+                  <Image
+                    unoptimized
+                    fill
+                    src={previewUrl}
+                    alt={`Preview of ${file.name}`}
+                    sizes="(min-width: 640px) 240px, 50vw"
+                    // The first two rows are above the fold on most screens, and one of them is the largest paint.
+                    priority={index < 8}
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-accent">
+                    <Icon aria-hidden="true" className="h-8 w-8" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted">{file.extension || file.family}</span>
+                  </div>
+                )}
+                {previewUrl && file.family === "video" ? (
+                  <span aria-hidden="true" className="pointer-events-none absolute inset-0 grid place-items-center bg-black/25">
+                    <Play className="h-7 w-7 fill-white text-white drop-shadow" />
+                  </span>
+                ) : null}
+              </div>
+              <div className="min-w-0 px-2.5 py-2">
+                <h3 className="truncate text-sm font-semibold text-ink">{file.name}</h3>
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                  <span>{formatBytes(file.sizeBytes)}</span>
+                  {statusLabel ? <span className={previewStatusClass(file.preview?.status)}>{statusLabel}</span> : null}
+                </div>
+              </div>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 function ListView({
   files,

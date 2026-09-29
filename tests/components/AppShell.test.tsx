@@ -336,7 +336,7 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Load more files" })).not.toBeInTheDocument());
   });
 
-  it("toggles between grid and list view, persisting the choice in localStorage", async () => {
+  it("toggles between grid, gallery and list view, persisting the choice in localStorage", async () => {
     const user = userEvent.setup();
     render(<AppShell initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
 
@@ -353,8 +353,30 @@ describe("AppShell", () => {
     expect(screen.getByRole("table", { name: "Files" })).toBeVisible();
     expect(window.localStorage.getItem("nas-cloud:viewMode")).toBe("list");
 
+    const galleryButton = screen.getByRole("button", { name: "Gallery view" });
+    await user.click(galleryButton);
+
+    expect(galleryButton).toHaveAttribute("aria-pressed", "true");
+    expect(listButton).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("list", { name: "Files" })).toBeVisible();
+    expect(window.localStorage.getItem("nas-cloud:viewMode")).toBe("gallery");
+
     await user.click(gridButton);
     expect(window.localStorage.getItem("nas-cloud:viewMode")).toBe("grid");
+  });
+
+  it("restores a saved gallery view and ignores an unknown saved value", async () => {
+    window.localStorage.setItem("nas-cloud:viewMode", "gallery");
+    const { unmount } = render(<AppShell initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Gallery view" })).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByRole("list", { name: "Files" })).toBeVisible();
+    unmount();
+
+    window.localStorage.setItem("nas-cloud:viewMode", "mosaic");
+    render(<AppShell initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Grid view" })).toHaveAttribute("aria-pressed", "true"));
   });
 
   it("restores the saved view mode from localStorage on mount", async () => {

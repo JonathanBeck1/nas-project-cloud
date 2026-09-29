@@ -19,6 +19,7 @@ import { DetailDrawer } from "./DetailDrawer";
 import type { CreateShareLinkOptions, UpdateShareLinkOptions } from "./DetailDrawer";
 import { DropZone } from "./DropZone";
 import { FileGrid } from "./FileGrid";
+import { useViewMode, ViewModeToggle } from "./ViewModeToggle";
 
 type ProjectWorkspaceProps = {
   project: Project;
@@ -35,6 +36,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isFileActionBusy, setIsFileActionBusy] = useState(false);
+  const [viewMode, setViewMode] = useViewMode();
   const fileInputId = `project-file-upload-${project.id}`;
   const folderInputId = `project-folder-upload-${project.id}`;
   const visibleFiles = files.filter((file) => matchesQuery(file, query));
@@ -253,17 +255,20 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
 
           <div className="space-y-4 px-4 py-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <label className="relative block w-full max-w-lg">
-                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                <input
-                  type="search"
-                  aria-label="Search project files"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search project files"
-                  className="h-10 w-full rounded-md border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
-                />
-              </label>
+              <div className="flex w-full max-w-lg items-center gap-2">
+                <label className="relative block min-w-0 flex-1">
+                  <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                  <input
+                    type="search"
+                    aria-label="Search project files"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search project files"
+                    className="h-10 w-full rounded-md border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  />
+                </label>
+                <ViewModeToggle value={viewMode} onChange={setViewMode} />
+              </div>
 
               <DropZone
                 inputId={fileInputId}
@@ -328,6 +333,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
               selectedFileId={selectedFileId}
               selectedFileIds={selectedFileIds}
               selectionMode="multiple"
+              mode={viewMode}
               emptyMessage="Choose files or a folder to add project assets here."
               onSelectFile={(file) => setSelectedFileId(file.id)}
               onToggleSelected={toggleSelectedFile}
