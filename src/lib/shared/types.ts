@@ -12,7 +12,7 @@ export type UploadTargetKind = "inbox" | "project";
 
 export type UploadSessionStatus = "open" | "completed" | "failed" | "aborted";
 
-export type FilePreviewKind = "image" | "video" | "document" | "other";
+export type FilePreviewKind = "image" | "video" | "document" | "cad" | "other";
 
 export type FilePreviewStatus = "pending" | "processing" | "ready" | "failed" | "skipped" | "unsupported";
 

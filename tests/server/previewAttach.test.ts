@@ -56,6 +56,14 @@ describe("previews attached to listed files", () => {
     expect(repo.getFileById(video.id)?.preview?.status).toBe("ready");
   });
 
+  it("attaches the thumbnail extracted from a 3MF file", () => {
+    const repo = createMetadataRepository(db);
+    const plate = fileOf("cad", "bracket.3mf");
+    repo.upsertFilePreview({ fileId: plate.id, kind: "cad", status: "ready", previewPath: `.previews/images/${plate.id}.webp` });
+
+    expect(repo.listFiles()[0].preview).toMatchObject({ kind: "cad", status: "ready" });
+  });
+
   it("attaches a preview that is still pending or failed, so the UI can say so", () => {
     const repo = createMetadataRepository(db);
     const image = fileOf("image", "photo.png");
@@ -77,10 +85,10 @@ describe("previews attached to listed files", () => {
 });
 
 describe("reindex queues previews", () => {
-  it("queues previews for indexed images, videos and PDFs, and never resets a finished one", async () => {
+  it("queues previews for indexed images, videos, PDFs and 3MF files, and never resets a finished one", async () => {
     const root = path.join(dir, "storage");
     fs.mkdirSync(path.join(root, "Library"), { recursive: true });
-    for (const name of ["a.png", "b.mp4", "c.pdf", "d.stl", "e.docx"]) {
+    for (const name of ["a.png", "b.mp4", "c.pdf", "d.stl", "e.docx", "f.3mf"]) {
       fs.writeFileSync(path.join(root, "Library", name), name);
     }
     const repo = createMetadataRepository(db);
@@ -96,7 +104,8 @@ describe("reindex queues previews", () => {
     expect(statuses()).toEqual([
       { name: "a.png", kind: "image", status: "pending" },
       { name: "b.mp4", kind: "video", status: "pending" },
-      { name: "c.pdf", kind: "document", status: "pending" }
+      { name: "c.pdf", kind: "document", status: "pending" },
+      { name: "f.3mf", kind: "cad", status: "pending" }
     ]);
 
     const png = repo.listFiles({ query: "a.png" })[0];
@@ -106,7 +115,8 @@ describe("reindex queues previews", () => {
     expect(statuses()).toEqual([
       { name: "a.png", kind: "image", status: "ready" },
       { name: "b.mp4", kind: "video", status: "pending" },
-      { name: "c.pdf", kind: "document", status: "pending" }
+      { name: "c.pdf", kind: "document", status: "pending" },
+      { name: "f.3mf", kind: "cad", status: "pending" }
     ]);
   });
 

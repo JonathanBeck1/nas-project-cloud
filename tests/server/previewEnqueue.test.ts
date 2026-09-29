@@ -6,7 +6,8 @@ describe("preview enqueue", () => {
   it.each([
     ["image", "png", "image"],
     ["video", "mp4", "video"],
-    ["document", "pdf", "document"]
+    ["document", "pdf", "document"],
+    ["cad", "3mf", "cad"]
   ] as const)("queues %s files with the matching preview kind", (family, extension, kind) => {
     const repo = { upsertFilePreview: vi.fn() };
 
@@ -27,10 +28,11 @@ describe("preview enqueue", () => {
     expect(repo.upsertFilePreview).not.toHaveBeenCalled();
   });
 
-  it("does not queue non-preview file families", () => {
+  it("does not queue non-preview file families or CAD formats without an embedded thumbnail", () => {
     const repo = { upsertFilePreview: vi.fn() };
 
-    enqueuePreviewForFile(repo, fileFixture("cad"));
+    enqueuePreviewForFile(repo, fileFixture("cad", "stl"));
+    enqueuePreviewForFile(repo, fileFixture("archive", "zip"));
 
     expect(repo.upsertFilePreview).not.toHaveBeenCalled();
   });
