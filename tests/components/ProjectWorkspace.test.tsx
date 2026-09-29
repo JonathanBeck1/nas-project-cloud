@@ -38,6 +38,27 @@ const fileFixture: CloudFile = {
 describe("ProjectWorkspace", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    window.localStorage.clear();
+  });
+
+  it("switches to gallery view and saves the same preference as the home page", async () => {
+    const user = userEvent.setup();
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+
+    await user.click(screen.getByRole("button", { name: "Gallery view" }));
+
+    expect(screen.getByRole("button", { name: "Gallery view" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(screen.getByRole("list", { name: "Files" })).getAllByRole("listitem")).toHaveLength(1);
+    expect(window.localStorage.getItem("nas-cloud:viewMode")).toBe("gallery");
+  });
+
+  it("opens in the view mode saved on the home page", async () => {
+    window.localStorage.setItem("nas-cloud:viewMode", "list");
+
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+
+    await waitFor(() => expect(screen.getByRole("table", { name: "Files" })).toBeVisible());
+    expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("renders project files and project metadata", () => {

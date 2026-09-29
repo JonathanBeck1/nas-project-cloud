@@ -1,6 +1,7 @@
 import React from "react";
-import { Grid2X2, List, Loader2, Search, Upload } from "lucide-react";
+import { Loader2, Search, Upload } from "lucide-react";
 import type { FileGridMode } from "./FileGrid";
+import { ViewModeToggle } from "./ViewModeToggle";
 
 type CommandBarProps = {
   query?: string;
@@ -10,35 +11,6 @@ type CommandBarProps = {
   viewMode?: FileGridMode;
   onChangeViewMode?: (mode: FileGridMode) => void;
 };
-
-function IconButton({
-  label,
-  children,
-  isActive = false,
-  onClick
-}: {
-  label: string;
-  children: React.ReactNode;
-  isActive?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={isActive}
-      title={label}
-      onClick={onClick}
-      className={`grid h-9 w-9 place-items-center rounded-md border transition ${
-        isActive
-          ? "border-accent bg-accent text-white"
-          : "border-line bg-panel text-muted hover:border-muted hover:text-ink"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
 
 export function CommandBar({
   query = "",
@@ -73,14 +45,7 @@ export function CommandBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <div className="flex items-center gap-1 rounded-md border border-line bg-panel p-1" role="group" aria-label="View mode">
-          <IconButton label="Grid view" isActive={viewMode === "grid"} onClick={() => onChangeViewMode?.("grid")}>
-            <Grid2X2 aria-hidden="true" className="h-4 w-4" />
-          </IconButton>
-          <IconButton label="List view" isActive={viewMode === "list"} onClick={() => onChangeViewMode?.("list")}>
-            <List aria-hidden="true" className="h-4 w-4" />
-          </IconButton>
-        </div>
+        <ViewModeToggle value={viewMode} onChange={(mode) => onChangeViewMode?.(mode)} />
         <button
           type="button"
           onClick={() => {

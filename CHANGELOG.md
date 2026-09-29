@@ -7,6 +7,13 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Unreleased
 
+### Added
+
+- **Gallery view.** A third view mode shows files as large 4:3 tiles with
+  their image, video or PDF preview, and the file type icon when there is
+  no preview. The view toggle is now on project pages as well as the home
+  page, and the choice carries between them.
+
 ### Changed
 
 - **`:latest` now means the newest release.** It was rebuilt on every push

@@ -42,6 +42,26 @@ test("uploads a file directly into a project workspace", async ({ page }) => {
   await expect(page.getByRole("button", { name: filename })).toBeVisible();
 });
 
+test("shows project files as a gallery and keeps that view after a reload", async ({ page }) => {
+  const project = await createProject(page, `Gallery ${Date.now()}`);
+  await page.goto(`/projects/${project.id}`);
+
+  const filename = `gallery-${Date.now()}.txt`;
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.getByText("Choose files", { exact: true }).click();
+  const chooser = await fileChooserPromise;
+  await chooser.setFiles({ name: filename, mimeType: "text/plain", buffer: Buffer.from("gallery tile") });
+  await expect(page.getByRole("button", { name: filename })).toBeVisible();
+
+  await page.getByRole("button", { name: "Gallery view" }).click();
+  const gallery = page.getByRole("list", { name: "Files" });
+  await expect(gallery.getByRole("listitem").filter({ hasText: filename })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Gallery view" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("list", { name: "Files" }).getByRole("button", { name: filename })).toBeVisible();
+});
+
 async function authenticate(page: import("@playwright/test").Page) {
   const setup = await page.request.post("/api/auth/setup", {
     data: owner

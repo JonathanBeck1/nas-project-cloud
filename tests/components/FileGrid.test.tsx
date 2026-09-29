@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { FileGrid } from "@/components/workspace/FileGrid";
@@ -174,5 +174,63 @@ describe("FileGrid", () => {
     expect(downloadLinks).toHaveLength(2);
     expect(downloadLinks[0]).toHaveAttribute("href", "/api/files/file_bracket/download");
     expect(downloadLinks[1]).toHaveAttribute("href", "/api/files/file_notes/download");
+  });
+  describe("gallery mode", () => {
+    it("shows ready previews as large tiles and falls back to the family icon and extension", () => {
+      render(<FileGrid files={[previewFixture, fixture]} mode="gallery" />);
+
+      const tiles = within(screen.getByRole("list", { name: "Files" })).getAllByRole("listitem");
+      expect(tiles).toHaveLength(2);
+
+      const image = within(tiles[0]).getByRole("img", { name: "Preview of render.png" });
+      expect(image).toHaveAttribute("src", "/api/files/file_render/preview");
+      expect(image).toHaveClass("object-cover");
+      expect(within(tiles[0]).getByText("render.png")).toBeVisible();
+
+      expect(within(tiles[1]).queryByRole("img")).not.toBeInTheDocument();
+      expect(within(tiles[1]).getByText("stl")).toBeVisible();
+      expect(within(tiles[1]).getByText("2 KB")).toBeVisible();
+    });
+
+    it("selects a tile and toggles checkboxes like the other modes", async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const onToggleSelected = vi.fn();
+
+      render(
+        <FileGrid
+          files={[fixture, notesFixture]}
+          mode="gallery"
+          selectionMode="multiple"
+          selectedFileId={notesFixture.id}
+          selectedFileIds={[fixture.id]}
+          onSelectFile={onSelect}
+          onToggleSelected={onToggleSelected}
+        />
+      );
+
+      expect(within(screen.getByRole("list", { name: "Files" })).getAllByRole("listitem")).toHaveLength(2);
+      expect(screen.getByRole("checkbox", { name: "Select bracket.stl" })).toBeChecked();
+      expect(screen.getByRole("button", { name: "notes.txt" })).toHaveAttribute("aria-pressed", "true");
+
+      await user.click(screen.getByRole("button", { name: "bracket.stl" }));
+      expect(onSelect).toHaveBeenCalledWith(fixture);
+
+      await user.click(screen.getByRole("checkbox", { name: "Select notes.txt" }));
+      expect(onToggleSelected).toHaveBeenCalledWith("file_notes");
+    });
+
+    it("keeps pending and failed preview chips without a broken image", () => {
+      render(
+        <FileGrid
+          files={[{ ...previewFixture, preview: { ...previewFixture.preview!, status: "pending", previewPath: null } }]}
+          mode="gallery"
+        />
+      );
+
+      expect(screen.getByRole("list", { name: "Files" })).toBeVisible();
+      expect(screen.queryByRole("img", { name: "Preview of render.png" })).not.toBeInTheDocument();
+      expect(screen.getByText("Preview pending")).toBeVisible();
+    });
   });
 });
