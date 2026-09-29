@@ -29,6 +29,16 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Bulk "Apply organization" no longer moves files you didn't ask to move.**
+  Both selects started on "Inbox" and "Unsorted" and were always sent, so
+  setting only a category on project files detached them and moved them to
+  `Inbox/<device>/`. Both selects now start on "Keep current", only changed
+  fields are sent, and they reset once the selection clears.
+- **Assigning a file to the project it is already in leaves it alone.** It
+  used to be moved again, which flattened subfolders and renamed the file
+  to `name-2` because it collided with itself. A move onto a file's exact
+  current path is now a no-op. Names that differ only by case on a
+  case-insensitive dataset are still a separate, known issue.
 - **`npm run index:storage` and `npm run previews:generate` run again.** Both
   crashed on startup with a top-level `await` error. A test now executes them.
 - **Re-indexing no longer ingests the app's own files.** Root dot-entries

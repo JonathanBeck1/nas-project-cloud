@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Archive, Check, Download, X } from "lucide-react";
 import type { Category, Project } from "@/lib/shared/types";
 
@@ -9,9 +9,12 @@ type BulkActionBarProps = {
   isBusy?: boolean;
   downloadHref?: string;
   onArchive: () => void;
-  onApplyOrganization?: (input: { projectId: string | null; categoryId: string | null }) => void;
+  onApplyOrganization?: (input: { projectId?: string | null; categoryId?: string | null }) => void;
   onClearSelection: () => void;
 };
+
+// Untouched selects are left out of the update: a project change moves files on disk.
+const KEEP_CURRENT = "__keep__";
 
 export function BulkActionBar({
   selectedCount,
@@ -23,12 +26,25 @@ export function BulkActionBar({
   onApplyOrganization,
   onClearSelection
 }: BulkActionBarProps) {
-  const [projectId, setProjectId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  const [projectId, setProjectId] = useState(KEEP_CURRENT);
+  const [categoryId, setCategoryId] = useState(KEEP_CURRENT);
+
+  useEffect(() => {
+    if (selectedCount === 0) {
+      setProjectId(KEEP_CURRENT);
+      setCategoryId(KEEP_CURRENT);
+    }
+  }, [selectedCount]);
 
   if (selectedCount === 0) {
     return null;
   }
+
+  const organization = {
+    ...(projectId !== KEEP_CURRENT ? { projectId: projectId || null } : {}),
+    ...(categoryId !== KEEP_CURRENT ? { categoryId: categoryId || null } : {})
+  };
+  const hasChanges = Object.keys(organization).length > 0;
 
   return (
     <div className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-panel px-3 py-2 shadow-panel">
@@ -42,7 +58,8 @@ export function BulkActionBar({
             disabled={isBusy}
             className="mt-1 h-8 w-full rounded-md border border-line bg-surface px-2 text-xs font-medium text-ink"
           >
-            <option value="">Inbox</option>
+            <option value={KEEP_CURRENT}>Keep current project</option>
+            <option value="">Inbox (no project)</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name}
@@ -58,6 +75,7 @@ export function BulkActionBar({
             disabled={isBusy}
             className="mt-1 h-8 w-full rounded-md border border-line bg-surface px-2 text-xs font-medium text-ink"
           >
+            <option value={KEEP_CURRENT}>Keep current category</option>
             <option value="">Unsorted</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
@@ -68,8 +86,8 @@ export function BulkActionBar({
         </label>
         <button
           type="button"
-          onClick={() => onApplyOrganization?.({ projectId: projectId || null, categoryId: categoryId || null })}
-          disabled={isBusy || !onApplyOrganization}
+          onClick={() => onApplyOrganization?.(organization)}
+          disabled={isBusy || !onApplyOrganization || !hasChanges}
           className="inline-flex h-8 items-center gap-2 self-end rounded-md border border-line bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Check aria-hidden="true" className="h-4 w-4" />

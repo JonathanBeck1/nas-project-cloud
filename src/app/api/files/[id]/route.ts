@@ -98,12 +98,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (!project) {
         return NextResponse.json({ error: "project not found" }, { status: 404 });
       }
-      moved = await storage.moveToProject({
-        currentRelativePath: file.storagePath,
-        projectSlug: project.slug,
-        filename: requestedName ?? file.name
-      });
-      update.storagePath = moved.relativePath;
+      // Already inside the project's folder: moving would flatten subfolders and collide with itself (name-2).
+      if (!file.storagePath.startsWith(`Projects/${project.slug}/`)) {
+        moved = await storage.moveToProject({
+          currentRelativePath: file.storagePath,
+          projectSlug: project.slug,
+          filename: requestedName ?? file.name
+        });
+        update.storagePath = moved.relativePath;
+      }
     } else if (file.projectId) {
       // Leaving a project moves the bytes out of Projects/<slug>/ too, so the folder on disk keeps matching the app.
       moved = await storage.moveToInbox({

@@ -433,12 +433,16 @@ async function moveIntoDirectory(input: {
   directory: string;
   filename: string;
 }): Promise<{ absolutePath: string; relativePath: string }> {
+  const filename = sanitizeFilename(input.filename);
+  // The file is already there; linking it onto itself would read as a collision and allocate name-2.
+  if (path.resolve(input.directory, filename) === path.resolve(input.from)) {
+    return {
+      absolutePath: input.from,
+      relativePath: path.relative(input.storageRoot, input.from).split(path.sep).join("/")
+    };
+  }
   await fs.mkdir(input.directory, { recursive: true });
-  const absolutePath = await linkIntoAvailablePath(
-    input.directory,
-    sanitizeFilename(input.filename),
-    input.from
-  );
+  const absolutePath = await linkIntoAvailablePath(input.directory, filename, input.from);
   return {
     absolutePath,
     relativePath: path.relative(input.storageRoot, absolutePath).split(path.sep).join("/")
