@@ -52,6 +52,11 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   variable per row, so the workspace, projects page, `GET /api/files`, and
   project ZIP export all failed with "too many SQL variables" beyond
   SQLite's limit. Tags and previews are now fetched with a single parameter.
+- **Moves across datasets work on SMB-preset datasets.** The cross-dataset
+  fallback copied with `fs.copyFile`, which then tries to `chmod` the copy.
+  Datasets with restricted NFSv4 ACLs, the TrueNAS SMB preset, refuse that
+  with `EPERM`, so uploads and moves into a child dataset failed. The copy is
+  now a plain stream copy that takes the destination folder's permissions.
 - **Moves work across filesystems.** Move, rename, archive, restore, and
   upload completion all hard-link the file into place, which fails with
   `EXDEV` when `Projects/` or `Archive/` is a child ZFS dataset. They now
@@ -224,6 +229,11 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   unlimited and each one costs a scrypt. A share now allows 10 attempts per
   15 minutes and then answers `429` with `Retry-After`. Requests without a
   password do not count.
+- **A move across datasets no longer copies a symlink that replaced the
+  file.** If a file had been swapped for a symlink in the files dataset,
+  moving it to a child dataset copied whatever the link pointed to, such as
+  the app database, into a folder readable over SMB. The source is now
+  opened with `O_NOFOLLOW` and must be a regular file.
 - **`maxDownloads` cannot be overrun.** The cap was checked, then the file
   was prepared, then the counter was incremented unconditionally, so
   simultaneous requests could all take the last download. The increment is
