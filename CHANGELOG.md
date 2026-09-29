@@ -7,6 +7,17 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Unreleased
 
+## [0.4.0] - 2026-09-28
+
+The hardening release. An external audit of 0.3.1 and a follow-up review
+found data-safety bugs in uploads, moves and exports, several ways a
+symlink planted in the files dataset could make the app read, overwrite or
+delete files outside it, and unbounded work that anonymous requests could
+trigger. This release fixes them, adds resumable downloads and in-image
+reindexing, and makes previews appear for video and PDF files. It is a
+minor release because `GET /api/files` is now paginated and chunks over
+32 MiB are rejected; see the migration notes before upgrading.
+
 ### Added
 
 - **A security policy and a code of conduct.** `SECURITY.md` explains how to
@@ -276,6 +287,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Passwords keep working.** v0.3.1 hashes verify as before and are
   upgraded on each account's next successful sign-in. That sign-in and
   every later one needs about 128 MiB for a fraction of a second.
+- **Rolling back needs your snapshot.** After the first sign-in on 0.4.0,
+  the stored password hash uses a format 0.3.x cannot read, so going back
+  to a 0.3.x image would lock you out. Take the stopped-app `appdata`
+  snapshot before upgrading and restore it if you ever roll back.
 - **`GET /api/files` is paginated.** Third-party clients must follow
   `nextCursor`; without it they now see only the first 100 files.
 - **Chunks over 32 MiB are rejected.** The web client sends 8 MiB.

@@ -1,6 +1,6 @@
 services:
   nas-project-cloud:
-    # :latest is rebuilt on every push to main. Pin a release tag (for example :0.3.1) for a repeatable install.
+    # :latest is rebuilt on every push to main. Pin a release tag (for example :0.4.0) for a repeatable install.
     image: ghcr.io/jonathanbeck1/nas-project-cloud:latest
     container_name: nas-project-cloud
     restart: unless-stopped
