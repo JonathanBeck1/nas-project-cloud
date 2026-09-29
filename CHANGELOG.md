@@ -191,6 +191,14 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   read, including the app database. Every read path now resolves the real
   path and re-checks containment; a symlink that stays inside the root still
   works. The indexer already ignored symlinks and now has a test for it.
+- **Writes no longer follow symlinks planted in the files dataset.** The
+  health probe wrote a fixed file at the storage root every 30 seconds, and
+  chunk uploads and preview thumbnails wrote to predictable paths under
+  `.uploads/` and `.previews/`. A symlink placed at any of those, for example
+  over SMB, made the app overwrite whatever it pointed to, including its own
+  database. The probe now uses a unique name opened exclusively, chunks are
+  opened with `O_NOFOLLOW`, and thumbnails are written to a fresh file and
+  renamed into place.
 - **Only one owner can be created.** Setup checked for an existing user,
   then hashed the password, then inserted, so two simultaneous requests
   could both become owner. The insert now only succeeds into an empty users
