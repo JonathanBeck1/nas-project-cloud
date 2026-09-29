@@ -129,4 +129,75 @@ describe("share download limits", () => {
     expect(response.status).toBe(200);
     await response.text();
   });
+
+  describe("request bodies", () => {
+    function hugeBody() {
+      const chunk = new Uint8Array(1024 * 1024);
+      let pulls = 0;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          pulls += 1;
+          if (pulls > 256) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(chunk);
+        }
+      });
+      return { stream, pulls: () => pulls };
+    }
+    const postShare = (token: string, body: BodyInit, contentType: string) =>
+      new Request(`http://localhost/api/shares/${token}/download`, {
+        method: "POST",
+        headers: { "content-type": contentType },
+        body,
+        duplex: "half"
+      } as RequestInit);
+
+    it("does not read the body at all for an unknown token", async () => {
+      const { POST } = await import("@/app/api/shares/[token]/download/route");
+      const body = hugeBody();
+
+      const response = await POST(postShare("no-such-token", body.stream, "multipart/form-data; boundary=x"), {
+        params: Promise.resolve({ token: "no-such-token" })
+      });
+
+      expect(response.status).toBe(404);
+      expect(body.pulls()).toBeLessThan(2);
+    });
+
+    it("caps the password body on a protected share", async () => {
+      const { POST } = await import("@/app/api/shares/[token]/download/route");
+      shareFor({ passwordHash: "scrypt:salt:hash" });
+      const body = hugeBody();
+
+      const response = await POST(postShare("share-token", body.stream, "application/x-www-form-urlencoded"), context);
+
+      expect(response.status).toBe(413);
+      expect(body.pulls()).toBeLessThan(3);
+    });
+
+    it("accepts the password from the share page's urlencoded form", async () => {
+      const { POST } = await import("@/app/api/shares/[token]/download/route");
+      shareFor({ passwordHash: "scrypt:salt:hash" });
+
+      const response = await POST(
+        postShare("share-token", "password=correct+horse", "application/x-www-form-urlencoded"),
+        context
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.text()).resolves.toBe("manual");
+    });
+
+    it("no longer parses multipart bodies", async () => {
+      const { POST } = await import("@/app/api/shares/[token]/download/route");
+      shareFor({ passwordHash: "scrypt:salt:hash" });
+      const multipart = '--x\r\nContent-Disposition: form-data; name="password"\r\n\r\ncorrect horse\r\n--x--\r\n';
+
+      const response = await POST(postShare("share-token", multipart, "multipart/form-data; boundary=x"), context);
+
+      expect(response.status).toBe(401);
+    });
+  });
 });
