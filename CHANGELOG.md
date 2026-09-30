@@ -26,6 +26,15 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   Print's png blocks, and Snapmaker Luban's data URI. The largest image is
   used, and only the first 8 MiB of the file is read. QOI thumbnails and
   the raw pixel formats some printers use are skipped.
+- **Daily database copies.** Tags, shares, users and devices exist only in
+  SQLite, and there was no way to back it up while the app ran. Hourly
+  maintenance (the in-process scheduler, or
+  `POST /api/maintenance/upload-cleanup` from cron) now writes a consistent
+  copy once a day to `backups/nas-cloud-YYYY-MM-DD.sqlite` next to the
+  database and keeps the newest seven. The TrueNAS guide now recommends one
+  recursive snapshot task on the parent dataset instead of separate
+  snapshots of `files` and `appdata`, which aren't taken at the same
+  moment, and has restore steps.
 
 ### Changed
 
