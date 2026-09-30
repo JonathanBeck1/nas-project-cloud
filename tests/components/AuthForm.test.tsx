@@ -17,6 +17,7 @@ describe("AuthForm", () => {
 
     render(<AuthForm mode="setup" endpoint="/api/auth/setup" onSuccess={onSuccess} />);
 
+    await user.type(screen.getByLabelText("Setup code"), "ABCD-EFGH-JKMN");
     await user.type(screen.getByLabelText("Email"), "owner@example.local");
     await user.type(screen.getByLabelText("Name"), "Owner");
     await user.type(screen.getByLabelText("Password"), "long-enough-password");
@@ -32,10 +33,23 @@ describe("AuthForm", () => {
         body: JSON.stringify({
           email: "owner@example.local",
           name: "Owner",
+          setupCode: "ABCD-EFGH-JKMN",
           password: "long-enough-password",
           deviceName: "Mac Studio"
         })
       })
     );
+  });
+
+  it("tells the owner where the setup code is", () => {
+    render(<AuthForm mode="setup" endpoint="/api/auth/setup" />);
+
+    expect(screen.getByLabelText("Setup code")).toHaveAccessibleDescription(/app's log/);
+  });
+
+  it("does not ask for a setup code when signing in", () => {
+    render(<AuthForm mode="login" endpoint="/api/auth/login" />);
+
+    expect(screen.queryByLabelText("Setup code")).toBeNull();
   });
 });

@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { createSetupCode } from "@/lib/server/auth/setupCode";
 import type { AppDatabase } from "@/lib/server/db";
 import type {
   Category,
@@ -1349,8 +1350,24 @@ export function createMetadataRepository(db: AppDatabase) {
       return userWithoutPasswordHash(user);
     },
 
-    // Inserts only into an empty users table, in one statement, so concurrent setups cannot both win.
-    createFirstOwner(input: Omit<CreateUserInput, "role">): User | null {
+    getOrCreateSetupCode(): string {
+      return db.transaction(() => {
+        const existing = db.prepare<[], { code: string }>("select code from setup_codes limit 1").get();
+        if (existing) {
+          return existing.code;
+        }
+        const code = createSetupCode();
+        db.prepare("insert into setup_codes (code, created_at) values (?, ?)").run(code, new Date().toISOString());
+        return code;
+      })();
+    },
+
+    hasSetupCode(code: string): boolean {
+      return db.prepare("select 1 from setup_codes where code = ?").get(code) !== undefined;
+    },
+
+    // Inserts only into an empty users table and only with the printed setup code, in one statement, so concurrent setups cannot both win.
+    createFirstOwner(input: Omit<CreateUserInput, "role"> & { setupCode: string }): User | null {
       const now = new Date().toISOString();
       const user = {
         id: `user_${nanoid(12)}`,
@@ -1362,13 +1379,20 @@ export function createMetadataRepository(db: AppDatabase) {
         updatedAt: now
       };
 
-      const result = db.prepare(`
-        insert into users (id, email, name, password_hash, role, created_at, updated_at)
-        select @id, @email, @name, @passwordHash, @role, @createdAt, @updatedAt
-        where not exists (select 1 from users)
-      `).run(user);
+      const created = db.transaction(() => {
+        const result = db.prepare(`
+          insert into users (id, email, name, password_hash, role, created_at, updated_at)
+          select @id, @email, @name, @passwordHash, @role, @createdAt, @updatedAt
+          where not exists (select 1 from users)
+            and exists (select 1 from setup_codes where code = @setupCode)
+        `).run({ ...user, setupCode: input.setupCode });
+        if (result.changes === 1) {
+          db.prepare("delete from setup_codes").run();
+        }
+        return result.changes === 1;
+      })();
 
-      return result.changes === 1 ? userWithoutPasswordHash(user) : null;
+      return created ? userWithoutPasswordHash(user) : null;
     },
 
     updateUserPasswordHash(userId: string, passwordHash: string): void {

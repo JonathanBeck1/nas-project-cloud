@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   config: { previewScheduler: "on" },
   requeueStalePreviewJobs: vi.fn(() => ({ requeued: 0, failed: 0 })),
   purgeExpiredAuthState: vi.fn(() => ({ sessions: 0, pairingCodes: 0, rateLimitEvents: 0 })),
+  countUsers: vi.fn(() => 1),
+  getOrCreateSetupCode: vi.fn(() => "ABCDEFGHJKMN"),
   startPreviewScheduler: vi.fn(),
   cleanupStaleUploads: vi.fn(async () => undefined)
 }));
@@ -13,7 +15,9 @@ vi.mock("@/lib/server/db", () => ({ getDatabase: vi.fn(() => ({})) }));
 vi.mock("@/lib/server/metadata", () => ({
   createMetadataRepository: () => ({
     requeueStalePreviewJobs: mocks.requeueStalePreviewJobs,
-    purgeExpiredAuthState: mocks.purgeExpiredAuthState
+    purgeExpiredAuthState: mocks.purgeExpiredAuthState,
+    countUsers: mocks.countUsers,
+    getOrCreateSetupCode: mocks.getOrCreateSetupCode
   })
 }));
 vi.mock("@/lib/server/previews/scheduler", () => ({ startPreviewScheduler: mocks.startPreviewScheduler }));
@@ -47,5 +51,22 @@ describe("node instrumentation", () => {
     expect(mocks.requeueStalePreviewJobs).toHaveBeenCalledTimes(1);
     expect(mocks.purgeExpiredAuthState).toHaveBeenCalledTimes(1);
     expect(mocks.startPreviewScheduler).not.toHaveBeenCalled();
+  });
+
+  it("prints the setup code while no owner exists", async () => {
+    mocks.countUsers.mockReturnValueOnce(0);
+
+    await import("@/instrumentation-node");
+
+    expect(console.log).toHaveBeenCalledWith(
+      "[setup] No owner yet. Enter this setup code on the setup page: ABCD-EFGH-JKMN"
+    );
+  });
+
+  it("prints no setup code once an owner exists", async () => {
+    await import("@/instrumentation-node");
+
+    expect(mocks.getOrCreateSetupCode).not.toHaveBeenCalled();
+    expect(console.log).not.toHaveBeenCalledWith(expect.stringContaining("[setup]"));
   });
 });

@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   db: {},
   repo: {
     countUsers: vi.fn(),
+    hasSetupCode: vi.fn(),
     createFirstOwner: vi.fn(),
     getUserByEmail: vi.fn(),
     createDevice: vi.fn(),
@@ -39,6 +40,7 @@ describe("auth API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.repo.countUsers.mockReturnValue(0);
+    mocks.repo.hasSetupCode.mockImplementation((code: string) => code === "ABCDEFGHJKMN");
     mocks.hashPassword.mockResolvedValue("password-hash");
     mocks.verifyPassword.mockResolvedValue(true);
     mocks.repo.createFirstOwner.mockReturnValue({ id: "user_1", email: "owner@example.local", name: "Owner", role: "owner" });
@@ -53,7 +55,8 @@ describe("auth API", () => {
         email: "owner@example.local",
         name: "Owner",
         password: "long-enough-password",
-        deviceName: "Mac Studio"
+        deviceName: "Mac Studio",
+        setupCode: "abcd-efgh-jkmn"
       })
     );
 
@@ -63,11 +66,28 @@ describe("auth API", () => {
       user: expect.objectContaining({ id: "user_1" })
     });
     expect(mocks.hashPassword).toHaveBeenCalledWith("long-enough-password");
+    expect(mocks.repo.createFirstOwner).toHaveBeenCalledWith(expect.objectContaining({ setupCode: "ABCDEFGHJKMN" }));
     expect(mocks.repo.createDevice).toHaveBeenCalledWith({
       userId: "user_1",
       name: "Mac Studio",
       kind: "browser"
     });
+  });
+
+  it("refuses a wrong setup code without spending a password hash on it", async () => {
+    const { POST } = await import("@/app/api/auth/setup/route");
+    const response = await POST(
+      jsonRequest("http://localhost/api/auth/setup", {
+        email: "owner@example.local",
+        name: "Owner",
+        password: "long-enough-password",
+        setupCode: "ABCD-EFGH-JKMP"
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.hashPassword).not.toHaveBeenCalled();
+    expect(mocks.repo.createFirstOwner).not.toHaveBeenCalled();
   });
 
   it("refuses setup after an owner exists", async () => {
