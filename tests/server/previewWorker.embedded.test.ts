@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { processPreviewJob } from "@/lib/server/previews/worker";
 import { createStorageService } from "@/lib/server/storage";
 import type { PreviewJob } from "@/lib/shared/types";
+import { gcode, thumbnailBlock } from "../helpers/gcode";
 import { png, relsXml, writeZip } from "../helpers/threeMf";
 
 let root: string;
@@ -66,5 +67,35 @@ describe("3MF previews", () => {
     const recorded = repo.upsertFilePreview.mock.calls[0][0];
     expect(recorded).toMatchObject({ status: "failed" });
     expect(recorded.error).not.toContain(root);
+  });
+});
+
+describe("G-code previews", () => {
+  const gcodeJob = (storagePath: string) =>
+    ({
+      file: { id: "file_print", family: "cad", extension: "gcode", storagePath },
+      preview: { fileId: "file_print", kind: "cad", status: "pending" }
+    }) as PreviewJob;
+
+  it("turns the slicer thumbnail into a ready webp preview", async () => {
+    const storagePath = "Projects/shed/Inbox/bracket.gcode";
+    fs.writeFileSync(path.join(root, storagePath), gcode(thumbnailBlock(await png(400, 300, "#3030d0"), 400, 300)));
+    const repo = { upsertFilePreview: vi.fn() };
+
+    await processPreviewJob({ job: gcodeJob(storagePath), repo, storage: createStorageService(root) });
+
+    expect(repo.upsertFilePreview).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: "file_print", kind: "cad", status: "ready", width: 384, height: 288 })
+    );
+  });
+
+  it("records G-code without a thumbnail as skipped", async () => {
+    const storagePath = "Projects/shed/Inbox/plain.gcode";
+    fs.writeFileSync(path.join(root, storagePath), gcode());
+    const repo = { upsertFilePreview: vi.fn() };
+
+    await processPreviewJob({ job: gcodeJob(storagePath), repo, storage: createStorageService(root) });
+
+    expect(repo.upsertFilePreview).toHaveBeenCalledWith(expect.objectContaining({ status: "skipped", error: "no embedded thumbnail" }));
   });
 });

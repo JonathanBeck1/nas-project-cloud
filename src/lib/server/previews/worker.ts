@@ -9,12 +9,19 @@ import { createStorageService } from "@/lib/server/storage";
 import type { FilePreview, PreviewJob } from "@/lib/shared/types";
 import { probeFfmpeg } from "./ffmpeg";
 import { readEmbeddedThumbnail } from "./embeddedThumbnail";
+import { readGcodeThumbnail } from "./gcodeThumbnail";
 import { renderPdfFirstPage } from "./pdf";
 import { probePoppler } from "./poppler";
 import { generateVideoPoster } from "./video";
 
 // One libvips thread keeps peak memory predictable under the container's memory limit.
 sharp.concurrency(1);
+
+// CAD formats whose files already contain a rendered thumbnail, by extension.
+const embeddedThumbnailReaders = new Map<string, (absolutePath: string) => Promise<Buffer | null>>([
+  ["3mf", readEmbeddedThumbnail],
+  ["gcode", readGcodeThumbnail]
+]);
 
 type PreviewRepo = {
   listPendingPreviewJobs?: (limit?: number) => PreviewJob[];
@@ -57,8 +64,8 @@ export type PreviewWorkerResult = {
 
 export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJobInput): Promise<void> {
   const isPdf = job.file.family === "document" && job.file.extension.toLowerCase() === "pdf";
-  const isThreeMf = job.file.family === "cad" && job.file.extension.toLowerCase() === "3mf";
-  const isSupported = job.file.family === "image" || job.file.family === "video" || isPdf || isThreeMf;
+  const readThumbnail = job.file.family === "cad" ? embeddedThumbnailReaders.get(job.file.extension.toLowerCase()) : undefined;
+  const isSupported = job.file.family === "image" || job.file.family === "video" || isPdf || Boolean(readThumbnail);
 
   if (!isSupported) {
     repo.upsertFilePreview({
@@ -112,8 +119,8 @@ export async function processPreviewJob({ job, repo, storage }: ProcessPreviewJo
     return;
   }
 
-  if (isThreeMf) {
-    await generateEmbeddedThumbnail({ job, repo, storage, absolutePath });
+  if (readThumbnail) {
+    await generateEmbeddedThumbnail({ job, repo, storage, absolutePath, readThumbnail });
     return;
   }
 
@@ -247,14 +254,15 @@ async function generateEmbeddedThumbnail({
   job,
   repo,
   storage,
-  absolutePath
-}: ProcessPreviewJobInput & { absolutePath: string }) {
+  absolutePath,
+  readThumbnail
+}: ProcessPreviewJobInput & { absolutePath: string; readThumbnail: (absolutePath: string) => Promise<Buffer | null> }) {
   const previewPath = path.posix.join(".previews", "images", `${job.file.id}.webp`);
   const absolutePreviewPath = storage.absolutePathFor(previewPath);
   await fs.mkdir(path.dirname(absolutePreviewPath), { recursive: true });
 
   try {
-    const thumbnail = await readEmbeddedThumbnail(absolutePath);
+    const thumbnail = await readThumbnail(absolutePath);
     if (!thumbnail) {
       repo.upsertFilePreview({ fileId: job.file.id, kind: job.preview.kind, status: "skipped", error: "no embedded thumbnail" });
       return;
@@ -282,7 +290,7 @@ async function generateEmbeddedThumbnail({
       fileId: job.file.id,
       kind: job.preview.kind,
       status: "failed",
-      error: `could not make a preview from this 3MF: ${error instanceof Error ? error.message : "unknown error"}`
+      error: `could not make a preview from this ${job.file.extension.toUpperCase()}: ${error instanceof Error ? error.message : "unknown error"}`
     });
   }
 }

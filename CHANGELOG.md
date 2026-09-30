@@ -20,6 +20,12 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   Cura locations, and turns it into the same 384 px preview as a photo. A
   3MF without one is recorded as skipped. Reindexing queues existing 3MF
   files too.
+- **G-code thumbnails.** G-code files show the preview image the slicer
+  wrote into their header: the standard thumbnail blocks from PrusaSlicer,
+  SuperSlicer, OrcaSlicer, Bambu Studio and Cura (PNG or JPEG), Creality
+  Print's png blocks, and Snapmaker Luban's data URI. The largest image is
+  used, and only the first 8 MiB of the file is read. QOI thumbnails and
+  the raw pixel formats some printers use are skipped.
 
 ### Changed
 

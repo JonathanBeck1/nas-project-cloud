@@ -33,13 +33,13 @@ const FAMILIES: Record<FileFamily, Set<string>> = {
 };
 
 // The kind a file's preview is queued and stored under, or null when nothing can preview it.
-// Among documents only PDFs have a renderer, and among CAD files only 3MF carries an embedded thumbnail.
+// Among documents only PDFs have a renderer, and among CAD files only 3MF and G-code carry an embedded thumbnail.
 export function previewKindForFile(file: { family: FileFamily; extension: string }): FilePreviewKind | null {
   if (file.family === "image" || file.family === "video") {
     return file.family;
   }
   const extension = file.extension.toLowerCase();
-  if (file.family === "cad" && extension === "3mf") {
+  if (file.family === "cad" && (extension === "3mf" || extension === "gcode")) {
     return "cad";
   }
   return file.family === "document" && extension === "pdf" ? "document" : null;
