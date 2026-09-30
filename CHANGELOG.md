@@ -27,6 +27,13 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   used, and only the first 8 MiB of the file is read. QOI thumbnails and
   the raw pixel formats some printers use are skipped.
 
+### Documentation
+
+- **What the app can access.** SECURITY.md now lists what the container
+  can and can't reach on a TrueNAS install, the worst case if an image
+  were compromised, how to limit it, and how to read the provenance and
+  SBOM attached to each image. The README links to it.
+
 ### Changed
 
 - **`:latest` now means the newest release.** It was rebuilt on every push
