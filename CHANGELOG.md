@@ -27,6 +27,15 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   used, and only the first 8 MiB of the file is read. QOI thumbnails and
   the raw pixel formats some printers use are skipped.
 
+### Documentation
+
+- **HTTPS guide.** `docs/deployment/reverse-proxy.md` covers Tailscale
+  Serve, Caddy, Nginx, Nginx Proxy Manager, Traefik and Cloudflare Tunnel,
+  with the Caddy and Nginx configs tested against the app. It also corrects
+  the old advice to raise proxy body limits to 2 GiB: no request is larger
+  than 64 MiB, and stock nginx's 1 MiB limit is what actually breaks
+  uploads.
+
 ### Changed
 
 - **`:latest` now means the newest release.** It was rebuilt on every push
