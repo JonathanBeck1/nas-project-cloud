@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   requeueStalePreviewJobs: vi.fn(() => ({ requeued: 0, failed: 0 })),
   purgeExpiredAuthState: vi.fn(() => ({ sessions: 0, pairingCodes: 0, rateLimitEvents: 0 })),
   startPreviewScheduler: vi.fn(),
-  cleanupStaleUploads: vi.fn(async () => undefined)
+  cleanupStaleUploads: vi.fn(async () => undefined),
+  sweepOrphanPreviews: vi.fn(async () => ({ removed: 0 }))
 }));
 
 vi.mock("@/lib/server/config", () => ({ getAppConfig: () => mocks.config }));
@@ -18,6 +19,7 @@ vi.mock("@/lib/server/metadata", () => ({
 }));
 vi.mock("@/lib/server/previews/scheduler", () => ({ startPreviewScheduler: mocks.startPreviewScheduler }));
 vi.mock("@/lib/server/uploadCleanup", () => ({ cleanupStaleUploads: mocks.cleanupStaleUploads }));
+vi.mock("@/lib/server/previews/cleanup", () => ({ sweepOrphanPreviews: mocks.sweepOrphanPreviews }));
 
 describe("node instrumentation", () => {
   beforeEach(() => {
@@ -37,6 +39,7 @@ describe("node instrumentation", () => {
     await runHourlyMaintenance();
     expect(mocks.cleanupStaleUploads).toHaveBeenCalledWith({ olderThan: expect.any(Date) });
     expect(mocks.purgeExpiredAuthState).toHaveBeenCalledTimes(2);
+    expect(mocks.sweepOrphanPreviews).toHaveBeenCalledTimes(1);
   });
 
   it("still requeues interrupted previews when the scheduler is off", async () => {

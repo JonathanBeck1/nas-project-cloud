@@ -27,6 +27,16 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   used, and only the first 8 MiB of the file is read. QOI thumbnails and
   the raw pixel formats some printers use are skipped.
 
+### Fixed
+
+- **Permanently deleting a file now deletes its thumbnail.** The 384 px
+  preview stayed in `.previews/images/`, readable over SMB, in snapshots
+  and in replicas, for every image, video, PDF, 3MF and G-code file ever
+  deleted. Hourly maintenance (the in-process scheduler, or
+  `POST /api/maintenance/upload-cleanup` from cron) now also removes
+  thumbnails whose file is gone, including ones left by earlier versions,
+  plus temporary files a crashed preview job left behind.
+
 ### Changed
 
 - **`:latest` now means the newest release.** It was rebuilt on every push

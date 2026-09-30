@@ -1,6 +1,7 @@
 import { getAppConfig } from "@/lib/server/config";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
+import { sweepOrphanPreviews } from "@/lib/server/previews/cleanup";
 import { startPreviewScheduler } from "@/lib/server/previews/scheduler";
 import { cleanupStaleUploads } from "@/lib/server/uploadCleanup";
 
@@ -18,6 +19,7 @@ if (getAppConfig().previewScheduler === "on") {
     runHourlyMaintenance: async () => {
       await cleanupStaleUploads({ olderThan: new Date(Date.now() - STALE_UPLOAD_MS) });
       repo.purgeExpiredAuthState();
+      await sweepOrphanPreviews();
     }
   });
   console.log("[instrumentation] preview scheduler started");
