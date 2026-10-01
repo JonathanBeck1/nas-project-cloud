@@ -48,6 +48,25 @@ describe("CI supply chain", () => {
     expect(publish).toMatch(/^\s+sbom: true$/m);
   });
 
+  it("signs build provenance for the pushed image, with the signing permissions only on the publish job", () => {
+    const publish = read("workflows", "docker-publish.yml");
+    const topLevel = publish.slice(0, publish.indexOf("\njobs:"));
+    const publishJob = publish.slice(publish.indexOf("\n  publish:"));
+    const verifyJob = publish.slice(publish.indexOf("\n  verify:"), publish.indexOf("\n  publish:"));
+
+    expect(publishJob).toMatch(/uses: actions\/attest-build-provenance@[0-9a-f]{40} # v\d+\.\d+\.\d+$/m);
+    expect(publishJob).toMatch(/^\s+id: build$/m);
+    expect(publishJob).toContain("subject-digest: ${{ steps.build.outputs.digest }}");
+    expect(publishJob).toContain("push-to-registry: true");
+    // Registry references must be lowercase, and the repository owner's name isn't.
+    expect(publishJob).toContain("${GITHUB_REPOSITORY,,}");
+    for (const permission of ["id-token: write", "attestations: write"]) {
+      expect(publishJob).toContain(permission);
+      expect(verifyJob).not.toContain(permission);
+      expect(topLevel).not.toContain(permission);
+    }
+  });
+
   it("has Dependabot watching npm and the pinned actions", () => {
     const dependabot = read("dependabot.yml");
 
