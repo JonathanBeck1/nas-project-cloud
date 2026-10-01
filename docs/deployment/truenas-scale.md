@@ -470,7 +470,7 @@ Proxy to the app at:
 http://<truenas-ip>:3000
 ```
 
-Set proxy upload limits and buffering with the 2 GiB application limit in mind. For Nginx, raise `client_max_body_size` and review request buffering. For Caddy or Traefik, check the equivalent body-size and timeout settings.
+Proxy configs for Caddy, Nginx, Nginx Proxy Manager, Traefik, Cloudflare Tunnel and Tailscale Serve are in [reverse-proxy.md](./reverse-proxy.md). No single request is larger than 64 MiB (larger files are sent in 8 MiB chunks), so a 100 MB body limit and a read timeout of a few minutes are enough; the 2 GiB application limit applies to whole files.
 
 When the app is served over HTTPS (TLS terminated at the proxy), set `NAS_CLOUD_SECURE_COOKIES=true` so session and CSRF cookies are marked `Secure`. Leave it unset (the default) for direct LAN access over plain `http://<nas-ip>:3000` — browsers drop `Secure` cookies over HTTP, which silently blocks login.
 

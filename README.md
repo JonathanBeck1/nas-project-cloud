@@ -107,7 +107,7 @@ The full guide lives at [`docs/deployment/truenas-scale.md`](./docs/deployment/t
 
 4. Wait for `/api/health` to turn green. Browse to `http://<truenas>:3000` and create the owner. The setup page asks for a code the app prints to its log at startup: in TrueNAS, open Apps, select the app, and use View Logs in the Workloads widget.
 
-For a reverse-proxied deployment, raise the proxy's body-size limit to at least 2 GiB and disable buffering on the upload paths.
+For HTTPS, put a reverse proxy in front: [`docs/deployment/reverse-proxy.md`](./docs/deployment/reverse-proxy.md) has tested Caddy and nginx configs plus Tailscale Serve, Nginx Proxy Manager, Traefik and Cloudflare Tunnel notes. No request is larger than 64 MiB, so a 100 MB proxy body limit is enough.
 
 ## Configuration
 
