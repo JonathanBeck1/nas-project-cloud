@@ -72,6 +72,11 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- **Signed build provenance.** Published images now carry a build
+  provenance attestation signed through Sigstore with the publish
+  workflow's GitHub identity, so `gh attestation verify` can confirm an
+  image was built by this repository's workflow from a given commit. The
+  SBOM and BuildKit provenance that images already carried are unsigned.
 - **Creating the owner needs a setup code.** On a fresh install, whoever
   reached `/setup` first became the owner, including another device on the
   LAN or a web page the owner happened to visit that posted a form to the
