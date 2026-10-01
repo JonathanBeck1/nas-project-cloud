@@ -834,6 +834,10 @@ export function createMetadataRepository(db: AppDatabase) {
       return row ? projectFromRow(row) : null;
     },
 
+    listFileIds(): Set<string> {
+      return new Set(db.prepare<[], { id: string }>("select id from files").all().map((row) => row.id));
+    },
+
     deleteFile(id: string): boolean {
       const result = db.prepare<[string]>("delete from files where id = ?").run(id);
       return result.changes > 0;

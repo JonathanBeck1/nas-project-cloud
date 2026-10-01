@@ -1,3 +1,4 @@
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -24,6 +25,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   } catch {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
+  // The thumbnail is a copy of the file's content. The hourly sweep retries it if this fails.
+  await storage.deleteFile(path.posix.join(".previews", "images", `${file.id}.webp`)).catch(() => undefined);
 
   try {
     const deleted = repo.deleteFile(id);
