@@ -45,6 +45,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the old advice to raise proxy body limits to 2 GiB: no request is larger
   than 64 MiB, and stock nginx's 1 MiB limit is what actually breaks
   uploads.
+- **What the app can access.** SECURITY.md now lists what the container
+  can and can't reach on a TrueNAS install, the worst case if an image
+  were compromised, how to limit it, and how to read the provenance and
+  SBOM attached to each image. The README links to it.
 
 ### Changed
 

@@ -109,6 +109,10 @@ The full guide lives at [`docs/deployment/truenas-scale.md`](./docs/deployment/t
 
 For HTTPS, put a reverse proxy in front: [`docs/deployment/reverse-proxy.md`](./docs/deployment/reverse-proxy.md) has tested Caddy and nginx configs plus Tailscale Serve, Nginx Proxy Manager, Traefik and Cloudflare Tunnel notes. No request is larger than 64 MiB, so a 100 MB proxy body limit is enough.
 
+## Security
+
+The container runs as UID 1001 with no Linux capabilities and sees only its two datasets: no Docker socket, no TrueNAS API, and no outbound requests of its own. [SECURITY.md](./SECURITY.md#what-the-app-can-access) spells out what it can reach, the worst case and how to limit it, and how to report a vulnerability privately.
+
 ## Configuration
 
 All runtime configuration is environment variables. Defaults are sane for local dev.
