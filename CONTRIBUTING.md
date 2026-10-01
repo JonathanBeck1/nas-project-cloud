@@ -12,7 +12,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open <http://localhost:3000>, finish owner setup, and you're in.
+Open <http://localhost:3000> and finish owner setup with the setup code `npm run dev` prints in the terminal, and you're in.
 
 ## Branch and commit conventions
 

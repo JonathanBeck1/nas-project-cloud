@@ -1,3 +1,4 @@
+import { formatSetupCode } from "@/lib/server/auth/setupCode";
 import { getAppConfig } from "@/lib/server/config";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -8,6 +9,9 @@ const STALE_UPLOAD_MS = 24 * 60 * 60 * 1000;
 
 const repo = createMetadataRepository(getDatabase());
 repo.purgeExpiredAuthState();
+if (repo.countUsers() === 0) {
+  console.log(`[setup] No owner yet. Enter this setup code on the setup page: ${formatSetupCode(repo.getOrCreateSetupCode())}`);
+}
 const stale = repo.requeueStalePreviewJobs();
 if (stale.requeued > 0 || stale.failed > 0) {
   console.log(`[instrumentation] previews interrupted by the last shutdown: ${stale.requeued} requeued, ${stale.failed} failed`);

@@ -125,6 +125,11 @@ function migrate(db: AppDatabase) {
       updated_at text not null
     );
 
+    create table if not exists setup_codes (
+      code text primary key,
+      created_at text not null
+    );
+
     create table if not exists devices (
       id text primary key,
       user_id text not null references users(id) on delete cascade,

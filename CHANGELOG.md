@@ -29,6 +29,12 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Documentation
 
+- **HTTPS guide.** `docs/deployment/reverse-proxy.md` covers Tailscale
+  Serve, Caddy, Nginx, Nginx Proxy Manager, Traefik and Cloudflare Tunnel,
+  with the Caddy and Nginx configs tested against the app. It also corrects
+  the old advice to raise proxy body limits to 2 GiB: no request is larger
+  than 64 MiB, and stock nginx's 1 MiB limit is what actually breaks
+  uploads.
 - **What the app can access.** SECURITY.md now lists what the container
   can and can't reach on a TrueNAS install, the worst case if an image
   were compromised, how to limit it, and how to read the provenance and
@@ -45,11 +51,25 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   running, so two quick pushes to `main` can no longer leave `:edge` on the
   older build.
 
+### Security
+
+- **Creating the owner needs a setup code.** On a fresh install, whoever
+  reached `/setup` first became the owner, including another device on the
+  LAN or a web page the owner happened to visit that posted a form to the
+  NAS. The app now prints a setup code to its log at startup while no owner
+  exists, and the setup page asks for it. The code stays the same across
+  restarts until it's used. Installs that already have an owner are
+  unaffected.
+
 ### Migration notes
 
 - **Unreleased builds are on `:edge`.** If you pulled `:latest` to follow
   `main`, switch to `:edge`. If you pulled it for releases, nothing changes,
   though pinning a version is still the safer choice.
+- **Fresh installs: have the app log open.** Owner setup asks for the code
+  printed there (`[setup] No owner yet. Enter this setup code ...`). On
+  TrueNAS, open Apps, select the app, and use View Logs in the Workloads
+  widget.
 
 ## [0.4.0] - 2026-09-28
 
