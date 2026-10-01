@@ -357,10 +357,10 @@ The app exposes two maintenance routes that can be driven from a TrueNAS cron jo
 ```text
 POST /api/maintenance/previews        # process pending preview jobs
 POST /api/maintenance/reindex         # rebuild the file index from the storage tree
-POST /api/maintenance/upload-cleanup  # delete abandoned uploads older than 24h; purge expired sessions, pairing codes, rate-limit rows; remove thumbnails left by deleted files
+POST /api/maintenance/upload-cleanup  # delete abandoned uploads older than 24h; purge expired sessions, pairing codes, rate-limit rows; remove thumbnails left by deleted files; take the daily database copy
 ```
 
-> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process loop that ticks every 60 seconds while there is pending preview work, goes again after one second when a batch of 25 came back full, and idles to every 5 minutes when the queue is empty. The same loop runs the stale-upload cleanup, the purge of expired sessions, pairing codes, and rate-limit rows, and the removal of thumbnails left by deleted files once an hour. The cron approach below still works either way and is the safe choice if you run multiple replicas; with the scheduler off, cron is the only thing that cleans up abandoned uploads.
+> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process loop that ticks every 60 seconds while there is pending preview work, goes again after one second when a batch of 25 came back full, and idles to every 5 minutes when the queue is empty. The same loop runs the stale-upload cleanup, the purge of expired sessions, pairing codes, and rate-limit rows, the removal of thumbnails left by deleted files, and the daily database copy once an hour. The cron approach below still works either way and is the safe choice if you run multiple replicas; with the scheduler off, cron is the only thing that cleans up abandoned uploads.
 
 Both routes accept either:
 
@@ -414,7 +414,7 @@ Tips:
 ## Upgrading
 
 1. Read the release's migration notes in [CHANGELOG.md](../../CHANGELOG.md).
-2. Stop the app and take snapshots of both `files` and `appdata` (see Backups And Snapshots below).
+2. Stop the app and take a recursive snapshot of the parent `nas-project-cloud` dataset (see Backups And Snapshots below).
 3. Change the image tag, for example from `0.3.1` to `0.4.0`, and start the app. Schema changes are applied automatically on first start.
 4. Check `/api/health`, then sign in.
 
@@ -422,29 +422,26 @@ To roll back, stop the app and restore the `appdata` snapshot as well as changin
 
 ## Backups And Snapshots
 
-Snapshot both datasets:
-
-```text
-/mnt/OfficeNAS/nas-project-cloud/files
-/mnt/OfficeNAS/nas-project-cloud/appdata
-```
+Create one periodic snapshot task on the parent dataset with **Recursive** on (Data Protection > Periodic Snapshot Tasks > Add, dataset `<pool>/nas-project-cloud`). A recursive snapshot captures `files` and `appdata` at the same instant, so on a restore the database matches the files it describes. Two separate tasks, one per dataset, never run at quite the same moment. The app can keep running: SQLite in WAL mode recovers from a snapshot the same way it recovers from a power cut.
 
 `appdata` is not disposable. Re-indexing the `files` dataset (`POST /api/maintenance/reindex` on the running container, or `npm run index:storage` from a source checkout with both datasets mounted -- the script itself is not in the Docker image) brings back file records, project membership inferred from `Projects/<slug>/`, and default categories. Tags, custom categories, share links, users, paired devices, and upload sessions exist only in SQLite and are lost without an `appdata` backup.
 
-The app enables SQLite WAL mode. Do not back up only `nas-cloud.sqlite` while the container is running. For the cleanest backup:
+### Daily database copies
 
-1. Stop the app.
-2. Snapshot or copy `files`.
-3. Snapshot or copy the full `appdata` dataset.
-4. Start the app again.
-
-If doing file-level backups, include the full SQLite file set:
+While hourly maintenance runs (the in-process scheduler, or the `upload-cleanup` cron job below), the app writes a consistent copy of its database once a day and keeps the newest seven:
 
 ```text
-/mnt/OfficeNAS/nas-project-cloud/appdata/nas-cloud.sqlite
-/mnt/OfficeNAS/nas-project-cloud/appdata/nas-cloud.sqlite-wal
-/mnt/OfficeNAS/nas-project-cloud/appdata/nas-cloud.sqlite-shm
+/mnt/OfficeNAS/nas-project-cloud/appdata/backups/nas-cloud-YYYY-MM-DD.sqlite
 ```
+
+The date is UTC. These copies cover a bad upgrade or a mistake made in the app, not the loss of the dataset they sit on, so keep snapshotting and replicating `appdata` too. A file-level backup tool (rsync, a Cloud Sync task) should copy the newest file in `backups/` rather than the live `nas-cloud.sqlite`, whose recent changes sit in `nas-cloud.sqlite-wal`.
+
+To restore the database from one:
+
+1. Stop the app.
+2. In `appdata`, move `nas-cloud.sqlite`, `nas-cloud.sqlite-wal` and `nas-cloud.sqlite-shm` aside.
+3. Copy the backup you want to `nas-cloud.sqlite`, and make sure it's owned by UID/GID `1001` (`chown 1001:1001 nas-cloud.sqlite` if you copied it as root). A database the app can't write makes `/api/health` fail.
+4. Start the app. Files uploaded after that backup are still in `files`; `POST /api/maintenance/reindex` adds them back.
 
 ## LAN Access
 

@@ -1,4 +1,5 @@
 import { formatSetupCode } from "@/lib/server/auth/setupCode";
+import { backupDatabase } from "@/lib/server/backup";
 import { getAppConfig } from "@/lib/server/config";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -24,6 +25,7 @@ if (getAppConfig().previewScheduler === "on") {
       await cleanupStaleUploads({ olderThan: new Date(Date.now() - STALE_UPLOAD_MS) });
       repo.purgeExpiredAuthState();
       await sweepOrphanPreviews();
+      await backupDatabase({ db: getDatabase(), dbPath: getAppConfig().dbPath });
     }
   });
   console.log("[instrumentation] preview scheduler started");

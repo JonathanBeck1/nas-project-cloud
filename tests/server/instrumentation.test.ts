@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  config: { previewScheduler: "on" },
+  config: { previewScheduler: "on", dbPath: "/data/nas-cloud.sqlite" },
   requeueStalePreviewJobs: vi.fn(() => ({ requeued: 0, failed: 0 })),
   purgeExpiredAuthState: vi.fn(() => ({ sessions: 0, pairingCodes: 0, rateLimitEvents: 0 })),
   countUsers: vi.fn(() => 1),
   getOrCreateSetupCode: vi.fn(() => "ABCDEFGHJKMN"),
   startPreviewScheduler: vi.fn(),
   cleanupStaleUploads: vi.fn(async () => undefined),
-  sweepOrphanPreviews: vi.fn(async () => ({ removed: 0 }))
+  sweepOrphanPreviews: vi.fn(async () => ({ removed: 0 })),
+  backupDatabase: vi.fn(async () => ({ created: null, removed: 0 }))
 }));
 
 vi.mock("@/lib/server/config", () => ({ getAppConfig: () => mocks.config }));
@@ -24,6 +25,7 @@ vi.mock("@/lib/server/metadata", () => ({
 vi.mock("@/lib/server/previews/scheduler", () => ({ startPreviewScheduler: mocks.startPreviewScheduler }));
 vi.mock("@/lib/server/uploadCleanup", () => ({ cleanupStaleUploads: mocks.cleanupStaleUploads }));
 vi.mock("@/lib/server/previews/cleanup", () => ({ sweepOrphanPreviews: mocks.sweepOrphanPreviews }));
+vi.mock("@/lib/server/backup", () => ({ backupDatabase: mocks.backupDatabase }));
 
 describe("node instrumentation", () => {
   beforeEach(() => {
@@ -44,6 +46,7 @@ describe("node instrumentation", () => {
     expect(mocks.cleanupStaleUploads).toHaveBeenCalledWith({ olderThan: expect.any(Date) });
     expect(mocks.purgeExpiredAuthState).toHaveBeenCalledTimes(2);
     expect(mocks.sweepOrphanPreviews).toHaveBeenCalledTimes(1);
+    expect(mocks.backupDatabase).toHaveBeenCalledWith({ db: {}, dbPath: "/data/nas-cloud.sqlite" });
   });
 
   it("still requeues interrupted previews when the scheduler is off", async () => {
