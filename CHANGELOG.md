@@ -12,8 +12,8 @@ shows large previews, and 3MF and G-code files show the thumbnail the
 slicer saved inside them. It also closes gaps a TrueNAS user would
 otherwise have to take on trust: a fresh install can only be claimed with
 a code from the app's log, the database is copied daily, deleting a file
-deletes its thumbnail, and new guides cover HTTPS and exactly what the
-container can reach. Nothing breaks: upgrading from 0.4.0 needs no manual
+deletes its thumbnail, images carry signed provenance, and new guides
+cover HTTPS and exactly what the container can reach. Nothing breaks: upgrading from 0.4.0 needs no manual
 steps, and rolling back to 0.4.0 works on the same `appdata`.
 
 ### Added
@@ -73,6 +73,11 @@ steps, and rolling back to 0.4.0 works on the same `appdata`.
 
 ### Security
 
+- **Signed build provenance.** Published images now carry a build
+  provenance attestation signed through Sigstore with the publish
+  workflow's GitHub identity, so `gh attestation verify` can confirm an
+  image was built by this repository's workflow from a given commit. The
+  SBOM and BuildKit provenance that images already carried are unsigned.
 - **Creating the owner needs a setup code.** On a fresh install, whoever
   reached `/setup` first became the owner, including another device on the
   LAN or a web page the owner happened to visit that posted a form to the

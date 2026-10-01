@@ -55,10 +55,18 @@ The worst case, a compromised release or a flaw someone exploits, is that everyt
 - Take recursive ZFS snapshots of the parent `nas-project-cloud` dataset. The container can't touch snapshots, so they survive anything the app does.
 - Keep port 3000 off the internet. From outside your network, reach the app through a TLS reverse proxy or a VPN such as Tailscale.
 
-Every published image carries an SPDX software bill of materials and a SLSA provenance record, attached by the GitHub Actions build. The provenance names the Actions run that built the image and the digest of the base image. With Docker installed:
+Every image built from 0.5.0 on, including each `:edge` build, carries a signed build provenance attestation. It's signed through Sigstore with the GitHub Actions identity of this repository's publish workflow, so you can check that an image was built here, by that workflow, from a specific commit:
 
 ```bash
-docker buildx imagetools inspect ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0 --format '{{ json .Provenance.SLSA }}'
+gh attestation verify oci://ghcr.io/jonathanbeck1/nas-project-cloud:0.5.0 --repo JonathanBeck1/nas-project-cloud
 ```
 
-These records aren't signed, so they document the build rather than prove it. The workflow that builds and publishes every image is [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
+Each image also carries an SPDX software bill of materials and BuildKit's own provenance record, which names the Actions run that built it and the digest of the base image. With Docker installed you can read the record:
+
+```bash
+docker buildx imagetools inspect ghcr.io/jonathanbeck1/nas-project-cloud:0.5.0 --format '{{ json .Provenance.SLSA }}'
+```
+
+Those two records aren't signed, and images older than 0.5.0 have only them, not the signed attestation.
+
+The workflow that builds and publishes every image is [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
