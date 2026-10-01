@@ -4,6 +4,7 @@ import { backupDatabase } from "@/lib/server/backup";
 import { getAppConfig } from "@/lib/server/config";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
+import { sweepOrphanPreviews } from "@/lib/server/previews/cleanup";
 import { cleanupStaleUploads } from "@/lib/server/uploadCleanup";
 
 const DEFAULT_STALE_UPLOAD_MS = 24 * 60 * 60 * 1000;
@@ -19,7 +20,8 @@ export async function POST(request: Request) {
   });
   // With the in-process scheduler off, this cron call is the only periodic job there is.
   const purged = createMetadataRepository(getDatabase()).purgeExpiredAuthState();
+  const previews = await sweepOrphanPreviews();
   const backup = await backupDatabase({ db: getDatabase(), dbPath: getAppConfig().dbPath });
 
-  return NextResponse.json({ ...result, purged, backup });
+  return NextResponse.json({ ...result, purged, previews, backup });
 }

@@ -16,13 +16,24 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   return downloadSharedFile(request, params);
 }
 
+export async function HEAD(request: Request, { params }: { params: Promise<{ token: string }> }) {
+  const response = await downloadSharedFile(request, params, { recordDownload: false });
+  await response.body?.cancel();
+  return new Response(null, { status: response.status, headers: response.headers });
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
-  return downloadSharedFile(request, params, true);
+  return downloadSharedFile(request, params, { hasPasswordBody: true });
 }
 
 // The body is read only once the token names a password-protected share, so anonymous callers cannot make
 // the server buffer anything by posting to a made-up token.
-async function downloadSharedFile(request: Request, params: Promise<{ token: string }>, hasPasswordBody = false) {
+async function downloadSharedFile(
+  request: Request,
+  params: Promise<{ token: string }>,
+  options: { hasPasswordBody?: boolean; recordDownload?: boolean } = {}
+) {
+  const { hasPasswordBody = false, recordDownload = true } = options;
   const { token } = await params;
   const repo = createMetadataRepository(getDatabase());
   const share = repo.getFileShareLinkByTokenHash(hashShareToken(token));
@@ -78,7 +89,7 @@ async function downloadSharedFile(request: Request, params: Promise<{ token: str
   }
 
   // A resumed transfer is the same download, so only a response that starts the file uses one up.
-  if (includesFirstByte(response)) {
+  if (recordDownload && includesFirstByte(response)) {
     const recorded = repo.recordFileShareDownload(share.id, {
       userAgent: request.headers.get("user-agent"),
       ipAddress: trustedClientIp(request)

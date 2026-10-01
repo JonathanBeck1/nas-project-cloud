@@ -208,7 +208,15 @@ Then open:
 http://192.168.68.64:3000
 ```
 
-The first page should redirect to `/setup`. Create the owner account, then upload a small image file and confirm that:
+The first page should redirect to `/setup`. It asks for a setup code, which the app prints to its log at startup while no owner exists:
+
+```text
+[setup] No owner yet. Enter this setup code on the setup page: ABCD-EFGH-JKMN
+```
+
+In TrueNAS, open Apps, select the app, and use the View Logs icon in the Workloads widget. On plain Docker, run `docker logs nas-project-cloud 2>&1 | grep setup`. The code stays the same across restarts until the owner is created, and only someone who can read the app's log can use it, so another device on the LAN can't claim the install first.
+
+Create the owner account, then upload a small image file and confirm that:
 
 - it appears in the workspace,
 - it downloads successfully,
@@ -349,10 +357,10 @@ The app exposes two maintenance routes that can be driven from a TrueNAS cron jo
 ```text
 POST /api/maintenance/previews        # process pending preview jobs
 POST /api/maintenance/reindex         # rebuild the file index from the storage tree
-POST /api/maintenance/upload-cleanup  # delete abandoned uploads older than 24h; purge expired sessions, pairing codes, rate-limit rows; take the daily database copy
+POST /api/maintenance/upload-cleanup  # delete abandoned uploads older than 24h; purge expired sessions, pairing codes, rate-limit rows; remove thumbnails left by deleted files; take the daily database copy
 ```
 
-> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process loop that ticks every 60 seconds while there is pending preview work, goes again after one second when a batch of 25 came back full, and idles to every 5 minutes when the queue is empty. The same loop runs the stale-upload cleanup, the purge of expired sessions, pairing codes, and rate-limit rows, and the daily database copy once an hour. The cron approach below still works either way and is the safe choice if you run multiple replicas; with the scheduler off, cron is the only thing that cleans up abandoned uploads.
+> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process loop that ticks every 60 seconds while there is pending preview work, goes again after one second when a batch of 25 came back full, and idles to every 5 minutes when the queue is empty. The same loop runs the stale-upload cleanup, the purge of expired sessions, pairing codes, and rate-limit rows, the removal of thumbnails left by deleted files, and the daily database copy once an hour. The cron approach below still works either way and is the safe choice if you run multiple replicas; with the scheduler off, cron is the only thing that cleans up abandoned uploads.
 
 Both routes accept either:
 
@@ -459,7 +467,7 @@ Proxy to the app at:
 http://<truenas-ip>:3000
 ```
 
-Set proxy upload limits and buffering with the 2 GiB application limit in mind. For Nginx, raise `client_max_body_size` and review request buffering. For Caddy or Traefik, check the equivalent body-size and timeout settings.
+Proxy configs for Caddy, Nginx, Nginx Proxy Manager, Traefik, Cloudflare Tunnel and Tailscale Serve are in [reverse-proxy.md](./reverse-proxy.md). No single request is larger than 64 MiB (larger files are sent in 8 MiB chunks), so a 100 MB body limit and a read timeout of a few minutes are enough; the 2 GiB application limit applies to whole files.
 
 When the app is served over HTTPS (TLS terminated at the proxy), set `NAS_CLOUD_SECURE_COOKIES=true` so session and CSRF cookies are marked `Secure`. Leave it unset (the default) for direct LAN access over plain `http://<nas-ip>:3000` — browsers drop `Secure` cookies over HTTP, which silently blocks login.
 
