@@ -83,12 +83,12 @@ Key settings:
 - File dataset mount: `/mnt/OfficeNAS/nas-project-cloud/files:/mnt/nas-cloud`
 - App metadata mount: `/mnt/OfficeNAS/nas-project-cloud/appdata:/data`
 - Healthcheck: `GET /api/health`
-- Image: the pinned release `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`
+- Image: the pinned release `ghcr.io/jonathanbeck1/nas-project-cloud:0.5.0`
 
 Recommended TrueNAS Install via YAML flow:
 
 1. Build and publish the image first, for example to GitHub Container Registry.
-2. Confirm the compose file points at a release tag such as `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`.
+2. Confirm the compose file points at a release tag such as `ghcr.io/jonathanbeck1/nas-project-cloud:0.5.0`.
 3. Paste the compose YAML into TrueNAS SCALE's custom app YAML flow.
 4. Start the app and wait for the healthcheck to turn healthy.
 5. Browse to `http://<truenas-hostname-or-ip>:3000`.
@@ -107,11 +107,11 @@ nas-project-cloud
 
 ```text
 Repository: ghcr.io/jonathanbeck1/nas-project-cloud
-Tag: 0.4.0
+Tag: 0.5.0
 Pull Policy: Always pull an image even if it is present on the host
 ```
 
-Pin a release tag such as `0.4.0`. `latest` moves to each new release as soon as it is tagged, so with the "always pull" policy a restart can upgrade you before you have read the migration notes or taken a snapshot. `edge` is rebuilt on every push to `main` and is only for trying unreleased changes.
+Pin a release tag such as `0.5.0`. `latest` moves to each new release as soon as it is tagged, so with the "always pull" policy a restart can upgrade you before you have read the migration notes or taken a snapshot. `edge` is rebuilt on every push to `main` and is only for trying unreleased changes.
 
 ### Container Configuration
 
@@ -230,7 +230,7 @@ Create the owner account, then upload a small image file and confirm that:
 Check these first:
 
 - Repository is `ghcr.io/jonathanbeck1/nas-project-cloud`.
-- Tag is a published release such as `0.4.0`, or `latest`.
+- Tag is a published release such as `0.5.0`, or `latest`.
 - The GitHub Container Registry package is public, or TrueNAS has pull credentials configured.
 - TrueNAS has outbound internet access and working DNS.
 
@@ -415,10 +415,10 @@ Tips:
 
 1. Read the release's migration notes in [CHANGELOG.md](../../CHANGELOG.md).
 2. Stop the app and take a recursive snapshot of the parent `nas-project-cloud` dataset (see Backups And Snapshots below).
-3. Change the image tag, for example from `0.3.1` to `0.4.0`, and start the app. Schema changes are applied automatically on first start.
+3. Change the image tag, for example from `0.4.0` to `0.5.0`, and start the app. Schema changes are applied automatically on first start.
 4. Check `/api/health`, then sign in.
 
-To roll back, stop the app and restore the `appdata` snapshot as well as changing the tag back. Starting an older image on a newer database is not supported. For 0.4.0 in particular, the first sign-in rewrites the password hash in a format 0.3.x cannot read.
+To roll back, stop the app and restore the `appdata` snapshot as well as changing the tag back. Starting an older image on a newer database is not supported. For 0.4.0 in particular, the first sign-in rewrites the password hash in a format 0.3.x cannot read. Going from 0.5.0 back to 0.4.0 is the exception: 0.5.0 only adds a table that 0.4.0 ignores, so changing the tag back is enough.
 
 ## Backups And Snapshots
 

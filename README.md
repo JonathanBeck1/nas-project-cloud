@@ -2,7 +2,7 @@
 
 A self-hosted, project-first file cloud for [TrueNAS SCALE](https://www.truenas.com/truenas-scale/). It feels like a private Google Drive built around real projects, but the bytes live on a ZFS dataset that you can still see from SMB, Finder, or Explorer when the app is offline.
 
-> **Status:** pre-1.0 (`v0.4.x`). The app is usable on a private LAN and has a TrueNAS-ready Docker deployment, but it is still moving quickly. See [Roadmap](#roadmap) for what's next and [Known limitations](#known-limitations) for what to expect today.
+> **Status:** pre-1.0 (`v0.5.x`). The app is usable on a private LAN and has a TrueNAS-ready Docker deployment, but it is still moving quickly. See [Roadmap](#roadmap) for what's next and [Known limitations](#known-limitations) for what to expect today.
 
 [![CI](https://github.com/JonathanBeck1/nas-project-cloud/actions/workflows/ci.yml/badge.svg)](https://github.com/JonathanBeck1/nas-project-cloud/actions/workflows/ci.yml)
 [![Publish Docker image](https://github.com/JonathanBeck1/nas-project-cloud/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/JonathanBeck1/nas-project-cloud/actions/workflows/docker-publish.yml)
@@ -103,7 +103,7 @@ The full guide lives at [`docs/deployment/truenas-scale.md`](./docs/deployment/t
 
 2. Make them writable by UID/GID `1001` (the container's `nextjs` user) or by an apps group it can join.
 
-3. Paste [`docker/docker-compose.truenas.yml`](./docker/docker-compose.truenas.yml) into TrueNAS SCALE's custom-app YAML flow. Update the host volume paths to match your pool. The compose file pins the current release, `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`. `:latest` moves to each new release, and `:edge` is unreleased `main`.
+3. Paste [`docker/docker-compose.truenas.yml`](./docker/docker-compose.truenas.yml) into TrueNAS SCALE's custom-app YAML flow. Update the host volume paths to match your pool. The compose file pins the current release, `ghcr.io/jonathanbeck1/nas-project-cloud:0.5.0`. `:latest` moves to each new release, and `:edge` is unreleased `main`.
 
 4. Wait for `/api/health` to turn green. Browse to `http://<truenas>:3000` and create the owner. The setup page asks for a code the app prints to its log at startup: in TrueNAS, open Apps, select the app, and use View Logs in the Workloads widget.
 
@@ -202,9 +202,9 @@ A more complete catalogue lives in [Roadmap](#roadmap) and in [`docs/superpowers
 
 ## Roadmap
 
-`v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). `v0.3.0` shipped the preview pipeline and Upload Center reliability pass. `v0.3.1` is a security patch on top of it: rate limits stop trusting a client-supplied `X-Forwarded-For`, and the production dependencies move past their open advisories. `v0.4.0` is the hardening release: data-safety fixes for uploads, moves and exports, symlink containment for every read and write, capped public request bodies, resumable downloads, in-image reindexing, and video and PDF thumbnails. Near-term, in priority order:
+`v0.2.0` shipped the security hardening pass (CSRF double-submit cookies, rate-limited login/pairing, sliding sessions, token-protected maintenance endpoints, streaming direct uploads, defense-in-depth headers). `v0.3.0` shipped the preview pipeline and Upload Center reliability pass. `v0.3.1` is a security patch on top of it: rate limits stop trusting a client-supplied `X-Forwarded-For`, and the production dependencies move past their open advisories. `v0.4.0` is the hardening release: data-safety fixes for uploads, moves and exports, symlink containment for every read and write, capped public request bodies, resumable downloads, in-image reindexing, and video and PDF thumbnails. `v0.5.0` is the maker release: a gallery view, thumbnails pulled from inside 3MF and G-code files, a setup code that stops anyone else claiming a fresh install, daily database copies, and guides for HTTPS and for exactly what the container can reach. Near-term, in priority order:
 
-1. **CAD preview strategy** for STL, STEP, 3MF, and renderer-choice decisions.
+1. **CAD preview strategy** for STL and STEP, and renderer-choice decisions. 3MF and G-code already show the thumbnail the slicer saved.
 2. **Project and folder share pages** after file-level share-link behavior settles.
 3. **SQLite FTS5 migration** once the corpus exposes a hot path on the `LIKE`-backed search.
 4. **Benchmark checklist** for 1 GiB and 5 GiB transfers over 2.5 Gb LAN, recorded in the deployment guide.
