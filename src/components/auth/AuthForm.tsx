@@ -11,6 +11,7 @@ type AuthFormProps = {
 export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [setupCode, setSetupCode] = useState("");
   const [password, setPassword] = useState("");
   const [deviceName, setDeviceName] = useState("");
   const [message, setMessage] = useState("");
@@ -28,7 +29,7 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          ...(isSetup ? { name } : {}),
+          ...(isSetup ? { name, setupCode } : {}),
           password,
           deviceName
         })
@@ -53,6 +54,30 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
         <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">NAS Project Cloud</p>
         <h1 className="mt-2 text-2xl font-semibold text-ink">{isSetup ? "Create Owner" : "Sign In"}</h1>
       </div>
+
+      {isSetup ? (
+        <div>
+          <label className="block text-sm font-medium text-ink">
+            Setup code
+            <input
+              aria-describedby="setup-code-hint"
+              autoCapitalize="characters"
+              autoComplete="off"
+              className="mt-1 h-10 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm tracking-wider outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+              name="setupCode"
+              onChange={(event) => setSetupCode(event.target.value)}
+              placeholder="XXXX-XXXX-XXXX"
+              required
+              spellCheck={false}
+              type="text"
+              value={setupCode}
+            />
+          </label>
+          <p id="setup-code-hint" className="mt-1 text-xs text-muted">
+            Printed in the app&apos;s log when it starts.
+          </p>
+        </div>
+      ) : null}
 
       <label className="block text-sm font-medium text-ink">
         Email

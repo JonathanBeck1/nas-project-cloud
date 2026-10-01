@@ -6,6 +6,7 @@
 // Usage: npm run screenshots
 
 import { spawn } from "node:child_process";
+import Database from "better-sqlite3";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -111,12 +112,22 @@ async function setupOwner(jar) {
   const response = await fetch(`${baseUrl}/api/auth/setup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(owner)
+    body: JSON.stringify({ ...owner, setupCode: readSetupCode() })
   });
   if (response.status !== 201) {
     throw new Error(`auth/setup failed with ${response.status}: ${await response.text()}`);
   }
   jar.absorb(response.headers);
+}
+
+// The server prints the code at boot; this script started that server, so it can read it from the database.
+function readSetupCode() {
+  const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+  try {
+    return db.prepare("select code from setup_codes").get()?.code ?? "";
+  } finally {
+    db.close();
+  }
 }
 
 async function createProjects(jar) {

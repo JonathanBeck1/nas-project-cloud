@@ -208,7 +208,15 @@ Then open:
 http://192.168.68.64:3000
 ```
 
-The first page should redirect to `/setup`. Create the owner account, then upload a small image file and confirm that:
+The first page should redirect to `/setup`. It asks for a setup code, which the app prints to its log at startup while no owner exists:
+
+```text
+[setup] No owner yet. Enter this setup code on the setup page: ABCD-EFGH-JKMN
+```
+
+In TrueNAS, open Apps, select the app, and use the View Logs icon in the Workloads widget. On plain Docker, run `docker logs nas-project-cloud 2>&1 | grep setup`. The code stays the same across restarts until the owner is created, and only someone who can read the app's log can use it, so another device on the LAN can't claim the install first.
+
+Create the owner account, then upload a small image file and confirm that:
 
 - it appears in the workspace,
 - it downloads successfully,
@@ -462,7 +470,7 @@ Proxy to the app at:
 http://<truenas-ip>:3000
 ```
 
-Set proxy upload limits and buffering with the 2 GiB application limit in mind. For Nginx, raise `client_max_body_size` and review request buffering. For Caddy or Traefik, check the equivalent body-size and timeout settings.
+Proxy configs for Caddy, Nginx, Nginx Proxy Manager, Traefik, Cloudflare Tunnel and Tailscale Serve are in [reverse-proxy.md](./reverse-proxy.md). No single request is larger than 64 MiB (larger files are sent in 8 MiB chunks), so a 100 MB body limit and a read timeout of a few minutes are enough; the 2 GiB application limit applies to whole files.
 
 When the app is served over HTTPS (TLS terminated at the proxy), set `NAS_CLOUD_SECURE_COOKIES=true` so session and CSRF cookies are marked `Secure`. Leave it unset (the default) for direct LAN access over plain `http://<nas-ip>:3000` — browsers drop `Secure` cookies over HTTP, which silently blocks login.
 

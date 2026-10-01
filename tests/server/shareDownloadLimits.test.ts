@@ -77,6 +77,29 @@ describe("share download limits", () => {
     expect(row).toEqual({ count: 1 });
   });
 
+  it("does not use up a share link's download limit on HEAD requests", async () => {
+    const { GET, HEAD } = await import("@/app/api/shares/[token]/download/route");
+    const share = shareFor({ maxDownloads: 1 });
+
+    const headResponse = await HEAD(
+      new Request("http://localhost/api/shares/share-token/download", { method: "HEAD" }),
+      context
+    );
+    expect(headResponse.status).toBe(200);
+    expect(headResponse.headers.get("content-length")).toBe("6");
+    expect(await headResponse.text()).toBe("");
+    expect(db.prepare("select download_count as count from file_share_links where id = ?").get(share.id)).toEqual({
+      count: 0
+    });
+
+    const getResponse = await GET(new Request("http://localhost/api/shares/share-token/download"), context);
+    expect(getResponse.status).toBe(200);
+    await expect(getResponse.text()).resolves.toBe("manual");
+    expect(db.prepare("select download_count as count from file_share_links where id = ?").get(share.id)).toEqual({
+      count: 1
+    });
+  });
+
   it("does not count downloads on a revoked link", () => {
     const repo = createMetadataRepository(db);
     const share = shareFor({});

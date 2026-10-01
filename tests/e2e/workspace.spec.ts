@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { expect, test } from "@playwright/test";
+import { readSetupCode } from "../helpers/setupCode";
 
 const owner = {
   email: "owner@example.local",
@@ -73,7 +74,7 @@ test("uploads selects and archives a file", async ({ page }) => {
 
 async function authenticate(page: import("@playwright/test").Page) {
   const setup = await page.request.post("/api/auth/setup", {
-    data: owner
+    data: { ...owner, setupCode: readSetupCode() }
   });
 
   if (setup.status() === 201) {
