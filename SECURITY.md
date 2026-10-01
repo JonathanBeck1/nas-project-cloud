@@ -6,7 +6,7 @@ Security fixes land in the newest release line and ship as a patch release. Plea
 
 | Version | Supported |
 | --- | --- |
-| Latest release line (currently 0.4.x) | Yes |
+| Latest release line (currently 0.5.x) | Yes |
 | Anything older | No |
 
 ## Reporting a vulnerability

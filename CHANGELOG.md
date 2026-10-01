@@ -5,7 +5,16 @@ All notable changes to NAS Project Cloud are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.5.0] - 2026-10-01
+
+The maker release. Projects now look like what they hold: a gallery view
+shows large previews, and 3MF and G-code files show the thumbnail the
+slicer saved inside them. It also closes gaps a TrueNAS user would
+otherwise have to take on trust: a fresh install can only be claimed with
+a code from the app's log, the database is copied daily, deleting a file
+deletes its thumbnail, and new guides cover HTTPS and exactly what the
+container can reach. Nothing breaks: upgrading from 0.4.0 needs no manual
+steps, and rolling back to 0.4.0 works on the same `appdata`.
 
 ### Added
 
@@ -36,6 +45,17 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   snapshots of `files` and `appdata`, which aren't taken at the same
   moment, and has restore steps.
 
+### Changed
+
+- **`:latest` now means the newest release.** It was rebuilt on every push
+  to `main`, and the compose file pulled it, so a TrueNAS app set to "always
+  pull" could move onto unreleased code on its next restart. Pushes to
+  `main` now publish `:edge`, only a release tag moves `:latest` (not a
+  prerelease or any other `v*` tag), and the compose file pins the current
+  release. A newer publish for the same branch or tag cancels one still
+  running, so two quick pushes to `main` can no longer leave `:edge` on the
+  older build.
+
 ### Fixed
 
 - **Permanently deleting a file now deletes its thumbnail.** The 384 px
@@ -45,6 +65,21 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `POST /api/maintenance/upload-cleanup` from cron) now also removes
   thumbnails whose file is gone, including ones left by earlier versions,
   plus temporary files a crashed preview job left behind.
+- **HEAD requests no longer use up a share link's download limit.** Next.js
+  answered `HEAD` by running the download handler, so a link preview, a
+  download manager's check or `curl -I` counted as a download, and a
+  one-time link was gone before the recipient opened it. Thanks to
+  @DYNOSuprovo for the fix (#56).
+
+### Security
+
+- **Creating the owner needs a setup code.** On a fresh install, whoever
+  reached `/setup` first became the owner, including another device on the
+  LAN or a web page the owner happened to visit that posted a form to the
+  NAS. The app now prints a setup code to its log at startup while no owner
+  exists, and the setup page asks for it. The code stays the same across
+  restarts until it's used. Installs that already have an owner are
+  unaffected.
 
 ### Documentation
 
@@ -59,27 +94,6 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   were compromised, how to limit it, and how to read the provenance and
   SBOM attached to each image. The README links to it.
 
-### Changed
-
-- **`:latest` now means the newest release.** It was rebuilt on every push
-  to `main`, and the compose file pulled it, so a TrueNAS app set to "always
-  pull" could move onto unreleased code on its next restart. Pushes to
-  `main` now publish `:edge`, only a release tag moves `:latest` (not a
-  prerelease or any other `v*` tag), and the compose file pins the current
-  release. A newer publish for the same branch or tag cancels one still
-  running, so two quick pushes to `main` can no longer leave `:edge` on the
-  older build.
-
-### Security
-
-- **Creating the owner needs a setup code.** On a fresh install, whoever
-  reached `/setup` first became the owner, including another device on the
-  LAN or a web page the owner happened to visit that posted a form to the
-  NAS. The app now prints a setup code to its log at startup while no owner
-  exists, and the setup page asks for it. The code stays the same across
-  restarts until it's used. Installs that already have an owner are
-  unaffected.
-
 ### Migration notes
 
 - **Unreleased builds are on `:edge`.** If you pulled `:latest` to follow
@@ -89,6 +103,9 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   printed there (`[setup] No owner yet. Enter this setup code ...`). On
   TrueNAS, open Apps, select the app, and use View Logs in the Workloads
   widget.
+- **Upgrading from 0.4.0** needs no manual steps: change the tag to `0.5.0`
+  and start the app. The only schema change is one new table, so going
+  back to `0.4.0` on the same `appdata` also works.
 
 ## [0.4.0] - 2026-09-28
 
