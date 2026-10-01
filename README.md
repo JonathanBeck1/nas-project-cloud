@@ -82,7 +82,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open <http://localhost:3000>. The first page redirects to `/setup` so you can create the owner account (12+ character password). After that, sign in at `/login` and you're in the workspace.
+Open <http://localhost:3000>. The first page redirects to `/setup` so you can create the owner account (12+ character password). It asks for the setup code that `npm run dev` prints in the terminal (`[setup] No owner yet. Enter this setup code ...`). After that, sign in at `/login` and you're in the workspace.
 
 To wipe local state and start over:
 
@@ -105,7 +105,7 @@ The full guide lives at [`docs/deployment/truenas-scale.md`](./docs/deployment/t
 
 3. Paste [`docker/docker-compose.truenas.yml`](./docker/docker-compose.truenas.yml) into TrueNAS SCALE's custom-app YAML flow. Update the host volume paths to match your pool. The compose file pins the current release, `ghcr.io/jonathanbeck1/nas-project-cloud:0.4.0`. `:latest` moves to each new release, and `:edge` is unreleased `main`.
 
-4. Wait for `/api/health` to turn green. Browse to `http://<truenas>:3000`, finish owner setup, and you're done.
+4. Wait for `/api/health` to turn green. Browse to `http://<truenas>:3000` and create the owner. The setup page asks for a code the app prints to its log at startup: in TrueNAS, open Apps, select the app, and use View Logs in the Workloads widget.
 
 For a reverse-proxied deployment, raise the proxy's body-size limit to at least 2 GiB and disable buffering on the upload paths.
 

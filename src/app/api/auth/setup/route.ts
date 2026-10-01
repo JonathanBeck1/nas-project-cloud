@@ -4,6 +4,7 @@ import { createMetadataRepository } from "@/lib/server/metadata";
 import { hashPassword } from "@/lib/server/auth/passwords";
 import { createSessionToken, hashSessionToken, sessionExpiresAt } from "@/lib/server/auth/sessions";
 import { withSessionCookie } from "@/lib/server/auth/http";
+import { normalizeSetupCode } from "@/lib/server/auth/setupCode";
 import { SMALL_BODY_MAX_BYTES, bodyTooLarge, parseJsonObject, readLimitedBody } from "@/lib/server/requestBody";
 
 export async function POST(request: Request) {
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
   const name = stringValue(body.name);
   const password = stringValue(body.password);
   const deviceName = stringValue(body.deviceName) || "Browser";
+  const setupCode = normalizeSetupCode(stringValue(body.setupCode));
 
   if (!email || !name || password.length < 12) {
     return NextResponse.json({ error: "email, name, and a 12 character password are required" }, { status: 400 });
@@ -30,8 +32,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "owner already exists" }, { status: 409 });
   }
 
-  // The check above only saves a derivation; this insert is what decides, because hashing yields to other requests.
-  const user = repo.createFirstOwner({ email, name, passwordHash: await hashPassword(password) });
+  // The code is printed only in the app's log, so a LAN client or a cross-site form can't claim a fresh install.
+  if (!setupCode || !repo.hasSetupCode(setupCode)) {
+    return NextResponse.json({ error: "setup code is wrong" }, { status: 403 });
+  }
+
+  // The checks above only save a derivation; this insert is what decides, because hashing yields to other requests.
+  const user = repo.createFirstOwner({ email, name, passwordHash: await hashPassword(password), setupCode });
   if (!user) {
     return NextResponse.json({ error: "owner already exists" }, { status: 409 });
   }

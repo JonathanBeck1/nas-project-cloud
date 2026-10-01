@@ -208,7 +208,15 @@ Then open:
 http://192.168.68.64:3000
 ```
 
-The first page should redirect to `/setup`. Create the owner account, then upload a small image file and confirm that:
+The first page should redirect to `/setup`. It asks for a setup code, which the app prints to its log at startup while no owner exists:
+
+```text
+[setup] No owner yet. Enter this setup code on the setup page: ABCD-EFGH-JKMN
+```
+
+In TrueNAS, open Apps, select the app, and use the View Logs icon in the Workloads widget. On plain Docker, run `docker logs nas-project-cloud 2>&1 | grep setup`. The code stays the same across restarts until the owner is created, and only someone who can read the app's log can use it, so another device on the LAN can't claim the install first.
+
+Create the owner account, then upload a small image file and confirm that:
 
 - it appears in the workspace,
 - it downloads successfully,
