@@ -1,34 +1,25 @@
 import type { AppDatabase } from "@/lib/server/db";
-import { scanStorageRoot, type ScanStorageRootResult } from "@/lib/server/indexer";
+import { reconcileStorage, type ReconcileStorageResult } from "@/lib/server/indexer";
 
 export type ReindexInput = {
   db: AppDatabase;
   storageRoot: string;
+  budgetMs?: number;
 };
 
-let inFlight: Promise<ScanStorageRootResult> | null = null;
+let inFlight: Promise<ReconcileStorageResult> | null = null;
 
 /**
- * Single-flight wrapper around scanStorageRoot.
- *
- * A reindex walks the whole storage tree and checksums every new file. Two
- * overlapping runs would duplicate that work and race each other's inserts, so
- * a caller arriving while a scan is running joins that scan instead of starting
- * a second one. Single-process app, so a module-level promise is enough.
+ * Single-flight wrapper around reconcileStorage, shared by the maintenance
+ * route and the background scheduler. Two overlapping runs would hash the same
+ * new files and race each other's updates, so a caller arriving mid-run joins
+ * that run instead. Single-process app, so a module-level promise is enough.
  */
-export async function reindexStorageRoot(input: ReindexInput): Promise<ScanStorageRootResult> {
-  if (inFlight) {
-    return inFlight;
+export function reindexStorageRoot(input: ReindexInput): Promise<ReconcileStorageResult> {
+  if (!inFlight) {
+    inFlight = reconcileStorage(input).finally(() => {
+      inFlight = null;
+    });
   }
-
-  inFlight = scanStorageRoot(input).finally(() => {
-    inFlight = null;
-  });
-
   return inFlight;
-}
-
-/** Test seam: true while a scan is running. */
-export function isReindexRunning(): boolean {
-  return inFlight !== null;
 }

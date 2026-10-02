@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   countUsers: vi.fn(() => 1),
   getOrCreateSetupCode: vi.fn(() => "ABCDEFGHJKMN"),
   startPreviewScheduler: vi.fn(),
+  startReconcileScheduler: vi.fn(),
   cleanupStaleUploads: vi.fn(async () => undefined),
   sweepOrphanPreviews: vi.fn(async () => ({ removed: 0 })),
   backupDatabase: vi.fn(async () => ({ created: null, removed: 0 }))
@@ -23,6 +24,7 @@ vi.mock("@/lib/server/metadata", () => ({
   })
 }));
 vi.mock("@/lib/server/previews/scheduler", () => ({ startPreviewScheduler: mocks.startPreviewScheduler }));
+vi.mock("@/lib/server/reconcileScheduler", () => ({ startReconcileScheduler: mocks.startReconcileScheduler }));
 vi.mock("@/lib/server/uploadCleanup", () => ({ cleanupStaleUploads: mocks.cleanupStaleUploads }));
 vi.mock("@/lib/server/previews/cleanup", () => ({ sweepOrphanPreviews: mocks.sweepOrphanPreviews }));
 vi.mock("@/lib/server/backup", () => ({ backupDatabase: mocks.backupDatabase }));
@@ -57,6 +59,7 @@ describe("node instrumentation", () => {
     expect(mocks.requeueStalePreviewJobs).toHaveBeenCalledTimes(1);
     expect(mocks.purgeExpiredAuthState).toHaveBeenCalledTimes(1);
     expect(mocks.startPreviewScheduler).not.toHaveBeenCalled();
+    expect(mocks.startReconcileScheduler).not.toHaveBeenCalled();
   });
 
   it("prints the setup code while no owner exists", async () => {
@@ -74,5 +77,13 @@ describe("node instrumentation", () => {
 
     expect(mocks.getOrCreateSetupCode).not.toHaveBeenCalled();
     expect(console.log).not.toHaveBeenCalledWith(expect.stringContaining("[setup]"));
+  });
+
+  it("starts storage sync alongside the preview scheduler", async () => {
+    mocks.config.previewScheduler = "on";
+
+    await import("@/instrumentation-node");
+
+    expect(mocks.startReconcileScheduler).toHaveBeenCalledTimes(1);
   });
 });

@@ -834,6 +834,17 @@ export function createMetadataRepository(db: AppDatabase) {
       return row ? projectFromRow(row) : null;
     },
 
+    listMissingFiles(limit = 50): CloudFile[] {
+      const rows = db
+        .prepare<[number], FileRow>("select * from files where status = 'missing' order by updated_at desc, name limit ?")
+        .all(limit);
+      return filesFromRowsWithTags(db, rows);
+    },
+
+    countMissingFiles(): number {
+      return db.prepare<[], { count: number }>("select count(*) as count from files where status = 'missing'").get()?.count ?? 0;
+    },
+
     listFileIds(): Set<string> {
       return new Set(db.prepare<[], { id: string }>("select id from files").all().map((row) => row.id));
     },
@@ -986,9 +997,8 @@ export function createMetadataRepository(db: AppDatabase) {
       const where: string[] = [];
       const params: Record<string, string | number> = {};
 
-      if (!filters.includeArchived) {
-        where.push("files.status = 'active'");
-      }
+      // Files storage sync couldn't find on disk stay out of every listing; Settings lists them on their own.
+      where.push(filters.includeArchived ? "files.status in ('active', 'archived')" : "files.status = 'active'");
 
       const trimmedQuery = filters.query?.trim();
       if (trimmedQuery) {
@@ -1815,8 +1825,8 @@ function fileListWhere(filters: ListFilesFilters): { where: string[]; params: Re
   if (filters.status) {
     where.push("status = @status");
     params.status = filters.status;
-  } else if (!filters.includeArchived) {
-    where.push("status = 'active'");
+  } else {
+    where.push(filters.includeArchived ? "status in ('active', 'archived')" : "status = 'active'");
   }
 
   if (filters.query) {

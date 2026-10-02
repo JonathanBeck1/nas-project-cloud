@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type AppDatabase, createDatabase } from "@/lib/server/db";
-import { scanStorageRoot } from "@/lib/server/indexer";
+import { reconcileStorage } from "@/lib/server/indexer";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import type { FileFamily } from "@/lib/shared/types";
 
@@ -99,7 +99,7 @@ describe("reindex queues previews", () => {
         )
         .all();
 
-    await scanStorageRoot({ db, storageRoot: root });
+    await reconcileStorage({ db, storageRoot: root, quietMs: 0 });
 
     expect(statuses()).toEqual([
       { name: "a.png", kind: "image", status: "pending" },
@@ -111,7 +111,7 @@ describe("reindex queues previews", () => {
 
     const png = repo.listFiles({ query: "a.png" })[0];
     ready(png.id, "image");
-    await scanStorageRoot({ db, storageRoot: root });
+    await reconcileStorage({ db, storageRoot: root, quietMs: 0 });
 
     expect(statuses()).toEqual([
       { name: "a.png", kind: "image", status: "ready" },
@@ -124,10 +124,12 @@ describe("reindex queues previews", () => {
 
   it("backfills previews for files indexed before this existed", async () => {
     const root = path.join(dir, "storage");
-    fs.mkdirSync(root, { recursive: true });
+    fs.mkdirSync(path.join(root, "Inbox", "Mac"), { recursive: true });
+    // Indexed by an older version: the record and the bytes exist, the preview row doesn't.
+    fs.writeFileSync(path.join(root, "Inbox", "Mac", "old.png"), "x");
     fileOf("image", "old.png");
 
-    await scanStorageRoot({ db, storageRoot: root });
+    await reconcileStorage({ db, storageRoot: root, quietMs: 0 });
 
     expect(db.prepare("select kind, status from file_previews").all()).toEqual([{ kind: "image", status: "pending" }]);
   });
