@@ -9,6 +9,16 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **STL thumbnails.** STL files carry no preview image, so the app now
+  draws one: a shaded view of the mesh from front-right and above, on a
+  transparent background, sized for the gallery's 4:3 tiles. Nothing new is
+  installed and no GPU is used. The file is streamed twice (once for its
+  bounds, once to draw), so memory stays flat and the app keeps answering
+  requests while a large mesh renders; a 585 MB, 11.7-million-triangle file
+  takes under five seconds. Binary and ASCII STL are both read, and meshes
+  over 25 million triangles are skipped. STLs already in the library get a
+  preview on the next storage sync.
+
 - **Storage sync.** The app now follows changes made to the files dataset
   over SMB, Finder or Explorer. Every 15 minutes (with
   `NAS_CLOUD_PREVIEW_SCHEDULER=on`, the compose default), and whenever you
