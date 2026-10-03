@@ -85,7 +85,7 @@ describe("previews attached to listed files", () => {
 });
 
 describe("reindex queues previews", () => {
-  it("queues previews for indexed images, videos, PDFs, 3MF and G-code files, and never resets a finished one", async () => {
+  it("queues previews for indexed images, videos, PDFs, STL, 3MF and G-code files, and never resets a finished one", async () => {
     const root = path.join(dir, "storage");
     fs.mkdirSync(path.join(root, "Library"), { recursive: true });
     for (const name of ["a.png", "b.mp4", "c.pdf", "d.stl", "e.docx", "f.3mf", "g.gcode"]) {
@@ -105,6 +105,7 @@ describe("reindex queues previews", () => {
       { name: "a.png", kind: "image", status: "pending" },
       { name: "b.mp4", kind: "video", status: "pending" },
       { name: "c.pdf", kind: "document", status: "pending" },
+      { name: "d.stl", kind: "cad", status: "pending" },
       { name: "f.3mf", kind: "cad", status: "pending" },
       { name: "g.gcode", kind: "cad", status: "pending" }
     ]);
@@ -117,6 +118,7 @@ describe("reindex queues previews", () => {
       { name: "a.png", kind: "image", status: "ready" },
       { name: "b.mp4", kind: "video", status: "pending" },
       { name: "c.pdf", kind: "document", status: "pending" },
+      { name: "d.stl", kind: "cad", status: "pending" },
       { name: "f.3mf", kind: "cad", status: "pending" },
       { name: "g.gcode", kind: "cad", status: "pending" }
     ]);
