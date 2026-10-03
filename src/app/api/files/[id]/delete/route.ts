@@ -15,15 +15,18 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const repo = createMetadataRepository(getDatabase());
   const file = repo.getFileById(id);
 
-  if (!file || file.status !== "archived") {
+  if (!file || file.status === "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
 
   const storage = createStorageService();
-  try {
-    await storage.deleteFile(file.storagePath);
-  } catch {
-    return NextResponse.json({ error: "file not found" }, { status: 404 });
+  // A missing file is already gone from disk; only its record and thumbnail are left to remove.
+  if (file.status === "archived") {
+    try {
+      await storage.deleteFile(file.storagePath);
+    } catch {
+      return NextResponse.json({ error: "file not found" }, { status: 404 });
+    }
   }
   // The thumbnail is a copy of the file's content. The hourly sweep retries it if this fails.
   await storage.deleteFile(path.posix.join(".previews", "images", `${file.id}.webp`)).catch(() => undefined);

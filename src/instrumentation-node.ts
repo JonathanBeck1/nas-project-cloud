@@ -5,6 +5,7 @@ import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { sweepOrphanPreviews } from "@/lib/server/previews/cleanup";
 import { startPreviewScheduler } from "@/lib/server/previews/scheduler";
+import { startReconcileScheduler } from "@/lib/server/reconcileScheduler";
 import { cleanupStaleUploads } from "@/lib/server/uploadCleanup";
 
 const STALE_UPLOAD_MS = 24 * 60 * 60 * 1000;
@@ -29,4 +30,6 @@ if (getAppConfig().previewScheduler === "on") {
     }
   });
   console.log("[instrumentation] preview scheduler started");
+  startReconcileScheduler();
+  console.log("[instrumentation] storage sync started, every 15 minutes");
 }

@@ -5,6 +5,35 @@ All notable changes to NAS Project Cloud are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **Storage sync.** The app now follows changes made to the files dataset
+  over SMB, Finder or Explorer. Every 15 minutes (with
+  `NAS_CLOUD_PREVIEW_SCHEDULER=on`, the compose default), and whenever you
+  press Sync now in Settings, it indexes new files, relinks files that were
+  moved or renamed by matching size and SHA-256 so their tags, project and
+  share links survive, and marks files that are gone as missing instead of
+  leaving records that point nowhere. Missing files are hidden from the
+  workspace, listed in Settings with a Remove record button, and restored
+  automatically if they come back. Moving a file into or out of a
+  `Projects/<slug>/` folder joins or leaves that project, and moving it into
+  or out of `Archive/` archives or restores it. Files still being copied
+  are left for the next run, SMB clutter (`.DS_Store`, `._*`, `Thumbs.db`,
+  `desktop.ini`, Office lock files, `.recycle`) is ignored, and a sync
+  refuses to run if the dataset looks empty, so an unmounted dataset can't
+  mark everything missing.
+
+### Changed
+
+- **`POST /api/maintenance/reindex` runs storage sync.** It used to add new
+  paths only. It now stops hashing new files after 20 seconds and returns
+  what it changed (`indexed`, `relinked`, `restored`, `missing`,
+  `deferred`); the next run picks up the rest. If a long sync is already
+  running in the background it answers `202 {"running": true}` instead of
+  waiting. `GET` on the same route lists missing files.
+
 ## [0.5.0] - 2026-10-01
 
 The maker release. Projects now look like what they hold: a gallery view

@@ -356,11 +356,11 @@ The app exposes two maintenance routes that can be driven from a TrueNAS cron jo
 
 ```text
 POST /api/maintenance/previews        # process pending preview jobs
-POST /api/maintenance/reindex         # rebuild the file index from the storage tree
+POST /api/maintenance/reindex         # storage sync: index new files, relink moved or renamed ones, mark vanished ones missing
 POST /api/maintenance/upload-cleanup  # delete abandoned uploads older than 24h; purge expired sessions, pairing codes, rate-limit rows; remove thumbnails left by deleted files; take the daily database copy
 ```
 
-> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process loop that ticks every 60 seconds while there is pending preview work, goes again after one second when a batch of 25 came back full, and idles to every 5 minutes when the queue is empty. The same loop runs the stale-upload cleanup, the purge of expired sessions, pairing codes, and rate-limit rows, the removal of thumbnails left by deleted files, and the daily database copy once an hour. The cron approach below still works either way and is the safe choice if you run multiple replicas; with the scheduler off, cron is the only thing that cleans up abandoned uploads.
+> **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process loop that ticks every 60 seconds while there is pending preview work, goes again after one second when a batch of 25 came back full, and idles to every 5 minutes when the queue is empty. The same loop runs the stale-upload cleanup, the purge of expired sessions, pairing codes, and rate-limit rows, the removal of thumbnails left by deleted files, and the daily database copy once an hour. Storage sync runs on its own timer a minute after startup and then every 15 minutes. The cron approach below still works either way and is the safe choice if you run multiple replicas; with the scheduler off, cron is the only thing that cleans up abandoned uploads.
 
 Both routes accept either:
 
@@ -424,7 +424,7 @@ To roll back, stop the app and restore the `appdata` snapshot as well as changin
 
 Create one periodic snapshot task on the parent dataset with **Recursive** on (Data Protection > Periodic Snapshot Tasks > Add, dataset `<pool>/nas-project-cloud`). A recursive snapshot captures `files` and `appdata` at the same instant, so on a restore the database matches the files it describes. Two separate tasks, one per dataset, never run at quite the same moment. The app can keep running: SQLite in WAL mode recovers from a snapshot the same way it recovers from a power cut.
 
-`appdata` is not disposable. Re-indexing the `files` dataset (`POST /api/maintenance/reindex` on the running container, or `npm run index:storage` from a source checkout with both datasets mounted -- the script itself is not in the Docker image) brings back file records, project membership inferred from `Projects/<slug>/`, and default categories. Tags, custom categories, share links, users, paired devices, and upload sessions exist only in SQLite and are lost without an `appdata` backup.
+`appdata` is not disposable. Storage sync over the `files` dataset (`POST /api/maintenance/reindex` on the running container, or Sync now in Settings, or `npm run index:storage` from a source checkout with both datasets mounted -- the script itself is not in the Docker image) brings back file records, project membership inferred from `Projects/<slug>/`, and default categories. Tags, custom categories, share links, users, paired devices, and upload sessions exist only in SQLite and are lost without an `appdata` backup.
 
 ### Daily database copies
 

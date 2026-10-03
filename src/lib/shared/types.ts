@@ -1,6 +1,6 @@
 export type FileFamily = "cad" | "image" | "video" | "document" | "archive" | "software" | "other";
 
-export type FileStatus = "active" | "archived";
+export type FileStatus = "active" | "archived" | "missing";
 
 export type ProjectStatus = "active" | "paused" | "complete" | "archived";
 
