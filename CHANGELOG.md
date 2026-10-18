@@ -5,7 +5,15 @@ All notable changes to NAS Project Cloud are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.6.0] - 2026-10-18
+
+The app now follows the disk. Files added, moved, renamed or deleted over
+SMB, Finder or Explorer show up within 15 minutes, keeping their tags,
+project and share links, and STL files get a drawn thumbnail instead of an
+icon. It also patches a high-severity vulnerability in the image library
+the preview worker uses to read SVG files, so upgrade even if you don't
+need the new features. Nothing breaks, and rolling back to 0.5.0 works by
+changing the tag.
 
 ### Added
 
@@ -43,6 +51,40 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `deferred`); the next run picks up the rest. If a long sync is already
   running in the background it answers `202 {"running": true}` instead of
   waiting. `GET` on the same route lists missing files.
+
+### Security
+
+- **The image library that reads SVG files had a high-severity flaw.**
+  sharp 0.35.4 bundled a librsvg with CVE-2026-96889
+  ([GHSA-wq5f-xc86-pv6w](https://github.com/advisories/GHSA-wq5f-xc86-pv6w)).
+  The preview worker passes `.svg` files to sharp, so a crafted SVG could
+  reach it through an upload, a reindex, or now storage sync. sharp moves
+  to 0.35.5.
+- **Next.js 15.5.27** fixes two cache-poisoning advisories for statically
+  rendered pages in self-hosted apps
+  ([GHSA-4jqv-mc3x-m676](https://github.com/advisories/GHSA-4jqv-mc3x-m676),
+  [GHSA-mcj8-r9mp-w47p](https://github.com/advisories/GHSA-mcj8-r9mp-w47p)).
+  Most of this app renders per request behind sign-in, but the login and
+  setup pages are prerendered.
+- **source-map-js 1.2.2** fixes an event-loop denial of service
+  ([GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)).
+  It's only used while building the app.
+
+`npm audit --omit=dev` reports no known vulnerabilities in this release.
+
+### Migration notes
+
+- **Upgrading from 0.5.0** needs no manual steps and changes no schema.
+  Change the tag to `0.6.0` and start the app.
+- **The first storage sync runs a minute after startup** when
+  `NAS_CLOUD_PREVIEW_SCHEDULER=on` (the compose default). It indexes files
+  you added over SMB, relinks files you moved, and lists files it can't
+  find in Settings as missing. Nothing is deleted. If a whole folder shows
+  up as missing, check the dataset is mounted before removing any records.
+- **STL thumbnails fill in over the next few minutes**, as the first sync
+  queues previews for STLs already in the library.
+- **Rolling back to 0.5.0 works** by changing the tag back. Files marked
+  missing stay hidden on 0.5.0.
 
 ## [0.5.0] - 2026-10-01
 
