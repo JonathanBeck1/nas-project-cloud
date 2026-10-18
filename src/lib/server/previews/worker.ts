@@ -12,15 +12,20 @@ import { readEmbeddedThumbnail } from "./embeddedThumbnail";
 import { readGcodeThumbnail } from "./gcodeThumbnail";
 import { renderPdfFirstPage } from "./pdf";
 import { probePoppler } from "./poppler";
+import { renderStlThumbnail } from "./stlThumbnail";
 import { generateVideoPoster } from "./video";
 
 // One libvips thread keeps peak memory predictable under the container's memory limit.
 sharp.concurrency(1);
 
-// CAD formats whose files already contain a rendered thumbnail, by extension.
-const embeddedThumbnailReaders = new Map<string, (absolutePath: string) => Promise<Buffer | null>>([
+// CAD formats with a preview source, by extension: the image a slicer saved inside the file, or for STL a drawing of
+// the mesh. A reader returns the image to shrink into a preview, or why there isn't one.
+type ThumbnailReader = (absolutePath: string) => Promise<Buffer | { skipped: string } | null>;
+
+const embeddedThumbnailReaders = new Map<string, ThumbnailReader>([
   ["3mf", readEmbeddedThumbnail],
-  ["gcode", readGcodeThumbnail]
+  ["gcode", readGcodeThumbnail],
+  ["stl", renderStlThumbnail]
 ]);
 
 type PreviewRepo = {
@@ -256,15 +261,16 @@ async function generateEmbeddedThumbnail({
   storage,
   absolutePath,
   readThumbnail
-}: ProcessPreviewJobInput & { absolutePath: string; readThumbnail: (absolutePath: string) => Promise<Buffer | null> }) {
+}: ProcessPreviewJobInput & { absolutePath: string; readThumbnail: ThumbnailReader }) {
   const previewPath = path.posix.join(".previews", "images", `${job.file.id}.webp`);
   const absolutePreviewPath = storage.absolutePathFor(previewPath);
   await fs.mkdir(path.dirname(absolutePreviewPath), { recursive: true });
 
   try {
     const thumbnail = await readThumbnail(absolutePath);
-    if (!thumbnail) {
-      repo.upsertFilePreview({ fileId: job.file.id, kind: job.preview.kind, status: "skipped", error: "no embedded thumbnail" });
+    if (!Buffer.isBuffer(thumbnail)) {
+      const error = thumbnail?.skipped ?? "no embedded thumbnail";
+      repo.upsertFilePreview({ fileId: job.file.id, kind: job.preview.kind, status: "skipped", error });
       return;
     }
 

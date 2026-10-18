@@ -7,6 +7,7 @@ import { processPreviewJob } from "@/lib/server/previews/worker";
 import { createStorageService } from "@/lib/server/storage";
 import type { PreviewJob } from "@/lib/shared/types";
 import { gcode, thumbnailBlock } from "../helpers/gcode";
+import { binaryStl, cube } from "../helpers/stl";
 import { png, relsXml, writeZip } from "../helpers/threeMf";
 
 let root: string;
@@ -97,5 +98,39 @@ describe("G-code previews", () => {
     await processPreviewJob({ job: gcodeJob(storagePath), repo, storage: createStorageService(root) });
 
     expect(repo.upsertFilePreview).toHaveBeenCalledWith(expect.objectContaining({ status: "skipped", error: "no embedded thumbnail" }));
+  });
+});
+
+describe("STL previews", () => {
+  const stlJob = (storagePath: string) =>
+    ({
+      file: { id: "file_mesh", family: "cad", extension: "stl", storagePath },
+      preview: { fileId: "file_mesh", kind: "cad", status: "pending" }
+    }) as PreviewJob;
+
+  it("draws the mesh into a ready webp preview", async () => {
+    const storagePath = "Projects/shed/Inbox/bracket.stl";
+    fs.writeFileSync(path.join(root, storagePath), binaryStl(cube()));
+    const repo = { upsertFilePreview: vi.fn() };
+
+    await processPreviewJob({ job: stlJob(storagePath), repo, storage: createStorageService(root) });
+
+    expect(repo.upsertFilePreview).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: "file_mesh", kind: "cad", status: "ready", width: 384, height: 288 })
+    );
+    const written = await sharp(path.join(root, ".previews", "images", "file_mesh.webp")).metadata();
+    expect(written).toMatchObject({ format: "webp", width: 384, height: 288, hasAlpha: true });
+  });
+
+  it("records an empty STL as skipped with its own reason", async () => {
+    const storagePath = "Projects/shed/Inbox/empty.stl";
+    fs.writeFileSync(path.join(root, storagePath), binaryStl([]));
+    const repo = { upsertFilePreview: vi.fn() };
+
+    await processPreviewJob({ job: stlJob(storagePath), repo, storage: createStorageService(root) });
+
+    expect(repo.upsertFilePreview).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "skipped", error: "no triangles to draw" })
+    );
   });
 });

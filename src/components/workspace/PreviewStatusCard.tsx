@@ -140,7 +140,7 @@ export function PreviewStatusCard() {
             Preview pipeline
           </h2>
           <p className="mt-1 text-xs leading-5 text-muted">
-            Background generation status for image, video, PDF, 3MF, and G-code previews. Refreshes every five seconds while
+            Background generation status for image, video, PDF, STL, 3MF, and G-code previews. Refreshes every five seconds while
             this tab is visible.
           </p>
         </div>
