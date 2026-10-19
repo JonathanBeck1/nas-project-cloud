@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { ownerStatePath } from "./tests/helpers/e2eAuth";
 
 const e2ePort = 3100;
 const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
@@ -24,8 +25,14 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "chromium",
+      name: "setup",
+      testMatch: /\.setup\.ts$/,
       use: { ...devices["Desktop Chrome"] }
+    },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], storageState: ownerStatePath },
+      dependencies: ["setup"]
     }
   ]
 });

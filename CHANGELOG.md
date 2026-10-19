@@ -5,6 +5,39 @@ All notable changes to NAS Project Cloud are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Security
+
+- **Two-factor sign-in, required for every account.** Signing in now takes
+  the password and a 6-digit code from an authenticator app, such as
+  1Password, Google Authenticator or Authy. A correct password alone earns a
+  five-minute pending sign-in, not a session; only a valid code or recovery
+  code turns it into one. Codes follow RFC 6238, each one works once, and an
+  account gets 10 code attempts per 15 minutes. Setup shows a QR code and
+  the key as text, and turning two-factor on hands out 10 one-time recovery
+  codes, stored hashed. Settings shows how many are left and replaces them
+  for a current code.
+- **An account without two-factor can only set it up.** Every other page
+  and API route stays closed to it until it enrolls.
+- **Lockout recovery from the NAS.** `POST /api/maintenance/two-factor-reset`
+  with the maintenance token and `{"email": "..."}` clears an account's
+  two-factor and signs it out everywhere, for someone who lost both their
+  phone and their recovery codes. A browser session can't call it.
+
+### Changed
+
+- Adds one dependency, `qrcode-generator` (MIT, with no dependencies of its
+  own), to draw the setup QR code on the server.
+
+### Migration notes
+
+- **The next page you open after upgrading is "Set up two-factor".** Have an
+  authenticator app ready. Turning it on signs out your other browsers and
+  paired devices; sign in or pair them again.
+- **Set `NAS_CLOUD_MAINTENANCE_TOKEN` before you need it.** It's the only
+  way back in if you lose your phone and your recovery codes.
+
 ## [0.6.0] - 2026-10-18
 
 The app now follows the disk. Files added, moved, renamed or deleted over

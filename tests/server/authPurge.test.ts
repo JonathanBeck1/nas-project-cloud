@@ -35,7 +35,7 @@ const count = (db: AppDatabase, table: string) =>
   (db.prepare(`select count(*) as count from ${table}`).get() as { count: number }).count;
 
 describe("purgeExpiredAuthState", () => {
-  it("removes expired sessions, dead pairing codes and old rate-limit rows, and keeps live ones", () => {
+  it("removes expired sessions, dead pairing codes, unanswered sign-ins and old rate-limit rows, and keeps live ones", () => {
     const { db, repo, user, device } = freshRepo();
     repo.createSession({ userId: user.id, deviceId: device.id, tokenHash: "expired", expiresAt: ago(HOUR) });
     repo.createSession({ userId: user.id, deviceId: device.id, tokenHash: "live", expiresAt: ahead(HOUR) });
@@ -51,14 +51,19 @@ describe("purgeExpiredAuthState", () => {
     insertEvent.run("login_email", "attacker-1@example.test", ago(25 * HOUR));
     insertEvent.run("login_email", "attacker-2@example.test", ago(30 * HOUR));
     insertEvent.run("pair_global", "global", ago(23 * HOUR));
+    const challenge = { userId: user.id, deviceName: "Laptop" };
+    repo.createLoginChallenge({ ...challenge, tokenHash: "challenge-expired", expiresAt: ago(HOUR) });
+    repo.createLoginChallenge({ ...challenge, tokenHash: "challenge-live", expiresAt: ahead(HOUR) });
 
     const purged = repo.purgeExpiredAuthState();
 
-    expect(purged).toEqual({ sessions: 1, pairingCodes: 2, rateLimitEvents: 2 });
+    expect(purged).toEqual({ sessions: 1, pairingCodes: 2, loginChallenges: 1, rateLimitEvents: 2 });
     expect(repo.getSessionByTokenHash("live")).not.toBeNull();
     expect(count(db, "sessions")).toBe(1);
     expect(count(db, "device_pairing_codes")).toBe(1);
     expect(count(db, "rate_limit_events")).toBe(1);
+    expect(repo.getLoginChallengeByTokenHash("challenge-live")).not.toBeNull();
+    expect(count(db, "login_challenges")).toBe(1);
   });
 
   it("reuses the code of a dead pairing row instead of failing on the unique hash", () => {

@@ -169,6 +169,37 @@ type SessionRow = {
   last_seen_at: string;
 };
 
+type TwoFactorRow = {
+  totp_secret: string | null;
+  totp_pending_secret: string | null;
+  totp_enabled_at: string | null;
+  totp_last_step: number;
+};
+
+type LoginChallengeRow = {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  device_name: string;
+  expires_at: string;
+  created_at: string;
+};
+
+export type TwoFactorState = {
+  enabled: boolean;
+  secret: string | null;
+  pendingSecret: string | null;
+  lastStep: number;
+  recoveryCodesLeft: number;
+};
+
+export type LoginChallenge = {
+  id: string;
+  userId: string;
+  deviceName: string;
+  expiresAt: string;
+};
+
 type DevicePairingCodeRow = {
   id: string;
   user_id: string;
@@ -1422,6 +1453,114 @@ export function createMetadataRepository(db: AppDatabase) {
       return row ? userWithPasswordHashFromRow(row) : null;
     },
 
+    getUserById(id: string): User | null {
+      const row = db.prepare<[string], UserRow>("select * from users where id = ? limit 1").get(id);
+      return row ? userWithoutPasswordHash(userWithPasswordHashFromRow(row)) : null;
+    },
+
+    getTwoFactorState(userId: string): TwoFactorState | null {
+      const row = db
+        .prepare<[string], TwoFactorRow>(
+          "select totp_secret, totp_pending_secret, totp_enabled_at, totp_last_step from users where id = ? limit 1"
+        )
+        .get(userId);
+      if (!row) return null;
+      const { count } = db
+        .prepare<[string], { count: number }>(
+          "select count(*) as count from user_recovery_codes where user_id = ? and used_at is null"
+        )
+        .get(userId)!;
+      return {
+        enabled: row.totp_enabled_at !== null,
+        secret: row.totp_secret,
+        pendingSecret: row.totp_pending_secret,
+        lastStep: row.totp_last_step,
+        recoveryCodesLeft: count
+      };
+    },
+
+    setPendingTotpSecret(userId: string, secret: string): void {
+      db.prepare<[string, string]>("update users set totp_pending_secret = ? where id = ?").run(secret, userId);
+    },
+
+    // Turns on the pending secret, issues recovery codes and signs out every other session, all or nothing.
+    enableTwoFactor(input: { userId: string; step: number; recoveryCodeHashes: string[]; keepSessionId: string }): boolean {
+      return db.transaction(() => {
+        const result = db
+          .prepare(`
+            update users
+            set totp_secret = totp_pending_secret, totp_pending_secret = null, totp_enabled_at = @now, totp_last_step = @step
+            where id = @userId and totp_pending_secret is not null and totp_enabled_at is null
+          `)
+          .run({ userId: input.userId, step: input.step, now: new Date().toISOString() });
+        if (result.changes !== 1) return false;
+        insertRecoveryCodes(db, input.userId, input.recoveryCodeHashes);
+        db.prepare<[string, string]>("delete from sessions where user_id = ? and id != ?").run(input.userId, input.keepSessionId);
+        // A redeemed pairing code opens a session without a code, so none issued before this point may survive it.
+        db.prepare<[string]>("delete from device_pairing_codes where user_id = ?").run(input.userId);
+        return true;
+      })();
+    },
+
+    // Compare-and-set, so two requests racing with the same code can't both be accepted.
+    recordTotpStep(userId: string, step: number): boolean {
+      return (
+        db
+          .prepare<[number, string, number]>("update users set totp_last_step = ? where id = ? and totp_last_step < ?")
+          .run(step, userId, step).changes === 1
+      );
+    },
+
+    useRecoveryCode(userId: string, codeHash: string): boolean {
+      return (
+        db
+          .prepare<[string, string, string]>(
+            "update user_recovery_codes set used_at = ? where user_id = ? and code_hash = ? and used_at is null"
+          )
+          .run(new Date().toISOString(), userId, codeHash).changes > 0
+      );
+    },
+
+    replaceRecoveryCodes(userId: string, codeHashes: string[]): void {
+      db.transaction(() => {
+        db.prepare<[string]>("delete from user_recovery_codes where user_id = ?").run(userId);
+        insertRecoveryCodes(db, userId, codeHashes);
+      })();
+    },
+
+    // Lockout recovery: the account signs in with its password alone and must enroll again.
+    resetTwoFactor(userId: string): void {
+      db.transaction(() => {
+        db.prepare<[string]>(`
+          update users
+          set totp_secret = null, totp_pending_secret = null, totp_enabled_at = null, totp_last_step = -1
+          where id = ?
+        `).run(userId);
+        db.prepare<[string]>("delete from user_recovery_codes where user_id = ?").run(userId);
+        db.prepare<[string]>("delete from login_challenges where user_id = ?").run(userId);
+        db.prepare<[string]>("delete from sessions where user_id = ?").run(userId);
+        db.prepare<[string]>("delete from device_pairing_codes where user_id = ?").run(userId);
+      })();
+    },
+
+    createLoginChallenge(input: { userId: string; tokenHash: string; deviceName: string; expiresAt: string }): void {
+      db.prepare(`
+        insert into login_challenges (id, user_id, token_hash, device_name, expires_at, created_at)
+        values (@id, @userId, @tokenHash, @deviceName, @expiresAt, @createdAt)
+      `).run({ id: `challenge_${nanoid(12)}`, ...input, createdAt: new Date().toISOString() });
+    },
+
+    getLoginChallengeByTokenHash(tokenHash: string): LoginChallenge | null {
+      const row = db
+        .prepare<[string], LoginChallengeRow>("select * from login_challenges where token_hash = ? limit 1")
+        .get(tokenHash);
+      return row ? { id: row.id, userId: row.user_id, deviceName: row.device_name, expiresAt: row.expires_at } : null;
+    },
+
+    deleteLoginChallenge(id: string): boolean {
+      return db.prepare<[string]>("delete from login_challenges where id = ?").run(id).changes === 1;
+    },
+
     createDevice(input: CreateDeviceInput): TrustedDevice {
       const now = new Date().toISOString();
       const device: TrustedDevice = {
@@ -1497,9 +1636,15 @@ export function createMetadataRepository(db: AppDatabase) {
       return session;
     },
 
-    getSessionByTokenHash(tokenHash: string): AuthSession | null {
-      const row = db.prepare<[string], SessionRow>("select * from sessions where token_hash = ? limit 1").get(tokenHash);
-      return row ? sessionFromRow(row) : null;
+    getSessionByTokenHash(tokenHash: string): (AuthSession & { twoFactorEnabled: boolean }) | null {
+      const row = db
+        .prepare<[string], SessionRow & { two_factor_enabled: number }>(`
+          select sessions.*, users.totp_enabled_at is not null as two_factor_enabled
+          from sessions join users on users.id = sessions.user_id
+          where sessions.token_hash = ? limit 1
+        `)
+        .get(tokenHash);
+      return row ? { ...sessionFromRow(row), twoFactorEnabled: row.two_factor_enabled === 1 } : null;
     },
 
     deleteSession(id: string): void {
@@ -1545,13 +1690,14 @@ export function createMetadataRepository(db: AppDatabase) {
       return code;
     },
 
-    purgeExpiredAuthState(): { sessions: number; pairingCodes: number; rateLimitEvents: number } {
+    purgeExpiredAuthState(): { sessions: number; pairingCodes: number; loginChallenges: number; rateLimitEvents: number } {
       const now = new Date();
       const nowIso = now.toISOString();
       const rateLimitCutoff = new Date(now.getTime() - RATE_LIMIT_RETENTION_MS).toISOString();
       return {
         sessions: db.prepare<[string]>("delete from sessions where expires_at < ?").run(nowIso).changes,
         pairingCodes: deleteDeadPairingCodes(db, nowIso),
+        loginChallenges: db.prepare<[string]>("delete from login_challenges where expires_at < ?").run(nowIso).changes,
         // Across every key: the limiter only purges the key it is asked about, so one-off keys were kept forever.
         rateLimitEvents: db.prepare<[string]>("delete from rate_limit_events where occurred_at < ?").run(rateLimitCutoff)
           .changes
@@ -1805,6 +1951,17 @@ function uniqueSlug(db: AppDatabase, tableName: "projects" | "tags" | "categorie
   }
 
   return candidate;
+}
+
+function insertRecoveryCodes(db: AppDatabase, userId: string, codeHashes: string[]): void {
+  const insert = db.prepare(`
+    insert into user_recovery_codes (id, user_id, code_hash, used_at, created_at)
+    values (@id, @userId, @codeHash, null, @createdAt)
+  `);
+  const createdAt = new Date().toISOString();
+  for (const codeHash of codeHashes) {
+    insert.run({ id: `recovery_${nanoid(12)}`, userId, codeHash, createdAt });
+  }
 }
 
 function deleteDeadPairingCodes(db: AppDatabase, nowIso: string): number {

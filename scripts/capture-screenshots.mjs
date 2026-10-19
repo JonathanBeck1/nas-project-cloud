@@ -6,6 +6,7 @@
 // Usage: npm run screenshots
 
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import Database from "better-sqlite3";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -118,6 +119,36 @@ async function setupOwner(jar) {
     throw new Error(`auth/setup failed with ${response.status}: ${await response.text()}`);
   }
   jar.absorb(response.headers);
+  await enrollTwoFactor(jar);
+}
+
+// A new account can reach nothing until two-factor is on, so the script enrolls with a code it computes itself.
+async function enrollTwoFactor(jar) {
+  const setup = await fetch(`${baseUrl}/api/auth/two-factor/setup`, { method: "POST", headers: jar.headers() });
+  if (setup.status !== 200) {
+    throw new Error(`two-factor setup failed with ${setup.status}: ${await setup.text()}`);
+  }
+  const { secret } = await setup.json();
+  const enable = await fetch(`${baseUrl}/api/auth/two-factor/enable`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...jar.headers() },
+    body: JSON.stringify({ code: totp(secret) })
+  });
+  if (enable.status !== 200) {
+    throw new Error(`two-factor enable failed with ${enable.status}: ${await enable.text()}`);
+  }
+}
+
+// RFC 6238 as the app checks it: HMAC-SHA1, 6 digits, 30-second steps, base32 secret.
+function totp(base32Secret) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const bits = [...base32Secret.replace(/\s/g, "")].map((char) => alphabet.indexOf(char).toString(2).padStart(5, "0")).join("");
+  const key = Buffer.from(bits.match(/.{8}/g).map((byte) => parseInt(byte, 2)));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)));
+  const hmac = crypto.createHmac("sha1", key).update(counter).digest();
+  const offset = hmac[hmac.length - 1] & 0xf;
+  return String((hmac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, "0");
 }
 
 // The server prints the code at boot; this script started that server, so it can read it from the database.
@@ -139,7 +170,7 @@ async function createProjects(jar) {
   for (const seed of seeds) {
     const response = await fetch(`${baseUrl}/api/projects`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: jar.cookieHeader() },
+      headers: { "Content-Type": "application/json", ...jar.headers() },
       body: JSON.stringify(seed)
     });
     if (response.status !== 201) {
@@ -238,7 +269,7 @@ async function uploadFixtureFiles(jar, projects) {
 
     const response = await fetch(`${baseUrl}/api/files`, {
       method: "POST",
-      headers: { Cookie: jar.cookieHeader() },
+      headers: jar.headers(),
       body: form
     });
     if (response.status !== 201) {
@@ -248,7 +279,7 @@ async function uploadFixtureFiles(jar, projects) {
     if (file.archive) {
       const archiveResponse = await fetch(`${baseUrl}/api/files/${body.file.id}/archive`, {
         method: "POST",
-        headers: { Cookie: jar.cookieHeader() }
+        headers: jar.headers()
       });
       if (archiveResponse.status !== 200) {
         throw new Error(`archive failed: ${await archiveResponse.text()}`);
@@ -344,8 +375,13 @@ class CookieJar {
     }
   }
 
-  cookieHeader() {
-    return [...this.cookies.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
+  // Mutating routes want the CSRF cookie echoed back in a header.
+  headers() {
+    const csrf = this.cookies.get("nas_cloud_csrf");
+    return {
+      Cookie: [...this.cookies.entries()].map(([name, value]) => `${name}=${value}`).join("; "),
+      ...(csrf ? { "x-nas-csrf": decodeURIComponent(csrf) } : {})
+    };
   }
 
   asPlaywrightCookies(domain) {

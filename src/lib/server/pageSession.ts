@@ -17,7 +17,9 @@ export type PageSession = {
   deviceId: string | null;
 };
 
-export async function requirePageSession(): Promise<PageSession> {
+export async function requirePageSession({
+  allowWithoutTwoFactor = false
+}: { allowWithoutTwoFactor?: boolean } = {}): Promise<PageSession> {
   const db = getDatabase();
   const repo = createMetadataRepository(db);
   if (repo.countUsers() === 0) {
@@ -32,6 +34,10 @@ export async function requirePageSession(): Promise<PageSession> {
   const session = repo.getSessionByTokenHash(hashSessionToken(token));
   if (!session || Date.parse(session.expiresAt) <= Date.now()) {
     redirect("/login");
+  }
+
+  if (!session.twoFactorEnabled && !allowWithoutTwoFactor) {
+    redirect("/two-factor");
   }
 
   if (shouldTouchSession(session.lastSeenAt)) {

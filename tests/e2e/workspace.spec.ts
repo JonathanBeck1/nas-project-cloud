@@ -1,17 +1,5 @@
 import fs from "node:fs/promises";
 import { expect, test } from "@playwright/test";
-import { readSetupCode } from "../helpers/setupCode";
-
-const owner = {
-  email: "owner@example.local",
-  name: "Owner",
-  password: process.env.E2E_OWNER_PASSWORD ?? "local-e2e-password-0000",
-  deviceName: "Playwright"
-};
-
-test.beforeEach(async ({ page }) => {
-  await authenticate(page);
-});
 
 test("workspace renders the local library shell", async ({ page }) => {
   await page.goto("/");
@@ -72,21 +60,3 @@ test("uploads selects and archives a file", async ({ page }) => {
   await expect(page.getByRole("status").filter({ hasText: `Archived ${filename}` })).toBeVisible();
 });
 
-async function authenticate(page: import("@playwright/test").Page) {
-  const setup = await page.request.post("/api/auth/setup", {
-    data: { ...owner, setupCode: readSetupCode() }
-  });
-
-  if (setup.status() === 201) {
-    return;
-  }
-
-  const login = await page.request.post("/api/auth/login", {
-    data: {
-      email: owner.email,
-      password: owner.password,
-      deviceName: owner.deviceName
-    }
-  });
-  expect(login.status()).toBe(200);
-}

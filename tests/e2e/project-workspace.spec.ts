@@ -1,16 +1,4 @@
 import { expect, test } from "@playwright/test";
-import { readSetupCode } from "../helpers/setupCode";
-
-const owner = {
-  email: "owner@example.local",
-  name: "Owner",
-  password: process.env.E2E_OWNER_PASSWORD ?? "local-e2e-password-0000",
-  deviceName: "Playwright"
-};
-
-test.beforeEach(async ({ page }) => {
-  await authenticate(page);
-});
 
 test("project workspace route renders", async ({ page }) => {
   const project = await createProject(page, `Garage Build ${Date.now()}`);
@@ -62,25 +50,6 @@ test("shows project files as a gallery and keeps that view after a reload", asyn
   await expect(page.getByRole("button", { name: "Gallery view" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("list", { name: "Files" }).getByRole("button", { name: filename })).toBeVisible();
 });
-
-async function authenticate(page: import("@playwright/test").Page) {
-  const setup = await page.request.post("/api/auth/setup", {
-    data: { ...owner, setupCode: readSetupCode() }
-  });
-
-  if (setup.status() === 201) {
-    return;
-  }
-
-  const login = await page.request.post("/api/auth/login", {
-    data: {
-      email: owner.email,
-      password: owner.password,
-      deviceName: owner.deviceName
-    }
-  });
-  expect(login.status()).toBe(200);
-}
 
 async function readCsrfCookie(page: import("@playwright/test").Page): Promise<string> {
   const cookies = await page.context().cookies();

@@ -5,6 +5,7 @@ import { DeviceLabelEditor } from "@/components/workspace/DeviceLabelEditor";
 import { DeploymentStatusCard } from "@/components/workspace/DeploymentStatusCard";
 import { PreviewStatusCard } from "@/components/workspace/PreviewStatusCard";
 import { StorageSyncCard } from "@/components/workspace/StorageSyncCard";
+import { TwoFactorCard } from "@/components/workspace/TwoFactorCard";
 import { appConfig } from "@/lib/server/config";
 import { requirePageSession } from "@/lib/server/pageSession";
 import { formatBytes } from "@/components/workspace/FileGrid";
@@ -12,7 +13,7 @@ import { formatBytes } from "@/components/workspace/FileGrid";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const { repo } = await requirePageSession();
+  const { repo, userId } = await requirePageSession();
   const projects = repo.listProjects();
 
   const settings = [
@@ -49,6 +50,8 @@ export default async function SettingsPage() {
             </div>
           ))}
         </dl>
+
+        <TwoFactorCard recoveryCodesLeft={repo.getTwoFactorState(userId)?.recoveryCodesLeft ?? 0} />
 
         <DeploymentStatusCard />
 
