@@ -160,6 +160,23 @@ function migrate(db: AppDatabase) {
       created_at text not null
     );
 
+    create table if not exists user_recovery_codes (
+      id text primary key,
+      user_id text not null references users(id) on delete cascade,
+      code_hash text not null,
+      used_at text,
+      created_at text not null
+    );
+
+    create table if not exists login_challenges (
+      id text primary key,
+      user_id text not null references users(id) on delete cascade,
+      token_hash text not null unique,
+      device_name text not null,
+      expires_at text not null,
+      created_at text not null
+    );
+
     create table if not exists rate_limit_events (
       id integer primary key autoincrement,
       bucket text not null,
@@ -205,6 +222,7 @@ function migrate(db: AppDatabase) {
     create index if not exists devices_user_id_idx on devices(user_id);
     create index if not exists device_pairing_codes_code_hash_idx on device_pairing_codes(code_hash);
     create index if not exists upload_sessions_status_idx on upload_sessions(status);
+    create index if not exists user_recovery_codes_user_id_idx on user_recovery_codes(user_id);
     create index if not exists rate_limit_events_bucket_key_idx
       on rate_limit_events(bucket, key, occurred_at);
   `);
@@ -217,6 +235,10 @@ function migrate(db: AppDatabase) {
   addColumnIfMissing(db, "file_share_links", "password_hash", "text");
   addColumnIfMissing(db, "upload_sessions", "temp_path_cleaned_at", "text");
   addColumnIfMissing(db, "file_previews", "attempts", "integer not null default 0");
+  addColumnIfMissing(db, "users", "totp_secret", "text");
+  addColumnIfMissing(db, "users", "totp_pending_secret", "text");
+  addColumnIfMissing(db, "users", "totp_enabled_at", "text");
+  addColumnIfMissing(db, "users", "totp_last_step", "integer not null default -1");
 
   // After the column migrations: files.status does not exist until the line above adds it.
   db.exec("create index if not exists files_listing_idx on files(status, uploaded_at desc, name, id)");
