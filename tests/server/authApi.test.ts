@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
     hasSetupCode: vi.fn(),
     createFirstOwner: vi.fn(),
     getUserByEmail: vi.fn(),
+    getTwoFactorState: vi.fn(),
     createDevice: vi.fn(),
     findDeviceByName: vi.fn(),
     touchDevice: vi.fn(),

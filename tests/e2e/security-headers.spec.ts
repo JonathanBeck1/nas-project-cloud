@@ -1,17 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { readSetupCode } from "../helpers/setupCode";
 
 // Only download and ZIP responses ever set security headers. Every app page --
 // login, setup, the workspace, the share download page -- was served bare, so
 // nothing stopped the app being framed, and the Referer on /shares/<token>
 // leaked the token to any link the recipient clicked.
-const owner = {
-  email: "owner@example.local",
-  name: "Owner",
-  password: process.env.E2E_OWNER_PASSWORD ?? "local-e2e-password-0000",
-  deviceName: "Playwright"
-};
-
 test("app pages carry security headers", async ({ page }) => {
   const response = await page.request.get("/login");
 
@@ -54,7 +46,6 @@ test("the workspace loads and responds under the page CSP", async ({ page }) => 
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
   });
-  await authenticate(page);
 
   await page.goto("/");
   const gallery = page.getByRole("button", { name: "Gallery view" }).first();
@@ -66,7 +57,6 @@ test("the workspace loads and responds under the page CSP", async ({ page }) => 
 });
 
 test("downloads keep their stricter headers", async ({ page }) => {
-  await authenticate(page);
   await page.goto("/");
 
   const filename = `headers-smoke-${Date.now()}.txt`;
@@ -97,14 +87,3 @@ test("downloads keep their stricter headers", async ({ page }) => {
   expect(headers["content-disposition"]).toContain(`filename="${filename}"`);
 });
 
-async function authenticate(page: import("@playwright/test").Page) {
-  const setup = await page.request.post("/api/auth/setup", { data: { ...owner, setupCode: readSetupCode() } });
-  if (setup.status() === 201) {
-    return;
-  }
-
-  const login = await page.request.post("/api/auth/login", {
-    data: { email: owner.email, password: owner.password, deviceName: owner.deviceName }
-  });
-  expect(login.status()).toBe(200);
-}

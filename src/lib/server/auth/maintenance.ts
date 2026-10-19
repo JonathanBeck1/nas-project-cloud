@@ -33,6 +33,17 @@ export async function requireMaintenanceAuth(request: Request): Promise<Maintena
   return { ok: true, via: "session", userId: session.userId };
 }
 
+// For actions a signed-in session must never reach, such as resetting someone's two-factor.
+export function requireMaintenanceToken(request: Request): MaintenanceAuthResult {
+  if (checkBearerToken(request) === "match") {
+    return { ok: true, via: "token" };
+  }
+  return {
+    ok: false,
+    response: NextResponse.json({ error: "maintenance token required" }, { status: 403 })
+  };
+}
+
 function checkBearerToken(request: Request): "match" | "mismatch" | "absent" {
   const expected = process.env[MAINTENANCE_ENV_VAR];
   if (!expected || expected.length === 0) {

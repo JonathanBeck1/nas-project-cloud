@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDatabase } from "@/lib/server/db";
+import { createMetadataRepository } from "@/lib/server/metadata";
 
 const createdDirs: string[] = [];
 
@@ -194,6 +196,34 @@ describe("createDatabase", () => {
       expect(sessionColumns.map((column) => column.name)).toEqual(
         expect.arrayContaining(["id", "user_id", "device_id", "token_hash", "expires_at", "created_at", "last_seen_at"])
       );
+    } finally {
+      db.close();
+    }
+  });
+
+  it("upgrades a 0.6 users table with two-factor off, so the owner has to enroll", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-db-"));
+    createdDirs.push(dir);
+    const dbPath = path.join(dir, "test.sqlite");
+    const old = new Database(dbPath);
+    old.exec(`
+      create table users (
+        id text primary key, email text not null unique, name text not null, password_hash text not null,
+        role text not null, created_at text not null, updated_at text not null
+      );
+      insert into users values ('user_1', 'owner@example.test', 'Owner', 'x', 'owner', '2026-01-01', '2026-01-01');
+    `);
+    old.close();
+
+    const db = createDatabase(dbPath);
+    try {
+      expect(createMetadataRepository(db).getTwoFactorState("user_1")).toEqual({
+        enabled: false,
+        secret: null,
+        pendingSecret: null,
+        lastStep: -1,
+        recoveryCodesLeft: 0
+      });
     } finally {
       db.close();
     }

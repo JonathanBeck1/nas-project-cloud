@@ -216,7 +216,9 @@ The first page should redirect to `/setup`. It asks for a setup code, which the 
 
 In TrueNAS, open Apps, select the app, and use the View Logs icon in the Workloads widget. On plain Docker, run `docker logs nas-project-cloud 2>&1 | grep setup`. The code stays the same across restarts until the owner is created, and only someone who can read the app's log can use it, so another device on the LAN can't claim the install first.
 
-Create the owner account, then upload a small image file and confirm that:
+Create the owner account. The app then asks you to set up two-factor: scan the QR code with an authenticator app (1Password, Google Authenticator, Authy and the like), enter the 6-digit code it shows, and save the 10 recovery codes somewhere safe, such as a password manager. Each recovery code signs you in once if you lose your phone.
+
+Then upload a small image file and confirm that:
 
 - it appears in the workspace,
 - it downloads successfully,
@@ -358,6 +360,7 @@ The app exposes two maintenance routes that can be driven from a TrueNAS cron jo
 POST /api/maintenance/previews        # process pending preview jobs
 POST /api/maintenance/reindex         # storage sync: index new files, relink moved or renamed ones, mark vanished ones missing
 POST /api/maintenance/upload-cleanup  # delete abandoned uploads older than 24h; purge expired sessions, pairing codes, rate-limit rows; remove thumbnails left by deleted files; take the daily database copy
+POST /api/maintenance/two-factor-reset  # token only: clear an account's two-factor after a lockout (see below)
 ```
 
 > **Tip:** if you'd rather skip the cron entirely, set `NAS_CLOUD_PREVIEW_SCHEDULER=on` in the container env. The app then runs an in-process loop that ticks every 60 seconds while there is pending preview work, goes again after one second when a batch of 25 came back full, and idles to every 5 minutes when the queue is empty. The same loop runs the stale-upload cleanup, the purge of expired sessions, pairing codes, and rate-limit rows, the removal of thumbnails left by deleted files, and the daily database copy once an hour. Storage sync runs on its own timer a minute after startup and then every 15 minutes. The cron approach below still works either way and is the safe choice if you run multiple replicas; with the scheduler off, cron is the only thing that cleans up abandoned uploads.
@@ -410,6 +413,20 @@ Tips:
 - Use `127.0.0.1:3000` (the loopback interface) so the request never leaves the NAS.
 - Export `NAS_CLOUD_MAINTENANCE_TOKEN` in the TrueNAS cron environment, or hard-code the bearer value into the cron command itself if you prefer not to expose it in the parent shell.
 - Every successful run returns JSON. A non-2xx response indicates the token did not match (`401`) or the worker hit an unexpected error.
+
+### Locked Out Of Two-Factor
+
+If someone loses their authenticator app and their recovery codes, reset their two-factor from a shell on the NAS:
+
+```bash
+curl --silent --show-error --fail \
+  -H "Authorization: Bearer ${NAS_CLOUD_MAINTENANCE_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com"}' \
+  -X POST http://127.0.0.1:3000/api/maintenance/two-factor-reset
+```
+
+This signs the account out everywhere and deletes its recovery codes. Its next sign-in takes only the password and goes straight to two-factor setup, so reset an account only when you know who signs in next. The route accepts the maintenance token and nothing else; a signed-in browser can't call it.
 
 ## Upgrading
 
