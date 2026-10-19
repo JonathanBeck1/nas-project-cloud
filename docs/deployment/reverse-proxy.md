@@ -21,7 +21,7 @@ Pick one:
 
 Then set two environment variables on the app, and restart it:
 
-- `NAS_CLOUD_SECURE_COOKIES=true` once every browser reaches the app over HTTPS. Browsers drop `Secure` cookies over plain HTTP, so leave it off if you still also use `http://<nas-ip>:3000` on the LAN, or login there stops working.
+- `NAS_CLOUD_SECURE_COOKIES=true` once every browser reaches the app over HTTPS. Browsers drop `Secure` cookies over plain HTTP, so leave it off if you still also use `http://<nas-ip>:3000` on the LAN, or login there stops working. With it on, pages also send HSTS (`Strict-Transport-Security: max-age=31536000`), so for a year browsers refuse plain HTTP to that hostname on any port. Don't turn it on if anyone opens the same hostname over `http://`, for example `http://nas.lan:3000` alongside `https://nas.lan`.
 - `NAS_CLOUD_TRUST_PROXY=true` only when port 3000 can't be reached except through the proxy. The app then rate-limits login per client and records real client addresses in share access history. If port 3000 is still open on the LAN, leave it off: any device could send its own `X-Forwarded-For` header. The [TrueNAS guide](./truenas-scale.md#reverse-proxy) has the full conditions.
 
 ## Tailscale Serve

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,15 +22,17 @@ const themeBootstrapScript = `
 })();
 `.trim();
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Set by middleware; the page CSP refuses inline scripts without it.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
       </head>
       <body>{children}</body>
     </html>

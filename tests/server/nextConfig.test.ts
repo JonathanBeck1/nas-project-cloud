@@ -18,17 +18,9 @@ describe("next.config security headers", () => {
     expect(headers["content-security-policy"]).toBeUndefined();
   });
 
-  it("sets the page CSP without replacing the sandboxed policy on API downloads", async () => {
+  it("leaves the page CSP to the middleware, so no static rule can replace its nonce or the download sandbox", async () => {
     const rules = (await nextConfig.headers?.()) ?? [];
-    const cspRule = rules.find((rule) => rule.headers.some(({ key }) => key === "Content-Security-Policy"));
-    const matches = (pathname: string) => new RegExp(`^${cspRule?.source}$`).test(pathname);
 
-    expect((await headersFor(cspRule?.source ?? ""))["content-security-policy"]).toBe(
-      "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
-    );
-    expect(matches("/")).toBe(true);
-    expect(matches("/shares/some-token")).toBe(true);
-    expect(matches("/api/files/file_1/download")).toBe(false);
-    expect(matches("/api/shares/some-token/download")).toBe(false);
+    expect(rules.flatMap((rule) => rule.headers).some(({ key }) => key.toLowerCase() === "content-security-policy")).toBe(false);
   });
 });

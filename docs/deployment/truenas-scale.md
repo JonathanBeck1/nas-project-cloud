@@ -486,7 +486,7 @@ http://<truenas-ip>:3000
 
 Proxy configs for Caddy, Nginx, Nginx Proxy Manager, Traefik, Cloudflare Tunnel and Tailscale Serve are in [reverse-proxy.md](./reverse-proxy.md). No single request is larger than 64 MiB (larger files are sent in 8 MiB chunks), so a 100 MB body limit and a read timeout of a few minutes are enough; the 2 GiB application limit applies to whole files.
 
-When the app is served over HTTPS (TLS terminated at the proxy), set `NAS_CLOUD_SECURE_COOKIES=true` so session and CSRF cookies are marked `Secure`. Leave it unset (the default) for direct LAN access over plain `http://<nas-ip>:3000` — browsers drop `Secure` cookies over HTTP, which silently blocks login.
+When the app is served over HTTPS (TLS terminated at the proxy), set `NAS_CLOUD_SECURE_COOKIES=true` so session and CSRF cookies are marked `Secure` and pages send HSTS, which makes browsers refuse plain HTTP to that hostname, on any port, for a year. Leave it unset (the default) for direct LAN access over plain `http://<nas-ip>:3000` — browsers drop `Secure` cookies over HTTP, which silently blocks login.
 
 Set `NAS_CLOUD_TRUST_PROXY=true` only when every request reaches the app through the proxy. The app then rate-limits login and pairing per client, using the last `X-Forwarded-For` entry, and records that address in share access history. Three conditions have to hold:
 

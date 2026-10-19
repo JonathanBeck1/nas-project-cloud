@@ -24,6 +24,16 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   with the maintenance token and `{"email": "..."}` clears an account's
   two-factor and signs it out everywhere, for someone who lost both their
   phone and their recovery codes. A browser session can't call it.
+- **Pages only run scripts the server put there.** Every page now gets a
+  Content Security Policy with a fresh nonce per request
+  (`script-src 'self' 'nonce-…' 'strict-dynamic'`), so markup injected into
+  a page can't run script, while Next.js's own scripts and the theme script
+  carry the nonce. Pages that were prerendered, like login and setup, now
+  render per request, since a nonce can't be baked in at build time.
+- **HSTS when the app is HTTPS-only.** With `NAS_CLOUD_SECURE_COOKIES=true`,
+  pages send `Strict-Transport-Security: max-age=31536000`. Browsers then
+  refuse plain HTTP to that hostname, on any port, for a year, so only turn
+  it on if nobody opens the same hostname over `http://`.
 
 ### Changed
 

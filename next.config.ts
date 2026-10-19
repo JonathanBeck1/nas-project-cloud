@@ -14,18 +14,6 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Pages only. A header set here replaces the same header from a route handler, and the
-        // download routes send a stricter sandboxed policy of their own.
-        source: "/((?!api/).*)",
-        headers: [
-          // No script-src yet: layout.tsx has an inline theme bootstrap, so that needs nonces first.
-          {
-            key: "Content-Security-Policy",
-            value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
-          }
-        ]
-      },
-      {
         source: "/:path*",
         headers: [
           { key: "X-Frame-Options", value: "DENY" },
