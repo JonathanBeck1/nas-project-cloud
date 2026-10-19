@@ -16,7 +16,20 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
   const [deviceName, setDeviceName] = useState("");
   const [message, setMessage] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [needsCode, setNeedsCode] = useState(false);
   const isSetup = mode === "setup";
+
+  if (needsCode) {
+    return (
+      <CodeStep
+        onSuccess={onSuccess}
+        onStartOver={() => {
+          setNeedsCode(false);
+          setPassword("");
+        }}
+      />
+    );
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,11 +48,15 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
         })
       });
 
+      const body = (await response.json().catch(() => ({}))) as { error?: string; twoFactorRequired?: boolean };
       if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error ?? "Authentication failed");
       }
 
+      if (body.twoFactorRequired) {
+        setNeedsCode(true);
+        return;
+      }
       onSuccess?.();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Authentication failed");
@@ -147,6 +164,100 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
       >
         {isBusy ? "Working..." : isSetup ? "Create owner" : "Sign in"}
       </button>
+    </form>
+  );
+}
+
+function CodeStep({ onSuccess, onStartOver }: { onSuccess?: () => void; onStartOver: () => void }) {
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const [code, setCode] = useState("");
+  const [message, setMessage] = useState("");
+  const [isBusy, setIsBusy] = useState(false);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/auth/login/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(useRecoveryCode ? { recoveryCode: code } : { code })
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Verification failed");
+      }
+      onSuccess?.();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Verification failed");
+      setCode("");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-md border border-line bg-panel p-5 shadow-panel">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">NAS Project Cloud</p>
+        <h1 className="mt-2 text-2xl font-semibold text-ink">Two-factor check</h1>
+        <p className="mt-2 text-sm text-muted">
+          {useRecoveryCode
+            ? "Enter one of the recovery codes you saved. Each code works once."
+            : "Enter the 6-digit code from your authenticator app."}
+        </p>
+      </div>
+
+      <label className="block text-sm font-medium text-ink">
+        {useRecoveryCode ? "Recovery code" : "Authentication code"}
+        <input
+          autoComplete="one-time-code"
+          autoFocus
+          className="mt-1 h-10 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm tracking-wider outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+          inputMode={useRecoveryCode ? "text" : "numeric"}
+          name={useRecoveryCode ? "recoveryCode" : "code"}
+          onChange={(event) => setCode(event.target.value)}
+          pattern={useRecoveryCode ? undefined : "[0-9 ]{6,7}"}
+          placeholder={useRecoveryCode ? "XXXXX-XXXXX" : "123456"}
+          required
+          spellCheck={false}
+          type="text"
+          value={code}
+        />
+      </label>
+
+      {message ? (
+        <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+          {message}
+        </p>
+      ) : null}
+
+      <button
+        className="h-10 w-full rounded-md bg-accent px-3 text-sm font-semibold text-white shadow-panel transition hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isBusy}
+        type="submit"
+      >
+        {isBusy ? "Checking..." : "Verify"}
+      </button>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <button
+          className="font-medium text-accent hover:underline"
+          onClick={() => {
+            setUseRecoveryCode((value) => !value);
+            setCode("");
+            setMessage("");
+          }}
+          type="button"
+        >
+          {useRecoveryCode ? "Use your authenticator app" : "Use a recovery code instead"}
+        </button>
+        <button className="font-medium text-muted hover:text-ink" onClick={onStartOver} type="button">
+          Start over
+        </button>
+      </div>
     </form>
   );
 }

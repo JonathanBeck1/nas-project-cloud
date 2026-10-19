@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { DUMMY_PASSWORD_HASH, hashPassword, needsRehash, verifyPassword } from "@/lib/server/auth/passwords";
-import { createSessionToken, hashSessionToken, sessionExpiresAt } from "@/lib/server/auth/sessions";
-import { withSessionCookie } from "@/lib/server/auth/http";
+import { LOGIN_CHALLENGE_MS, createSessionToken, hashSessionToken, startBrowserSession } from "@/lib/server/auth/sessions";
+import { withLoginChallengeCookie, withSessionCookie } from "@/lib/server/auth/http";
 import { clientIpFromRequest, createRateLimiter } from "@/lib/server/rateLimit";
 import { SMALL_BODY_MAX_BYTES, bodyTooLarge, parseJsonObject, readLimitedBody } from "@/lib/server/requestBody";
 
@@ -67,19 +67,19 @@ export async function POST(request: Request) {
   limiter.reset("login_email", email);
   limiter.reset("login_ip", ip);
 
-  // One row per named browser, not one per login. Revoking a device deletes its row, so the next login starts a new one.
-  const device =
-    repo.findDeviceByName(user.id, deviceName, "browser") ??
-    repo.createDevice({ userId: user.id, name: deviceName, kind: "browser" });
-  repo.touchDevice(device.id);
-  const token = createSessionToken();
-  repo.createSession({
-    userId: user.id,
-    deviceId: device.id,
-    tokenHash: hashSessionToken(token),
-    expiresAt: sessionExpiresAt()
-  });
+  // The password alone earns no session: the challenge cookie can only be traded for one with a code.
+  if (repo.getTwoFactorState(user.id)?.enabled) {
+    const challenge = createSessionToken();
+    repo.createLoginChallenge({
+      userId: user.id,
+      tokenHash: hashSessionToken(challenge),
+      deviceName,
+      expiresAt: new Date(Date.now() + LOGIN_CHALLENGE_MS).toISOString()
+    });
+    return withLoginChallengeCookie(NextResponse.json({ twoFactorRequired: true }), challenge);
+  }
 
+  const token = startBrowserSession(repo, user.id, deviceName);
   return withSessionCookie(
     NextResponse.json({
       user: {

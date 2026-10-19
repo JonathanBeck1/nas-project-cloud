@@ -28,7 +28,7 @@ NAS Project Cloud has one maintainer. The aim is to acknowledge a report within 
 
 The app is built for a single owner on a trusted home or office network, optionally behind a reverse proxy with TLS. Reports are especially welcome for:
 
-- getting past sign-in, pairing, or the CSRF checks
+- getting past sign-in, two-factor, pairing, or the CSRF checks
 - reading, writing, or deleting anything outside the configured storage root, including through a symlink placed in the files dataset
 - abusing share links: bypassing a password, an expiry, or a download limit
 - exposing or corrupting the SQLite database

@@ -19,7 +19,8 @@ const VALID_SESSION = {
   tokenHash: "abc",
   expiresAt: new Date(Date.now() + 60_000).toISOString(),
   createdAt: "2026-04-30T00:00:00.000Z",
-  lastSeenAt: "2026-04-30T00:00:00.000Z"
+  lastSeenAt: "2026-04-30T00:00:00.000Z",
+  twoFactorEnabled: true
 };
 
 describe("requireApiSession with CSRF", () => {

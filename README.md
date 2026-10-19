@@ -23,7 +23,7 @@ Tools like Nextcloud and OpenCloud are general-purpose. Tools like LocalSend are
 - **SQLite metadata** — fast, single-file, journal-mode WAL. Indexed on project, category, family, and uploaded_at.
 - **Resumable large uploads** — chunked sessions with 8 MiB chunks (the server accepts up to 32 MiB per chunk), offset checking, automatic retry of a failed chunk, abort, and stale-session cleanup. Default upload cap 2 GiB.
 - **Preview pipeline** — automatic 384 px webp previews for images, video poster frames via `ffmpeg`, first-page PDF previews via `poppler-utils`, the plate thumbnail slicers embed in 3MF and G-code files, and a shaded drawing of every STL mesh, streamed from authenticated routes.
-- **Trusted-device auth** — owner bootstrap on first run, scrypt password hashing, HTTP-only session cookie, route guards on every API and page, and pairing-code device trust.
+- **Trusted-device auth** — owner bootstrap on first run, required two-factor sign-in with an authenticator app and one-time recovery codes, scrypt password hashing, HTTP-only session cookie, route guards on every API and page, and pairing-code device trust.
 - **TrueNAS-ready** — Dockerfile, `docker-compose.truenas.yml`, deployment guide, and `/api/health` readiness check that exercises the storage mount, database, and preview binaries.
 - **CI/CD** — GitHub Actions runs unit, type, lint, and build checks, then publishes `ghcr.io/jonathanbeck1/nas-project-cloud`: `:edge` on every push to `main`, and the version tags plus `:latest` when a release is tagged.
 
@@ -83,7 +83,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open <http://localhost:3000>. The first page redirects to `/setup` so you can create the owner account (12+ character password). It asks for the setup code that `npm run dev` prints in the terminal (`[setup] No owner yet. Enter this setup code ...`). After that, sign in at `/login` and you're in the workspace.
+Open <http://localhost:3000>. The first page redirects to `/setup` so you can create the owner account (12+ character password). It asks for the setup code that `npm run dev` prints in the terminal (`[setup] No owner yet. Enter this setup code ...`). Then it asks you to set up two-factor: scan the QR code with an authenticator app, enter the code it shows, and save the recovery codes. After that you're in the workspace.
 
 To wipe local state and start over:
 

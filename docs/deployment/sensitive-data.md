@@ -52,15 +52,15 @@ Even with HTTPS in front, the app's own port answers anyone who can reach it. Li
 ## Accounts and share links
 
 - Use a long, unique password for the owner account, stored in a password manager, and don't share it.
+- Two-factor sign-in is required, so a stolen password alone doesn't get in. Keep the recovery codes in a password manager, and set `NAS_CLOUD_MAINTENANCE_TOKEN`: it's the only way to reset two-factor if the phone and the codes are both lost.
 - Sign out on shared computers. The Devices page lists every signed-in device, and removing one ends its session.
 - Share links always expire, after 30 days at most. For anything sensitive, set a short expiry, a password and a download limit, and revoke the link when it's no longer needed. A link works for anyone who has it, so send the password separately.
 
 ## What the app doesn't do yet
 
 - **One account.** There are no separate user accounts or per-project permissions yet; anyone signed in sees everything.
-- **No two-factor login.** A password alone signs in.
 - **No audit trail** of who viewed, downloaded, moved or deleted files inside the app. Share-link downloads are the only access that's recorded.
 - **No single sign-on (SAML/OIDC)** and **no malware scanning** of uploads.
 - **No certification.** It has one maintainer and hasn't had an outside penetration test or compliance audit (SOC 2, HIPAA and the like).
 
-Two-factor login, team accounts with per-project permissions, and an audit log are being added, and this page will change as they land. For regulated data, such as health, financial or legal records, get a professional security review before relying on the app, and check what your obligations require.
+Team accounts with per-project permissions and an audit log are being added, and this page will change as they land. For regulated data, such as health, financial or legal records, get a professional security review before relying on the app, and check what your obligations require.

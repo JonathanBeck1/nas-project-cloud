@@ -13,8 +13,12 @@ export type ApiSessionResult =
   | { ok: true; userId: string; sessionId: string; deviceId: string | null }
   | { ok: false; response: NextResponse };
 
-export async function requireApiSession(request: Request): Promise<ApiSessionResult> {
-  const token = sessionTokenFromRequest(request);
+// Until two-factor is on, a session can reach only the routes that set it up.
+export async function requireApiSession(
+  request: Request,
+  { allowWithoutTwoFactor = false }: { allowWithoutTwoFactor?: boolean } = {}
+): Promise<ApiSessionResult> {
+  const token = cookieFromRequest(request, sessionCookieName);
   if (!token) {
     return unauthorized();
   }
@@ -27,6 +31,13 @@ export async function requireApiSession(request: Request): Promise<ApiSessionRes
 
   if (isMutatingMethod(request.method) && !verifyCsrfToken(request)) {
     return csrfFailure();
+  }
+
+  if (!session.twoFactorEnabled && !allowWithoutTwoFactor) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "two-factor setup required" }, { status: 403 })
+    };
   }
 
   slideSession(repo, session);
@@ -60,12 +71,12 @@ function slideSession(repo: SlideRepo, session: SlideSession): void {
   }
 }
 
-function sessionTokenFromRequest(request: Request): string {
+export function cookieFromRequest(request: Request, cookieName: string): string {
   const cookieHeader = request.headers.get("cookie") ?? "";
   const cookies = cookieHeader.split(";").map((cookie) => cookie.trim());
   for (const cookie of cookies) {
     const [name, ...valueParts] = cookie.split("=");
-    if (name === sessionCookieName) {
+    if (name === cookieName) {
       try {
         return decodeURIComponent(valueParts.join("="));
       } catch {
