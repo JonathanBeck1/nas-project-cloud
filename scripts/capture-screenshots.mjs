@@ -256,21 +256,21 @@ async function uploadFixtureFiles(jar, projects) {
   ];
 
   for (const file of files) {
-    const form = new FormData();
-    form.set(
-      "file",
-      new File([file.bytes], file.name, { type: file.mimeType })
-    );
-    form.set("sourceDevice", "MacBook Pro");
+    // The route stores the raw body and reads everything else from the query string, like DropZone does.
+    const params = new URLSearchParams({
+      filename: file.name,
+      sourceDevice: "MacBook Pro",
+      mimeType: file.mimeType
+    });
     if (file.project) {
-      form.set("projectId", file.project.id);
-      form.set("projectSlug", file.project.slug);
+      params.set("projectId", file.project.id);
+      params.set("projectSlug", file.project.slug);
     }
 
-    const response = await fetch(`${baseUrl}/api/files`, {
+    const response = await fetch(`${baseUrl}/api/files?${params.toString()}`, {
       method: "POST",
-      headers: jar.headers(),
-      body: form
+      headers: { ...jar.headers(), "Content-Type": file.mimeType },
+      body: file.bytes
     });
     if (response.status !== 201) {
       throw new Error(`upload failed for ${file.name}: ${await response.text()}`);
