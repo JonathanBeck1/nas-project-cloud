@@ -25,6 +25,9 @@ test("app pages carry security headers", async ({ page }) => {
   expect(headers["permissions-policy"]).toBeTruthy();
 
   const csp = headers["content-security-policy"] ?? "";
+  // Only scripts carrying this response's nonce run, so injected markup can't execute.
+  expect(csp).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
+  expect(csp).not.toContain("unsafe-inline");
   expect(csp).toContain("frame-ancestors 'none'");
   expect(csp).toContain("base-uri 'self'");
   expect(csp).toContain("object-src 'none'");
@@ -36,12 +39,29 @@ test("the theme bootstrap script still runs under the page CSP", async ({ page }
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
   });
+  await page.addInitScript(() => window.localStorage.setItem("nas-cloud:theme", "dark"));
 
   await page.goto("/login");
   await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
 
-  // A script-src directive here would block the inline theme bootstrap in
-  // layout.tsx; the chosen subset deliberately omits it.
+  // The inline script in layout.tsx carries the nonce, so it ran and applied the stored theme.
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  expect(errors.filter((text) => /content security policy/i.test(text))).toEqual([]);
+});
+
+test("the workspace loads and responds under the page CSP", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await authenticate(page);
+
+  await page.goto("/");
+  const gallery = page.getByRole("button", { name: "Gallery view" }).first();
+  await gallery.click();
+
+  // A click that changes state proves Next.js's own scripts loaded under the nonce.
+  await expect(gallery).toHaveAttribute("aria-pressed", "true");
   expect(errors.filter((text) => /content security policy/i.test(text))).toEqual([]);
 });
 
