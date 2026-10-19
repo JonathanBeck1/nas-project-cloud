@@ -70,3 +70,5 @@ docker buildx imagetools inspect ghcr.io/jonathanbeck1/nas-project-cloud:0.6.0 -
 Those two records aren't signed, and images older than 0.5.0 have only them, not the signed attestation.
 
 The workflow that builds and publishes every image is [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
+
+Storing business or client data? [docs/deployment/sensitive-data.md](docs/deployment/sensitive-data.md) covers encrypting the datasets, HTTPS, who should get SMB access, encrypted backups, and what the app doesn't do yet.

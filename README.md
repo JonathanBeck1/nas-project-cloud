@@ -112,7 +112,7 @@ For HTTPS, put a reverse proxy in front: [`docs/deployment/reverse-proxy.md`](./
 
 ## Security
 
-The container runs as UID 1001 with no Linux capabilities and sees only its two datasets: no Docker socket, no TrueNAS API, and no outbound requests of its own. [SECURITY.md](./SECURITY.md#what-the-app-can-access) spells out what it can reach, the worst case and how to limit it, and how to report a vulnerability privately.
+The container runs as UID 1001 with no Linux capabilities and sees only its two datasets: no Docker socket, no TrueNAS API, and no outbound requests of its own. [SECURITY.md](./SECURITY.md#what-the-app-can-access) spells out what it can reach, the worst case and how to limit it, and how to report a vulnerability privately. For business or client data, read [running it with sensitive data](./docs/deployment/sensitive-data.md) first: it covers dataset encryption, HTTPS, SMB access and backups, and lists what the app doesn't do yet.
 
 ## Configuration
 
