@@ -2,14 +2,16 @@ import React from "react";
 import { Archive } from "lucide-react";
 import { ArchiveWorkspace } from "@/components/workspace/ArchiveWorkspace";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
+import { visibleTo } from "@/lib/server/auth/access";
 import { requirePageSession } from "@/lib/server/pageSession";
 
 export const dynamic = "force-dynamic";
 
 export default async function ArchivePage() {
-  const { repo } = await requirePageSession();
-  const projects = repo.listProjects();
-  const archivedFiles = repo.listFiles({ status: "archived" });
+  const session = await requirePageSession();
+  const { repo } = session;
+  const projects = repo.listProjects(visibleTo(session));
+  const archivedFiles = repo.listFiles({ status: "archived", visibleTo: visibleTo(session) });
 
   return (
     <WorkspaceFrame projects={projects} activeHref="/archive">

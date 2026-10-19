@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { type Actor, projectDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -14,15 +15,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  return withUploadSessionLock(id, () => completeSession(id));
+  return withUploadSessionLock(id, () => completeSession(id, auth));
 }
 
-async function completeSession(id: string) {
+async function completeSession(id: string, actor: Actor) {
   const repo = createMetadataRepository(getDatabase());
-  // SECURITY: not scoped to the caller's user id. Harmless with a single owner; an IDOR if multi-user lands.
+  // Upload sessions are private to whoever opened them, admins included.
   const session = repo.getUploadSession(id);
-  if (!session) {
+  if (!session || session.userId !== actor.userId) {
     return NextResponse.json({ error: "upload session not found" }, { status: 404 });
+  }
+  // Checked again here: access to the project may have been removed since the session opened.
+  if (session.projectId) {
+    const denied = projectDenied(repo, actor, session.projectId, "edit");
+    if (denied) {
+      return denied;
+    }
   }
   if (session.status !== "open") {
     return NextResponse.json({ error: "upload session is not open" }, { status: 409 });
@@ -78,7 +86,8 @@ async function completeSession(id: string) {
       storagePath: stored.relativePath,
       projectId: session.projectId,
       categoryId: session.categoryId,
-      sourceDevice: session.sourceDevice
+      sourceDevice: session.sourceDevice,
+      uploadedBy: session.userId
     });
   } catch {
     await storage.deleteFile(stored.relativePath).catch(() => undefined);

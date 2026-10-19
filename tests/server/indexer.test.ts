@@ -57,6 +57,21 @@ describe("reconcileStorage: indexing new files", () => {
     }
   });
 
+  it("attributes files it finds to the owner, since nobody uploaded them through the app", async () => {
+    const t = setup();
+    try {
+      const owner = t.repo.createUser({ email: "owner@example.test", name: "Owner", passwordHash: "x", role: "owner" });
+      t.repo.createUser({ email: "member@example.test", name: "Member", passwordHash: "x", role: "member" });
+      t.write("Inbox/SMB/dropped.txt", "from smb");
+
+      await t.run();
+
+      expect(t.repo.listFiles()[0].uploadedBy).toBe(owner.id);
+    } finally {
+      t.db.close();
+    }
+  });
+
   it("streams file checksums without reading the whole file", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "src/lib/server/indexer.ts"), "utf8");
 

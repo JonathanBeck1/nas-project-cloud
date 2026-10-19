@@ -16,7 +16,7 @@ vi.mock("@/lib/server/db", () => ({
 }));
 
 vi.mock("@/lib/server/auth/guards", () => ({
-  requireApiSession: vi.fn(async () => ({ ok: true, userId: "user_1", sessionId: "session_1", deviceId: "device_1" }))
+  requireApiSession: vi.fn(async () => ({ ok: true, role: "owner", userId: "user_1", sessionId: "session_1", deviceId: "device_1" }))
 }));
 
 vi.mock("@/lib/server/metadata", () => ({
@@ -110,7 +110,7 @@ describe("workspace API modules", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ files, truncated: false });
-    expect(mocks.listSmartViewFiles).toHaveBeenCalledWith(mocks.db, "cad");
+    expect(mocks.listSmartViewFiles).toHaveBeenCalledWith(mocks.db, "cad", undefined);
   });
 
   it("returns 404 for an unknown smart view", async () => {

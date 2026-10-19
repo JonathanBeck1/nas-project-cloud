@@ -17,6 +17,7 @@ const fixture: CloudFile = {
   projectId: null,
   categoryId: "cat_cad",
   sourceDevice: "Windows-PC",
+  uploadedBy: null,
   status: "active",
   archivedAt: null,
   uploadedAt: "2026-04-30T12:00:00.000Z",

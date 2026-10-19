@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { fileDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { hashSharePassword } from "@/lib/server/auth/passwords";
 import { getDatabase } from "@/lib/server/db";
@@ -44,6 +45,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!file || file.status !== "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
+  const denied = fileDenied(repo, auth, file, "edit");
+  if (denied) {
+    return denied;
+  }
 
   const token = createShareToken();
   const share = repo.createFileShareLink({
@@ -76,6 +81,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const file = repo.getFileById(id);
   if (!file || file.status !== "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
+  }
+  const denied = fileDenied(repo, auth, file, "edit");
+  if (denied) {
+    return denied;
   }
 
   return NextResponse.json({ shares: repo.listFileShareLinks(file.id) });

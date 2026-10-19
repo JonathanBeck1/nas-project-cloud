@@ -7,10 +7,11 @@ import {
   sessionExpiresAt,
   shouldTouchSession
 } from "./sessions";
+import type { UserRole } from "@/lib/shared/types";
 import { isMutatingMethod, verifyCsrfToken } from "./csrf";
 
 export type ApiSessionResult =
-  | { ok: true; userId: string; sessionId: string; deviceId: string | null }
+  | { ok: true; userId: string; role: UserRole; sessionId: string; deviceId: string | null }
   | { ok: false; response: NextResponse };
 
 // Until two-factor is on, a session can reach only the routes that set it up.
@@ -45,6 +46,7 @@ export async function requireApiSession(
   return {
     ok: true,
     userId: session.userId,
+    role: session.role,
     sessionId: session.id,
     deviceId: session.deviceId
   };

@@ -19,14 +19,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  return withUploadSessionLock(id, () => handleChunk(request, id));
+  return withUploadSessionLock(id, () => handleChunk(request, id, auth.userId));
 }
 
-async function handleChunk(request: Request, id: string) {
+async function handleChunk(request: Request, id: string, userId: string) {
   const repo = createMetadataRepository(getDatabase());
-  // SECURITY: not scoped to the caller's user id. Harmless with a single owner; an IDOR if multi-user lands.
+  // Upload sessions are private to whoever opened them, admins included.
   const session = repo.getUploadSession(id);
-  if (!session) {
+  if (!session || session.userId !== userId) {
     return NextResponse.json({ error: "upload session not found" }, { status: 404 });
   }
   if (session.status !== "open") {

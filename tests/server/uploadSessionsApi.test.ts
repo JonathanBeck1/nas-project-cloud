@@ -44,7 +44,7 @@ vi.mock("@/lib/server/db", () => ({
 }));
 
 vi.mock("@/lib/server/auth/guards", () => ({
-  requireApiSession: vi.fn(async () => ({ ok: true, userId: "user_1", sessionId: "session_1", deviceId: "device_1" }))
+  requireApiSession: vi.fn(async () => ({ ok: true, role: "owner", userId: "user_1", sessionId: "session_1", deviceId: "device_1" }))
 }));
 
 vi.mock("@/lib/server/metadata", () => ({

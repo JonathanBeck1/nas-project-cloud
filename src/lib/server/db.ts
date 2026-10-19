@@ -160,6 +160,14 @@ function migrate(db: AppDatabase) {
       created_at text not null
     );
 
+    create table if not exists project_members (
+      project_id text not null references projects(id) on delete cascade,
+      user_id text not null references users(id) on delete cascade,
+      access text not null check (access in ('edit', 'view')),
+      created_at text not null,
+      primary key (project_id, user_id)
+    );
+
     create table if not exists user_recovery_codes (
       id text primary key,
       user_id text not null references users(id) on delete cascade,
@@ -223,6 +231,7 @@ function migrate(db: AppDatabase) {
     create index if not exists device_pairing_codes_code_hash_idx on device_pairing_codes(code_hash);
     create index if not exists upload_sessions_status_idx on upload_sessions(status);
     create index if not exists user_recovery_codes_user_id_idx on user_recovery_codes(user_id);
+    create index if not exists project_members_user_id_idx on project_members(user_id);
     create index if not exists rate_limit_events_bucket_key_idx
       on rate_limit_events(bucket, key, occurred_at);
   `);
@@ -239,16 +248,23 @@ function migrate(db: AppDatabase) {
   addColumnIfMissing(db, "users", "totp_pending_secret", "text");
   addColumnIfMissing(db, "users", "totp_enabled_at", "text");
   addColumnIfMissing(db, "users", "totp_last_step", "integer not null default -1");
+  if (addColumnIfMissing(db, "files", "uploaded_by", "text references users(id) on delete set null")) {
+    // Everything stored before accounts existed was the owner's.
+    db.exec("update files set uploaded_by = (select id from users where role = 'owner' order by created_at limit 1)");
+  }
 
   // After the column migrations: files.status does not exist until the line above adds it.
   db.exec("create index if not exists files_listing_idx on files(status, uploaded_at desc, name, id)");
+  db.exec("create index if not exists files_uploaded_by_idx on files(uploaded_by)");
 }
 
-function addColumnIfMissing(db: AppDatabase, table: string, column: string, definition: string) {
+function addColumnIfMissing(db: AppDatabase, table: string, column: string, definition: string): boolean {
   const columns = db.prepare(`pragma table_info(${table})`).all() as Array<{ name: string }>;
-  if (!columns.some((existing) => existing.name === column)) {
-    db.exec(`alter table ${table} add column ${column} ${definition}`);
+  if (columns.some((existing) => existing.name === column)) {
+    return false;
   }
+  db.exec(`alter table ${table} add column ${column} ${definition}`);
+  return true;
 }
 
 function seedDefaults(db: AppDatabase) {

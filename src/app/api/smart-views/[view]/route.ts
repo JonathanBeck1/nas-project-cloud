@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { visibleTo } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { listSmartViewFiles } from "@/lib/server/smartViews";
@@ -17,5 +18,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ view
     return NextResponse.json({ error: "Unknown smart view" }, { status: 404 });
   }
 
-  return NextResponse.json(listSmartViewFiles(getDatabase(), smartView.key));
+  return NextResponse.json(listSmartViewFiles(getDatabase(), smartView.key, visibleTo(auth)));
 }

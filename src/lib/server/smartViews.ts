@@ -1,11 +1,15 @@
 import type { AppDatabase } from "@/lib/server/db";
-import { filesFromRowsWithTags, type FileRow } from "@/lib/server/metadata";
+import { fileVisibleToClause, filesFromRowsWithTags, type FileRow } from "@/lib/server/metadata";
 import type { CloudFile, SmartViewKey } from "@/lib/shared/types";
 
 export const LARGE_FILE_BYTES = 1_073_741_824;
 export const SMART_VIEW_LIMIT = 200;
 
-export function listSmartViewFiles(db: AppDatabase, view: SmartViewKey): { files: CloudFile[]; truncated: boolean } {
+export function listSmartViewFiles(
+  db: AppDatabase,
+  view: SmartViewKey,
+  visibleTo?: string
+): { files: CloudFile[]; truncated: boolean } {
   const params: Record<string, string | number> = {};
   const clauses: Record<SmartViewKey, string> = {
     inbox: "project_id is null",
@@ -23,10 +27,14 @@ export function listSmartViewFiles(db: AppDatabase, view: SmartViewKey): { files
   if (view === "large-files") {
     params.largeFileBytes = LARGE_FILE_BYTES;
   }
+  if (visibleTo !== undefined) {
+    params.visibleTo = visibleTo;
+  }
+  const visibility = visibleTo === undefined ? "" : ` and ${fileVisibleToClause("files")}`;
 
   const rows = db
     .prepare<Record<string, string | number>, FileRow>(
-      `select * from files where status = 'active' and (${clauses[view]}) order by uploaded_at desc, name, id limit ${SMART_VIEW_LIMIT + 1}`
+      `select * from files where status = 'active' and (${clauses[view]})${visibility} order by uploaded_at desc, name, id limit ${SMART_VIEW_LIMIT + 1}`
     )
     .all(params);
 

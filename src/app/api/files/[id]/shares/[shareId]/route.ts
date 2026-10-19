@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { fileDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { hashSharePassword } from "@/lib/server/auth/passwords";
 import { getDatabase } from "@/lib/server/db";
@@ -30,8 +31,12 @@ export async function DELETE(
   if (!file || file.status !== "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
+  const denied = fileDenied(repo, auth, file, "edit");
+  if (denied) {
+    return denied;
+  }
 
-  // SECURITY: not scoped to created_by_user_id. Harmless with a single owner; an IDOR if multi-user lands.
+  // Anyone who can edit the file manages its links, not only whoever created them.
   const share = repo.revokeFileShareLink(file.id, shareId);
   return share
     ? NextResponse.json({ share })
@@ -65,9 +70,13 @@ export async function PATCH(
   if (!file || file.status !== "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
+  const denied = fileDenied(repo, auth, file, "edit");
+  if (denied) {
+    return denied;
+  }
 
   const input = parsed.data;
-  // SECURITY: not scoped to created_by_user_id. Harmless with a single owner; an IDOR if multi-user lands.
+  // Anyone who can edit the file manages its links, not only whoever created them.
   const share = repo.updateFileShareLink(file.id, shareId, {
     ...(input.expiresInHours !== undefined ? { expiresAt: shareExpiresAt(input.expiresInHours) } : {}),
     ...(input.maxDownloads !== undefined ? { maxDownloads: input.maxDownloads } : {}),

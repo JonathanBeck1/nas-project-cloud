@@ -1,5 +1,6 @@
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { fileDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -17,6 +18,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
   if (!file || file.status === "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
+  }
+
+  const denied = fileDenied(repo, auth, file, "edit");
+  if (denied) {
+    return denied;
   }
 
   const storage = createStorageService();

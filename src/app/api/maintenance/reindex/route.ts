@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { adminOnly } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { requireMaintenanceAuth } from "@/lib/server/auth/maintenance";
 import { appConfig } from "@/lib/server/config";
@@ -42,6 +43,10 @@ export async function GET(request: Request) {
   const session = await requireApiSession(request);
   if (!session.ok) {
     return session.response;
+  }
+  const denied = adminOnly(session);
+  if (denied) {
+    return denied;
   }
 
   const repo = createMetadataRepository(getDatabase());

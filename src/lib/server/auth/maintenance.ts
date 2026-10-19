@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
+import { adminOnly } from "./access";
 import { requireApiSession } from "./guards";
 
 const MAINTENANCE_ENV_VAR = "NAS_CLOUD_MAINTENANCE_TOKEN";
@@ -28,6 +29,10 @@ export async function requireMaintenanceAuth(request: Request): Promise<Maintena
   const session = await requireApiSession(request);
   if (!session.ok) {
     return { ok: false, response: session.response };
+  }
+  const denied = adminOnly(session);
+  if (denied) {
+    return { ok: false, response: denied };
   }
 
   return { ok: true, via: "session", userId: session.userId };

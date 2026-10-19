@@ -2,6 +2,7 @@ import React from "react";
 import { notFound } from "next/navigation";
 import { FileList } from "@/components/workspace/FileList";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
+import { visibleTo } from "@/lib/server/auth/access";
 import { requirePageSession } from "@/lib/server/pageSession";
 import { listSmartViewFiles } from "@/lib/server/smartViews";
 import { SMART_VIEWS } from "@/lib/shared/defaults";
@@ -20,9 +21,10 @@ export default async function SmartViewPage({ params }: SmartViewPageProps) {
     notFound();
   }
 
-  const { db, repo } = await requirePageSession();
-  const projects = repo.listProjects();
-  const { files, truncated } = listSmartViewFiles(db, view as SmartViewKey);
+  const session = await requirePageSession();
+  const { db, repo } = session;
+  const projects = repo.listProjects(visibleTo(session));
+  const { files, truncated } = listSmartViewFiles(db, view as SmartViewKey, visibleTo(session));
 
   return (
     <WorkspaceFrame projects={projects} activeHref={`/smart-views/${view}`}>

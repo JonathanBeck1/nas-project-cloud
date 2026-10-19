@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { adminOnly } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -33,6 +34,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const auth = await requireApiSession(request);
   if (!auth.ok) {
     return auth.response;
+  }
+  const denied = adminOnly(auth);
+  if (denied) {
+    return denied;
   }
 
   const { id } = await params;
@@ -69,6 +74,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const auth = await requireApiSession(request);
   if (!auth.ok) {
     return auth.response;
+  }
+  const denied = adminOnly(auth);
+  if (denied) {
+    return denied;
   }
 
   const { id } = await params;

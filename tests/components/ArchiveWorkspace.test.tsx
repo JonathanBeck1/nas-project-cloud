@@ -17,6 +17,7 @@ const archivedFile: CloudFile = {
   projectId: null,
   categoryId: null,
   sourceDevice: "Browser",
+  uploadedBy: null,
   status: "archived",
   archivedAt: "2026-04-30T12:00:00.000Z",
   uploadedAt: "2026-04-30T12:00:00.000Z",

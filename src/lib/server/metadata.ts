@@ -15,6 +15,7 @@ import type {
   FileStatus,
   PreviewJob,
   Project,
+  ProjectAccess,
   ProjectStatus,
   Tag,
   TrustedDevice,
@@ -60,6 +61,7 @@ export type FileRow = {
   project_id: string | null;
   category_id: string | null;
   source_device: string;
+  uploaded_by: string | null;
   status: FileStatus;
   archived_at: string | null;
   uploaded_at: string;
@@ -252,6 +254,8 @@ type CreateFileInput = {
   projectId?: string | null;
   categoryId?: string | null;
   sourceDevice: string;
+  // Null leaves a file outside every project visible only to admins.
+  uploadedBy?: string | null;
   status?: FileStatus;
   archivedAt?: string | null;
 };
@@ -288,6 +292,8 @@ type ListFilesFilters = {
   categoryId?: string | null;
   status?: FileStatus;
   includeArchived?: boolean;
+  // A member's user id: only files in their projects, or their own files outside any project.
+  visibleTo?: string;
 };
 
 type ListFilesPageOptions = {
@@ -317,6 +323,7 @@ export type SearchFilesFilters = {
   to?: string;
   includeArchived?: boolean;
   limit?: number;
+  visibleTo?: string;
 };
 
 export type SearchFilesResult = {
@@ -451,6 +458,7 @@ export function fileFromRow(row: FileRow, tags: Tag[] = [], preview: FilePreview
     projectId: row.project_id,
     categoryId: row.category_id,
     sourceDevice: row.source_device,
+    uploadedBy: row.uploaded_by,
     status: row.status,
     archivedAt: row.archived_at,
     uploadedAt: row.uploaded_at,
@@ -502,6 +510,7 @@ export function createMetadataRepository(db: AppDatabase) {
         projectId: input.projectId ?? null,
         categoryId: input.categoryId ?? null,
         sourceDevice: input.sourceDevice,
+        uploadedBy: input.uploadedBy ?? null,
         status: input.status ?? "active",
         archivedAt: input.archivedAt ?? null,
         uploadedAt: now,
@@ -511,11 +520,11 @@ export function createMetadataRepository(db: AppDatabase) {
       db.prepare(`
         insert into files (
           id, name, extension, family, mime_type, size_bytes, checksum, storage_path,
-          project_id, category_id, source_device, status, archived_at, uploaded_at, updated_at
+          project_id, category_id, source_device, uploaded_by, status, archived_at, uploaded_at, updated_at
         )
         values (
           @id, @name, @extension, @family, @mimeType, @sizeBytes, @checksum, @storagePath,
-          @projectId, @categoryId, @sourceDevice, @status, @archivedAt, @uploadedAt, @updatedAt
+          @projectId, @categoryId, @sourceDevice, @uploadedBy, @status, @archivedAt, @uploadedAt, @updatedAt
         )
       `).run(file);
 
@@ -797,11 +806,34 @@ export function createMetadataRepository(db: AppDatabase) {
       return result.changes > 0;
     },
 
-    listProjects(): Project[] {
-      return db
-        .prepare<[], ProjectRow>("select * from projects order by created_at desc, name")
-        .all()
-        .map(projectFromRow);
+    listProjects(visibleTo?: string): Project[] {
+      const rows =
+        visibleTo === undefined
+          ? db.prepare<[], ProjectRow>("select * from projects order by created_at desc, name").all()
+          : db
+              .prepare<[string], ProjectRow>(`
+                select projects.* from projects
+                inner join project_members on project_members.project_id = projects.id and project_members.user_id = ?
+                order by projects.created_at desc, projects.name
+              `)
+              .all(visibleTo);
+      return rows.map(projectFromRow);
+    },
+
+    getProjectAccess(projectId: string, userId: string): ProjectAccess | null {
+      const row = db
+        .prepare<[string, string], { access: ProjectAccess }>(
+          "select access from project_members where project_id = ? and user_id = ?"
+        )
+        .get(projectId, userId);
+      return row?.access ?? null;
+    },
+
+    setProjectMember(projectId: string, userId: string, access: ProjectAccess): void {
+      db.prepare(`
+        insert into project_members (project_id, user_id, access, created_at) values (?, ?, ?, ?)
+        on conflict(project_id, user_id) do update set access = excluded.access
+      `).run(projectId, userId, access, new Date().toISOString());
     },
 
     updateProject(id: string, input: UpdateProjectInput): Project | null {
@@ -1082,6 +1114,11 @@ export function createMetadataRepository(db: AppDatabase) {
         params.to = filters.to;
       }
 
+      if (filters.visibleTo !== undefined) {
+        where.push(fileVisibleToClause("files"));
+        params.visibleTo = filters.visibleTo;
+      }
+
       const tagJoin = filters.tagId ? "inner join file_tags on file_tags.file_id = files.id" : "";
       if (filters.tagId) {
         where.push("file_tags.tag_id = @tagId");
@@ -1180,6 +1217,7 @@ export function createMetadataRepository(db: AppDatabase) {
             files.project_id,
             files.category_id,
             files.source_device,
+            files.uploaded_by,
             files.status as file_status,
             files.archived_at,
             files.uploaded_at,
@@ -1205,6 +1243,7 @@ export function createMetadataRepository(db: AppDatabase) {
           project_id: row.project_id,
           category_id: row.category_id,
           source_device: row.source_device,
+          uploaded_by: row.uploaded_by,
           status: row.file_status,
           archived_at: row.archived_at,
           uploaded_at: row.uploaded_at,
@@ -1453,6 +1492,14 @@ export function createMetadataRepository(db: AppDatabase) {
       return row ? userWithPasswordHashFromRow(row) : null;
     },
 
+    // Storage sync has no signed-in user, so files it finds are attributed to the owner.
+    getOwnerId(): string | null {
+      const row = db
+        .prepare<[], { id: string }>("select id from users where role = 'owner' order by created_at limit 1")
+        .get();
+      return row?.id ?? null;
+    },
+
     getUserById(id: string): User | null {
       const row = db.prepare<[string], UserRow>("select * from users where id = ? limit 1").get(id);
       return row ? userWithoutPasswordHash(userWithPasswordHashFromRow(row)) : null;
@@ -1636,15 +1683,15 @@ export function createMetadataRepository(db: AppDatabase) {
       return session;
     },
 
-    getSessionByTokenHash(tokenHash: string): (AuthSession & { twoFactorEnabled: boolean }) | null {
+    getSessionByTokenHash(tokenHash: string): (AuthSession & { twoFactorEnabled: boolean; role: UserRole }) | null {
       const row = db
-        .prepare<[string], SessionRow & { two_factor_enabled: number }>(`
-          select sessions.*, users.totp_enabled_at is not null as two_factor_enabled
+        .prepare<[string], SessionRow & { two_factor_enabled: number; role: UserRole }>(`
+          select sessions.*, users.totp_enabled_at is not null as two_factor_enabled, users.role
           from sessions join users on users.id = sessions.user_id
           where sessions.token_hash = ? limit 1
         `)
         .get(tokenHash);
-      return row ? { ...sessionFromRow(row), twoFactorEnabled: row.two_factor_enabled === 1 } : null;
+      return row ? { ...sessionFromRow(row), twoFactorEnabled: row.two_factor_enabled === 1, role: row.role } : null;
     },
 
     deleteSession(id: string): void {
@@ -2001,7 +2048,17 @@ function fileListWhere(filters: ListFilesFilters): { where: string[]; params: Re
     params.categoryId = filters.categoryId;
   }
 
+  if (filters.visibleTo !== undefined) {
+    where.push(fileVisibleToClause("files"));
+    params.visibleTo = filters.visibleTo;
+  }
+
   return { where, params };
+}
+
+export function fileVisibleToClause(table: string): string {
+  return `(${table}.project_id in (select project_id from project_members where user_id = @visibleTo)
+    or (${table}.project_id is null and ${table}.uploaded_by = @visibleTo))`;
 }
 
 type FilesCursor = { u: string; n: string; i: string };

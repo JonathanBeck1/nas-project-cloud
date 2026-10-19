@@ -1,12 +1,19 @@
 import React from "react";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
 import { TagManager } from "@/components/workspace/TagManager";
+import { notFound } from "next/navigation";
+import { isAdmin } from "@/lib/server/auth/access";
 import { requirePageSession } from "@/lib/server/pageSession";
 
 export const dynamic = "force-dynamic";
 
 export default async function TagsPage() {
-  const { db, repo } = await requirePageSession();
+  const session = await requirePageSession();
+  // Categories and tags label every file in the library, so only admins manage them.
+  if (!isAdmin(session)) {
+    notFound();
+  }
+  const { db, repo } = session;
   const projects = repo.listProjects();
   const tags = repo.listTags();
 

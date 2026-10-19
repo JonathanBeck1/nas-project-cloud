@@ -8,11 +8,13 @@ import {
 } from "@/lib/server/auth/sessions";
 import { type AppDatabase, getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
+import type { UserRole } from "@/lib/shared/types";
 
 export type PageSession = {
   db: AppDatabase;
   repo: ReturnType<typeof createMetadataRepository>;
   userId: string;
+  role: UserRole;
   sessionId: string;
   deviceId: string | null;
 };
@@ -53,6 +55,7 @@ export async function requirePageSession({
     db,
     repo,
     userId: session.userId,
+    role: session.role,
     sessionId: session.id,
     deviceId: session.deviceId
   };

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { fileDenied, projectDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -34,10 +35,25 @@ export async function POST(request: Request) {
 
   const repo = createMetadataRepository(getDatabase());
 
+  for (const id of new Set(parsed.data.fileIds)) {
+    const file = repo.getFileById(id);
+    if (!file) {
+      return NextResponse.json({ error: "file not found" }, { status: 404 });
+    }
+    const denied = fileDenied(repo, auth, file, "edit");
+    if (denied) {
+      return denied;
+    }
+  }
+
   if (parsed.data.projectId) {
     const project = repo.getProjectById(parsed.data.projectId);
     if (!project) {
       return NextResponse.json({ error: "project not found" }, { status: 404 });
+    }
+    const denied = projectDenied(repo, auth, project.id, "edit");
+    if (denied) {
+      return denied;
     }
   }
 

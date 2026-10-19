@@ -201,6 +201,38 @@ describe("createDatabase", () => {
     }
   });
 
+  it("attributes files stored before accounts existed to the owner", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-db-"));
+    createdDirs.push(dir);
+    const dbPath = path.join(dir, "test.sqlite");
+    const old = new Database(dbPath);
+    old.exec(`
+      create table users (
+        id text primary key, email text not null unique, name text not null, password_hash text not null,
+        role text not null, created_at text not null, updated_at text not null
+      );
+      create table files (
+        id text primary key, name text not null, extension text not null, family text not null,
+        mime_type text not null, size_bytes integer not null, checksum text not null,
+        storage_path text not null unique, project_id text, category_id text, source_device text not null,
+        uploaded_at text not null, updated_at text not null
+      );
+      insert into users values ('user_1', 'owner@example.test', 'Owner', 'x', 'owner', '2026-01-01', '2026-01-01');
+      insert into files values ('file_1', 'a.txt', 'txt', 'document', 'text/plain', 1, 'c', 'Inbox/Mac/a.txt',
+        null, null, 'Mac', '2026-01-01', '2026-01-01');
+    `);
+    old.close();
+
+    const db = createDatabase(dbPath);
+    try {
+      expect(createMetadataRepository(db).getFileById("file_1")?.uploadedBy).toBe("user_1");
+      const tables = db.prepare("select name from sqlite_master where type = 'table'").all() as Array<{ name: string }>;
+      expect(tables.map((table) => table.name)).toContain("project_members");
+    } finally {
+      db.close();
+    }
+  });
+
   it("upgrades a 0.6 users table with two-factor off, so the owner has to enroll", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nas-cloud-db-"));
     createdDirs.push(dir);

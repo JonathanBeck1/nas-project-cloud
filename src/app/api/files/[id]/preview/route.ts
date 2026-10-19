@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
 import { extname } from "node:path";
 import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
+import { deniedResponse, fileAccess } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -20,6 +21,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   if (!file || file.status !== "active" || file.preview?.status !== "ready" || !file.preview.previewPath) {
     return NextResponse.json({ error: "preview not found" }, { status: 404 });
+  }
+  const denied = deniedResponse(fileAccess(repo, auth, file), "view", "preview not found");
+  if (denied) {
+    return denied;
   }
 
   const storage = createStorageService();

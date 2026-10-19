@@ -54,6 +54,7 @@ describe("projects API", () => {
     );
     mocks.requireApiSession.mockResolvedValue({
       ok: true,
+      role: "owner",
       userId: "user_1",
       sessionId: "session_1",
       deviceId: "device_1"

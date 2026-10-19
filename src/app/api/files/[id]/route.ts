@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { fileDenied, projectDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -30,10 +31,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 
   const { id } = await params;
-  const file = createMetadataRepository(getDatabase()).getFileById(id);
+  const repo = createMetadataRepository(getDatabase());
+  const file = repo.getFileById(id);
 
   if (!file || file.status !== "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
+  }
+
+  const denied = fileDenied(repo, auth, file, "view");
+  if (denied) {
+    return denied;
   }
 
   return NextResponse.json({ file });
@@ -63,6 +70,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const file = repo.getFileById(id);
   if (!file || file.status !== "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
+  }
+
+  const denied = fileDenied(repo, auth, file, "edit");
+  if (denied) {
+    return denied;
   }
 
   const storage = createStorageService();
@@ -97,6 +109,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const project = repo.getProjectById(parsed.data.projectId);
       if (!project) {
         return NextResponse.json({ error: "project not found" }, { status: 404 });
+      }
+      const projectDeniedResponse = projectDenied(repo, auth, project.id, "edit");
+      if (projectDeniedResponse) {
+        return projectDeniedResponse;
       }
       // Already inside the project's folder: moving would flatten subfolders and collide with itself (name-2).
       if (!file.storagePath.startsWith(`Projects/${project.slug}/`)) {
