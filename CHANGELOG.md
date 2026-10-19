@@ -30,6 +30,16 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Adds one dependency, `qrcode-generator` (MIT, with no dependencies of its
   own), to draw the setup QR code on the server.
 
+### Documentation
+
+- **Running it with sensitive data.** `docs/deployment/sensitive-data.md`
+  covers what has to come from the NAS rather than the app: encrypting
+  the datasets with ZFS native encryption (key versus passphrase, and how
+  to move existing data into an encrypted dataset), HTTPS only, keeping
+  port 3000 off the open network, why SMB access bypasses the app,
+  encrypted offsite backups, and an honest list of what the app doesn't
+  do yet. SECURITY.md and the README link to it.
+
 ### Migration notes
 
 - **The next page you open after upgrading is "Set up two-factor".** Have an
