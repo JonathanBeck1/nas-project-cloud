@@ -1,5 +1,4 @@
 import { defineConfig, devices } from "@playwright/test";
-import { ownerStatePath } from "./tests/helpers/e2eAuth";
 
 const e2ePort = 3100;
 const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
@@ -31,7 +30,8 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"], storageState: ownerStatePath },
+      // Written by tests/e2e/owner.setup.ts. Spelled out because the image build leaves tests/ out, so nothing here may import from it.
+      use: { ...devices["Desktop Chrome"], storageState: ".data/e2e/owner-state.json" },
       dependencies: ["setup"]
     }
   ]
