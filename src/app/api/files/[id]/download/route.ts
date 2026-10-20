@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fileDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createFileDownloadResponse } from "@/lib/server/downloadResponse";
@@ -17,6 +18,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   if (!file || file.status !== "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
+  }
+
+  const denied = fileDenied(repo, auth, file, "view");
+  if (denied) {
+    return denied;
   }
 
   const absolutePath = await createStorageService()

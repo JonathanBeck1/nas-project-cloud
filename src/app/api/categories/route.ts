@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { adminOnly } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository, slugify } from "@/lib/server/metadata";
@@ -28,6 +29,10 @@ export async function POST(request: Request) {
   const auth = await requireApiSession(request);
   if (!auth.ok) {
     return auth.response;
+  }
+  const denied = adminOnly(auth);
+  if (denied) {
+    return denied;
   }
 
   let payload: unknown;

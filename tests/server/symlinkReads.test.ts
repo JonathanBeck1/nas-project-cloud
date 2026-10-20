@@ -17,7 +17,7 @@ vi.mock("@/lib/server/db", async (importOriginal) => ({
   getDatabase: () => state.db
 }));
 vi.mock("@/lib/server/auth/guards", () => ({
-  requireApiSession: vi.fn(async () => ({ ok: true, userId: "user_1", sessionId: "s", deviceId: "d" }))
+  requireApiSession: vi.fn(async () => ({ ok: true, role: "owner", userId: "user_1", sessionId: "s", deviceId: "d" }))
 }));
 
 let dir: string;

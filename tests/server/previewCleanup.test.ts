@@ -16,7 +16,7 @@ vi.mock("@/lib/server/db", async (importOriginal) => ({
 }));
 
 vi.mock("@/lib/server/auth/guards", () => ({
-  requireApiSession: vi.fn(async () => ({ ok: true, session: { userId: "user_1" } }))
+  requireApiSession: vi.fn(async () => ({ ok: true, role: "owner", userId: "user_1", sessionId: "s", deviceId: null }))
 }));
 
 const TWO_HOURS_AGO = new Date(Date.now() - 2 * 60 * 60 * 1000);

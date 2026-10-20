@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { projectDenied, visibleTo } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -22,7 +23,8 @@ export async function GET(request: Request) {
       {
         query: searchParams.get("query") ?? undefined,
         projectId: searchParams.get("projectId") ?? undefined,
-        categoryId: searchParams.get("categoryId") ?? undefined
+        categoryId: searchParams.get("categoryId") ?? undefined,
+        visibleTo: visibleTo(auth)
       },
       { limit: Number.isInteger(limit) ? limit : undefined, cursor: searchParams.get("cursor") }
     );
@@ -89,6 +91,10 @@ export async function POST(request: Request) {
     if (project.slug !== projectSlug) {
       return NextResponse.json({ error: "project slug mismatch" }, { status: 400 });
     }
+    const denied = projectDenied(repo, auth, project.id, "edit");
+    if (denied) {
+      return denied;
+    }
 
     target = { kind: "project", projectSlug: project.slug };
   }
@@ -124,7 +130,8 @@ export async function POST(request: Request) {
       storagePath: stored.relativePath,
       projectId,
       categoryId,
-      sourceDevice
+      sourceDevice,
+      uploadedBy: auth.userId
     });
   } catch {
     try {

@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import { NextResponse } from "next/server";
+import { projectDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -17,6 +18,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const project = repo.getProjectById(id);
   if (!project) {
     return NextResponse.json({ error: "project not found" }, { status: 404 });
+  }
+  const denied = projectDenied(repo, auth, project.id, "view");
+  if (denied) {
+    return denied;
   }
 
   const storage = createStorageService();

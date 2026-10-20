@@ -55,7 +55,7 @@ vi.mock("@/lib/server/db", () => ({
 }));
 
 vi.mock("@/lib/server/auth/guards", () => ({
-  requireApiSession: vi.fn(async () => ({ ok: true, userId: "user_1", sessionId: "session_1", deviceId: "device_1" }))
+  requireApiSession: vi.fn(async () => ({ ok: true, role: "owner", userId: "user_1", sessionId: "session_1", deviceId: "device_1" }))
 }));
 
 vi.mock("@/lib/server/metadata", () => ({
@@ -463,6 +463,7 @@ describe("files API module", () => {
   it("bulk assigns files to a project and category", async () => {
     const { POST } = await import("@/app/api/files/bulk/route");
     mocks.repo.getProjectById.mockReturnValue({ id: "proj_1", slug: "garage-build", name: "Garage Build" });
+    mocks.repo.getFileById.mockImplementation((id: string) => ({ id, projectId: null, uploadedBy: "user_1" }));
     mocks.repo.listCategories.mockReturnValue([{ id: "cat_cad", name: "CAD", slug: "cad" }]);
     mocks.repo.bulkUpdateFiles.mockReturnValue([
       { id: "file_1", projectId: "proj_1", categoryId: "cat_cad" },

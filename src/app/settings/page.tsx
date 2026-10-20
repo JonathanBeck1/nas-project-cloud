@@ -7,14 +7,18 @@ import { PreviewStatusCard } from "@/components/workspace/PreviewStatusCard";
 import { StorageSyncCard } from "@/components/workspace/StorageSyncCard";
 import { TwoFactorCard } from "@/components/workspace/TwoFactorCard";
 import { appConfig } from "@/lib/server/config";
+import { isAdmin, visibleTo } from "@/lib/server/auth/access";
 import { requirePageSession } from "@/lib/server/pageSession";
 import { formatBytes } from "@/components/workspace/FileGrid";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const { repo, userId } = await requirePageSession();
-  const projects = repo.listProjects();
+  const session = await requirePageSession();
+  const { repo, userId } = session;
+  const projects = repo.listProjects(visibleTo(session));
+  // Paths and the system cards are for admins; everyone manages their own two-factor here.
+  const admin = isAdmin(session);
 
   const settings = [
     { label: "Storage root", value: appConfig.storageRoot },
@@ -42,22 +46,28 @@ export default async function SettingsPage() {
           </div>
         </section>
 
-        <dl className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {settings.map((item) => (
-            <div key={item.label} className="min-w-0 rounded-md border border-line bg-panel px-4 py-3 shadow-panel">
-              <dt className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">{item.label}</dt>
-              <dd className="mt-2 break-words text-sm font-medium text-ink">{item.value}</dd>
-            </div>
-          ))}
-        </dl>
+        {admin ? (
+          <dl className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {settings.map((item) => (
+              <div key={item.label} className="min-w-0 rounded-md border border-line bg-panel px-4 py-3 shadow-panel">
+                <dt className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">{item.label}</dt>
+                <dd className="mt-2 break-words text-sm font-medium text-ink">{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
 
         <TwoFactorCard recoveryCodesLeft={repo.getTwoFactorState(userId)?.recoveryCodesLeft ?? 0} />
 
-        <DeploymentStatusCard />
+        {admin ? (
+          <>
+            <DeploymentStatusCard />
 
-        <PreviewStatusCard />
+            <PreviewStatusCard />
 
-        <StorageSyncCard />
+            <StorageSyncCard />
+          </>
+        ) : null}
 
         <DeviceLabelEditor />
       </div>

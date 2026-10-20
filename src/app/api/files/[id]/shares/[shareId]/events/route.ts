@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fileDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -18,13 +19,17 @@ export async function GET(
   if (!file || file.status !== "active") {
     return NextResponse.json({ error: "file not found" }, { status: 404 });
   }
+  const denied = fileDenied(repo, auth, file, "edit");
+  if (denied) {
+    return denied;
+  }
 
   const shareBelongsToFile = repo.listFileShareLinks(file.id).some((share) => share.id === shareId);
   if (!shareBelongsToFile) {
     return NextResponse.json({ error: "share not found" }, { status: 404 });
   }
 
-  // SECURITY: not scoped to created_by_user_id. Harmless with a single owner; an IDOR if multi-user lands.
+  // Anyone who can edit the file manages its links, not only whoever created them.
   const events = repo.listFileShareAccessEvents(shareId);
   const format = new URL(request.url).searchParams.get("format");
   if (format === "csv") {

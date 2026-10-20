@@ -22,7 +22,7 @@ describe("reindex maintenance API (storage sync)", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    mocks.requireApiSession.mockResolvedValue({ ok: true, userId: "user_1", sessionId: "session_1", deviceId: "device_1" });
+    mocks.requireApiSession.mockResolvedValue({ ok: true, role: "owner", userId: "user_1", sessionId: "session_1", deviceId: "device_1" });
     mocks.reconcileStorage.mockResolvedValue(counts);
     mocks.countMissingFiles.mockReturnValue(1);
     mocks.listMissingFiles.mockReturnValue([

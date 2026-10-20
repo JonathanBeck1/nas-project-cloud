@@ -107,6 +107,8 @@ export async function reconcileStorage(input: ReconcileStorageInput): Promise<Re
   const storageRoot = path.resolve(input.storageRoot);
   const quietMs = input.quietMs ?? DEFAULT_QUIET_MS;
   const repo = createMetadataRepository(input.db);
+  // Files added over SMB have no uploader the app knows of; the owner stands in.
+  const ownerId = repo.getOwnerId();
   const exists = input.db.prepare<[string], { id: string }>("select id from files where storage_path = ? limit 1");
   const projectBySlug = input.db.prepare<[string], { id: string }>("select id from projects where slug = ? limit 1");
 
@@ -245,6 +247,7 @@ export async function reconcileStorage(input: ReconcileStorageInput): Promise<Re
       projectId: projectIdForSlug(slug),
       categoryId: categoryForStoragePath(candidate.storagePath, classification.family),
       sourceDevice: sourceDeviceForStoragePath(candidate.storagePath),
+      uploadedBy: ownerId,
       status: lifecycle.status,
       archivedAt: lifecycle.archivedAt
     });

@@ -2,13 +2,15 @@ import React from "react";
 import Link from "next/link";
 import { FolderKanban } from "lucide-react";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
+import { visibleTo } from "@/lib/server/auth/access";
 import { requirePageSession } from "@/lib/server/pageSession";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsPage() {
-  const { repo } = await requirePageSession();
-  const projects = repo.listProjects();
+  const session = await requirePageSession();
+  const { repo } = session;
+  const projects = repo.listProjects(visibleTo(session));
   const fileCounts = repo.countActiveFilesByProject();
 
   return (

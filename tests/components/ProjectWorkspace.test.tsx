@@ -28,6 +28,7 @@ const fileFixture: CloudFile = {
   projectId: "proj_1",
   categoryId: null,
   sourceDevice: "Browser",
+  uploadedBy: null,
   status: "active",
   archivedAt: null,
   uploadedAt: "2026-05-02T00:00:00.000Z",

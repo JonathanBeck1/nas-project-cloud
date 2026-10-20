@@ -22,16 +22,17 @@ export type ProjectWorkspaceData = {
 type WorkspaceDataFilters = {
   userId?: string;
   deviceId?: string | null;
+  visibleTo?: string;
 };
 
 export function loadWorkspaceData(db: AppDatabase = getDatabase(), filters: WorkspaceDataFilters = {}): WorkspaceData {
   const repo = createMetadataRepository(db);
-  const firstPage = repo.listFilesPage();
+  const firstPage = repo.listFilesPage(filters.visibleTo === undefined ? {} : { visibleTo: filters.visibleTo });
 
   return {
     files: firstPage.files,
     nextCursor: firstPage.nextCursor,
-    projects: repo.listProjects(),
+    projects: repo.listProjects(filters.visibleTo),
     categories: repo.listCategories(),
     tags: repo.listTags(),
     openUploadSessions: filters.userId

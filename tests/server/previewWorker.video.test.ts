@@ -25,6 +25,7 @@ const videoJob: PreviewJob = {
     projectId: null,
     categoryId: null,
     sourceDevice: "Browser",
+    uploadedBy: null,
     status: "active",
     archivedAt: null,
     uploadedAt: "2026-05-20T00:00:00.000Z",

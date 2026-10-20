@@ -34,6 +34,17 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   pages send `Strict-Transport-Security: max-age=31536000`. Browsers then
   refuse plain HTTP to that hostname, on any port, for a year, so only turn
   it on if nobody opens the same hostname over `http://`.
+- **Per-project permissions behind every route.** Each file now records who
+  uploaded it, projects can have members with edit or view access, and
+  every API route and page checks them. Owners and admins see everything. A
+  member sees the projects they belong to plus their own files outside any
+  project; view-only members can browse and download but change nothing.
+  Project, category and tag management, maintenance and system settings are
+  admin-only. A file or project out of reach answers 404, the same as one
+  that doesn't exist. Upload sessions are now private to whoever opened
+  them. With a single account nothing changes yet; team accounts come next.
+- **A test lists every API route with its access policy,** so a new route
+  can't ship checking only that someone is signed in.
 
 ### Changed
 
@@ -57,6 +68,9 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   paired devices; sign in or pair them again.
 - **Set `NAS_CLOUD_MAINTENANCE_TOKEN` before you need it.** It's the only
   way back in if you lose your phone and your recovery codes.
+- **Files already in the library are attributed to the owner.** Files
+  storage sync finds later are too, since nobody uploaded them through the
+  app.
 
 ## [0.6.0] - 2026-10-18
 

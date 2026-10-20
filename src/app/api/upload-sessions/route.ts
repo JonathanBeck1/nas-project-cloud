@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
+import { projectDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { appConfig } from "@/lib/server/config";
 import { getDatabase } from "@/lib/server/db";
@@ -86,6 +87,10 @@ export async function POST(request: Request) {
     }
     if (project.slug !== projectSlug) {
       return NextResponse.json({ error: "project slug mismatch" }, { status: 400 });
+    }
+    const denied = projectDenied(repo, auth, project.id, "edit");
+    if (denied) {
+      return denied;
     }
     targetKind = "project";
     resolvedProjectSlug = project.slug;

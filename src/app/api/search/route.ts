@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { visibleTo } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository, SEARCH_FILES_LIMIT } from "@/lib/server/metadata";
@@ -62,7 +63,8 @@ export async function GET(request: Request) {
     maxBytes: data.maxBytes,
     from: data.from ? new Date(data.from).toISOString() : undefined,
     to: data.to ? new Date(data.to).toISOString() : undefined,
-    includeArchived: data.includeArchived
+    includeArchived: data.includeArchived,
+    visibleTo: visibleTo(auth)
   });
 
   return NextResponse.json({

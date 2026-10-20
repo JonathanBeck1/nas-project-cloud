@@ -1,13 +1,15 @@
 import React from "react";
 import { DevicesWorkspace } from "@/components/workspace/DevicesWorkspace";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
+import { visibleTo } from "@/lib/server/auth/access";
 import { requirePageSession } from "@/lib/server/pageSession";
 
 export const dynamic = "force-dynamic";
 
 export default async function DevicesPage() {
-  const { repo, userId, deviceId } = await requirePageSession();
-  const projects = repo.listProjects();
+  const session = await requirePageSession();
+  const { repo, userId, deviceId } = session;
+  const projects = repo.listProjects(visibleTo(session));
   const devices = repo.listDevices(userId);
 
   return (

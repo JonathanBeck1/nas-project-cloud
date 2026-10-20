@@ -70,7 +70,8 @@ describe("requireMaintenanceAuth", () => {
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
       createdAt: "2026-04-30T00:00:00.000Z",
       lastSeenAt: new Date().toISOString(),
-      twoFactorEnabled: true
+      twoFactorEnabled: true,
+      role: "owner"
     });
 
     const { requireMaintenanceAuth } = await import("@/lib/server/auth/maintenance");

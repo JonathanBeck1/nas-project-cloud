@@ -4,7 +4,9 @@ export type FileStatus = "active" | "archived" | "missing";
 
 export type ProjectStatus = "active" | "paused" | "complete" | "archived";
 
-export type UserRole = "owner";
+export type UserRole = "owner" | "admin" | "member";
+
+export type ProjectAccess = "edit" | "view";
 
 export type TrustedDeviceKind = "browser" | "desktop" | "mobile" | "cli";
 
@@ -97,6 +99,7 @@ export type CloudFile = {
   projectId: string | null;
   categoryId: string | null;
   sourceDevice: string;
+  uploadedBy: string | null;
   status: FileStatus;
   archivedAt: string | null;
   uploadedAt: string;

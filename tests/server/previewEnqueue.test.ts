@@ -53,6 +53,7 @@ function fileFixture(family: FileFamily, extension: string = family): CloudFile 
     projectId: null,
     categoryId: null,
     sourceDevice: "Browser",
+    uploadedBy: null,
     status: "active",
     archivedAt: null,
     uploadedAt: "2026-05-04T00:00:00.000Z",
