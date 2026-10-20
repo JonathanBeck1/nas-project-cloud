@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 // Every API handler must be classified here, so a new route can't ship checking only that someone is signed in.
-//   public   no session: sign-in steps, pairing, share-link downloads, the health probe
+//   public   no session: sign-in steps, accepting an invite, pairing, share-link downloads, the health probe
 //   self     acts only on the caller's own records (2FA, devices, upload sessions)
 //   any      any signed-in user, on data shared by the whole library (category and tag names)
 //   list     a listing filtered to what the caller can see
@@ -47,6 +47,10 @@ const POLICIES: Record<string, Policy> = {
   "files/bulk POST": "file",
   "files/bulk/download GET": "file",
   "health GET": "public",
+  "invites GET": "admin",
+  "invites POST": "admin",
+  "invites/[id] DELETE": "admin",
+  "invites/accept POST": "public",
   "maintenance/previews POST": "admin",
   "maintenance/previews/status GET": "admin",
   "maintenance/reindex GET": "admin",
@@ -58,6 +62,9 @@ const POLICIES: Record<string, Policy> = {
   "projects/[id] PATCH": "admin",
   "projects/[id] DELETE": "admin",
   "projects/[id]/download GET": "project",
+  "projects/[id]/members GET": "admin",
+  "projects/[id]/members/[userId] PATCH": "admin",
+  "projects/[id]/members/[userId] DELETE": "admin",
   "search GET": "list",
   "shares/[token]/download GET": "public",
   "shares/[token]/download HEAD": "public",
@@ -71,7 +78,11 @@ const POLICIES: Record<string, Policy> = {
   "upload-sessions/open GET": "self",
   "upload-sessions/[id]/abort POST": "self",
   "upload-sessions/[id]/chunk POST": "self",
-  "upload-sessions/[id]/complete POST": "self"
+  "upload-sessions/[id]/complete POST": "self",
+  "users GET": "admin",
+  "users/[id] PATCH": "admin",
+  "users/[id] DELETE": "admin",
+  "users/[id]/two-factor-reset POST": "admin"
 };
 
 // What the route file has to contain for its policy to hold.

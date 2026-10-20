@@ -2,7 +2,7 @@ import React from "react";
 import { notFound } from "next/navigation";
 import { FileList } from "@/components/workspace/FileList";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
-import { visibleTo } from "@/lib/server/auth/access";
+import { isAdmin, visibleTo } from "@/lib/server/auth/access";
 import { requirePageSession } from "@/lib/server/pageSession";
 import { listSmartViewFiles } from "@/lib/server/smartViews";
 import { SMART_VIEWS } from "@/lib/shared/defaults";
@@ -27,7 +27,7 @@ export default async function SmartViewPage({ params }: SmartViewPageProps) {
   const { files, truncated } = listSmartViewFiles(db, view as SmartViewKey, visibleTo(session));
 
   return (
-    <WorkspaceFrame projects={projects} activeHref={`/smart-views/${view}`}>
+    <WorkspaceFrame admin={isAdmin(session)} projects={projects} activeHref={`/smart-views/${view}`}>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <section className="rounded-md border border-line bg-panel px-4 py-4 shadow-panel">
           <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">Smart View</p>

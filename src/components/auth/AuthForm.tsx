@@ -3,12 +3,13 @@
 import React, { useState } from "react";
 
 type AuthFormProps = {
-  mode: "setup" | "login";
+  mode: "setup" | "login" | "invite";
   endpoint: string;
   onSuccess?: () => void;
+  inviteToken?: string;
 };
 
-export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
+export function AuthForm({ mode, endpoint, onSuccess, inviteToken }: AuthFormProps) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [setupCode, setSetupCode] = useState("");
@@ -18,6 +19,8 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
   const [isBusy, setIsBusy] = useState(false);
   const [needsCode, setNeedsCode] = useState(false);
   const isSetup = mode === "setup";
+  // Setup and invites both create an account; only setup needs the code from the log.
+  const createsAccount = mode !== "login";
 
   if (needsCode) {
     return (
@@ -42,7 +45,9 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          ...(isSetup ? { name, setupCode } : {}),
+          ...(createsAccount ? { name } : {}),
+          ...(isSetup ? { setupCode } : {}),
+          ...(mode === "invite" ? { token: inviteToken } : {}),
           password,
           deviceName
         })
@@ -69,7 +74,9 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
     <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-md border border-line bg-panel p-5 shadow-panel">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">NAS Project Cloud</p>
-        <h1 className="mt-2 text-2xl font-semibold text-ink">{isSetup ? "Create Owner" : "Sign In"}</h1>
+        <h1 className="mt-2 text-2xl font-semibold text-ink">
+          {isSetup ? "Create Owner" : mode === "invite" ? "Create Your Account" : "Sign In"}
+        </h1>
       </div>
 
       {isSetup ? (
@@ -109,7 +116,7 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
         />
       </label>
 
-      {isSetup ? (
+      {createsAccount ? (
         <label className="block text-sm font-medium text-ink">
           Name
           <input
@@ -127,7 +134,7 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
       <label className="block text-sm font-medium text-ink">
         Password
         <input
-          autoComplete={isSetup ? "new-password" : "current-password"}
+          autoComplete={createsAccount ? "new-password" : "current-password"}
           className="mt-1 h-10 w-full rounded-md border border-line bg-surface px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
           minLength={12}
           name="password"
@@ -162,7 +169,7 @@ export function AuthForm({ mode, endpoint, onSuccess }: AuthFormProps) {
         disabled={isBusy}
         type="submit"
       >
-        {isBusy ? "Working..." : isSetup ? "Create owner" : "Sign in"}
+        {isBusy ? "Working..." : isSetup ? "Create owner" : mode === "invite" ? "Create account" : "Sign in"}
       </button>
     </form>
   );

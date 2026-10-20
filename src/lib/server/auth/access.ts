@@ -55,3 +55,15 @@ export function fileDenied(
 export function projectDenied(repo: Repo, actor: Actor, projectId: string, need: ProjectAccess): NextResponse | null {
   return deniedResponse(projectAccess(repo, actor, projectId), need, "project not found");
 }
+
+// Owners manage everyone and admins manage members. Nobody acts on their own account here,
+// so the owner doing the managing always remains, and there is never a team without one.
+export function canManageUser(actor: Actor, target: { id: string; role: UserRole }): boolean {
+  if (actor.userId === target.id) return false;
+  if (actor.role === "owner") return true;
+  return actor.role === "admin" && target.role === "member";
+}
+
+export function canGrantRole(actor: Actor, role: UserRole): boolean {
+  return actor.role === "owner" || (actor.role === "admin" && role === "member");
+}

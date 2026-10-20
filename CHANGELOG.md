@@ -7,6 +7,26 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Unreleased
 
+### Added
+
+- **Team accounts.** Owners and admins invite people from the new
+  **People** page with a one-time link that works for 7 days. The invitee
+  sets their own email and password, then sets up two-factor before they
+  can see anything. People also lists every account and lets you:
+  - change someone's role;
+  - disable or re-enable an account (disabling signs them out everywhere at once);
+  - reset their two-factor;
+  - remove the account, keeping their files. Files they kept outside any
+    project become visible to admins only.
+
+  Owners manage everyone and admins manage members only. Nobody can change
+  their own account there, so a team always keeps an owner.
+- **Project members.** Each project page has a Members card for admins.
+  Add members as editors or viewers, change their access, or remove them.
+- **Members see only what they can use.** Categories, Tags and People
+  links, the New Project button, and project settings are hidden from
+  members.
+
 ### Security
 
 - **Two-factor sign-in, required for every account.** Signing in now takes
@@ -42,7 +62,7 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   Project, category and tag management, maintenance and system settings are
   admin-only. A file or project out of reach answers 404, the same as one
   that doesn't exist. Upload sessions are now private to whoever opened
-  them. With a single account nothing changes yet; team accounts come next.
+  them.
 - **A test lists every API route with its access policy,** so a new route
   can't ship checking only that someone is signed in.
 

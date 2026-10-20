@@ -2,12 +2,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createSessionToken, hashSessionToken, sessionExpiresAt } from "@/lib/server/auth/sessions";
 import { resetAppConfigForTesting } from "@/lib/server/config";
 import { type AppDatabase, createDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import type { CloudFile, Project, UserRole } from "@/lib/shared/types";
-import { Jar, call } from "../helpers/routeClient";
+import { type Person, signedInPerson } from "../helpers/people";
+import { call } from "../helpers/routeClient";
 
 const state = vi.hoisted(() => ({ db: null as unknown }));
 
@@ -35,19 +35,7 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-type Person = { id: string; jar: Jar };
-
-function person(role: UserRole, name: string): Person {
-  const repo = createMetadataRepository(db);
-  const user = repo.createUser({ email: `${name}@example.test`, name, passwordHash: "x", role });
-  db.prepare("update users set totp_enabled_at = ? where id = ?").run(new Date().toISOString(), user.id);
-  const token = createSessionToken();
-  repo.createSession({ userId: user.id, tokenHash: hashSessionToken(token), expiresAt: sessionExpiresAt() });
-  const jar = new Jar();
-  jar.cookies.set("nas_cloud_session", token);
-  jar.cookies.set("nas_cloud_csrf", "csrf-token-for-tests");
-  return { id: user.id, jar };
-}
+const person = (role: UserRole, name: string): Person => signedInPerson(db, role, name);
 
 async function upload(who: Person, name: string, project?: Project): Promise<Response> {
   const query = new URLSearchParams({ filename: name, sourceDevice: "Mac" });
