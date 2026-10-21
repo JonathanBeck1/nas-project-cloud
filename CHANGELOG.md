@@ -14,13 +14,16 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   sets their own email and password, then sets up two-factor before they
   can see anything. People also lists every account and lets you:
   - change someone's role;
-  - disable or re-enable an account (disabling signs them out everywhere at once);
+  - disable or re-enable an account (disabling signs them out everywhere at
+    once and revokes the share links they made);
   - reset their two-factor;
-  - remove the account, keeping their files. Files they kept outside any
-    project become visible to admins only.
+  - remove the account, keeping their files and revoking their share links.
+    Files they kept outside any project become visible to admins only.
 
   Owners manage everyone and admins manage members only. Nobody can change
-  their own account there, so a team always keeps an owner.
+  their own account there, so a team always keeps an owner. Promoting a
+  member to admin or owner drops their project memberships, since they now
+  see every project.
 - **Project members.** Each project page has a Members card for admins.
   Add members as editors or viewers, change their access, or remove them.
 - **Members see only what they can use.** Categories, Tags and People

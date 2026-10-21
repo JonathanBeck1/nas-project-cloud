@@ -1511,15 +1511,28 @@ export function createMetadataRepository(db: AppDatabase) {
         }));
     },
 
+    // Owners and admins see every project, so memberships from before a promotion would only come back on a demotion.
     updateUserRole(userId: string, role: UserRole): void {
-      db.prepare<[UserRole, string, string]>("update users set role = ?, updated_at = ? where id = ?").run(
-        role,
-        new Date().toISOString(),
-        userId
-      );
+      db.transaction(() => {
+        db.prepare<[UserRole, string, string]>("update users set role = ?, updated_at = ? where id = ?").run(
+          role,
+          new Date().toISOString(),
+          userId
+        );
+        if (role !== "member") {
+          db.prepare<[string]>("delete from project_members where user_id = ?").run(userId);
+        }
+      })();
     },
 
-    // Disabling ends every way the account is signed in, not just new sign-ins.
+    getActiveRole(userId: string): UserRole | null {
+      const row = db
+        .prepare<[string], { role: UserRole }>("select role from users where id = ? and disabled_at is null")
+        .get(userId);
+      return row?.role ?? null;
+    },
+
+    // Disabling ends every way the account is signed in or hands out files, not just new sign-ins.
     setUserDisabled(userId: string, disabled: boolean): void {
       db.transaction(() => {
         const now = new Date().toISOString();
@@ -1532,13 +1545,17 @@ export function createMetadataRepository(db: AppDatabase) {
           for (const table of ["sessions", "devices", "device_pairing_codes", "login_challenges"]) {
             db.prepare<[string]>(`delete from ${table} where user_id = ?`).run(userId);
           }
+          revokeShareLinksCreatedBy(db, userId, now);
         }
       })();
     },
 
     // Their files stay; uploaded_by goes null, which leaves their Inbox files to admins.
     deleteUser(userId: string): boolean {
-      return db.prepare<[string]>("delete from users where id = ?").run(userId).changes === 1;
+      return db.transaction(() => {
+        revokeShareLinksCreatedBy(db, userId, new Date().toISOString());
+        return db.prepare<[string]>("delete from users where id = ?").run(userId).changes === 1;
+      })();
     },
 
     createInvite(input: { tokenHash: string; role: UserRole; createdBy: string; expiresAt: string }): PendingInvite {
@@ -2115,6 +2132,12 @@ function uniqueSlug(db: AppDatabase, tableName: "projects" | "tags" | "categorie
   }
 
   return candidate;
+}
+
+function revokeShareLinksCreatedBy(db: AppDatabase, userId: string, now: string): void {
+  db.prepare<[string, string]>(
+    "update file_share_links set revoked_at = ? where created_by_user_id = ? and revoked_at is null"
+  ).run(now, userId);
 }
 
 function insertRecoveryCodes(db: AppDatabase, userId: string, codeHashes: string[]): void {

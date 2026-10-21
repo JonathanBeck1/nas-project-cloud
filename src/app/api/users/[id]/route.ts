@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { adminOnly, canGrantRole, canManageUser } from "@/lib/server/auth/access";
+import { adminOnly, canGrantRole, canManageUser, currentActor } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -34,7 +34,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!target) {
     return NextResponse.json({ error: "user not found" }, { status: 404 });
   }
-  if (!canManageUser(auth, target) || (parsed.data.role && !canGrantRole(auth, parsed.data.role))) {
+  const actor = currentActor(repo, auth);
+  if (!actor || !canManageUser(actor, target) || (parsed.data.role && !canGrantRole(actor, parsed.data.role))) {
     return NextResponse.json({ error: "you can't change this account" }, { status: 403 });
   }
 
@@ -64,7 +65,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!target) {
     return NextResponse.json({ error: "user not found" }, { status: 404 });
   }
-  if (!canManageUser(auth, target)) {
+  const actor = currentActor(repo, auth);
+  if (!actor || !canManageUser(actor, target)) {
     return NextResponse.json({ error: "you can't change this account" }, { status: 403 });
   }
 

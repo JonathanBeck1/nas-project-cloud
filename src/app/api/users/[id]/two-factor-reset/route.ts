@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminOnly, canManageUser } from "@/lib/server/auth/access";
+import { adminOnly, canManageUser, currentActor } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -21,7 +21,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!target) {
     return NextResponse.json({ error: "user not found" }, { status: 404 });
   }
-  if (!canManageUser(auth, target)) {
+  const actor = currentActor(repo, auth);
+  if (!actor || !canManageUser(actor, target)) {
     return NextResponse.json({ error: "you can't change this account" }, { status: 403 });
   }
 
