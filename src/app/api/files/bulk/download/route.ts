@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { fileDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -49,6 +50,11 @@ export async function GET(request: Request) {
     }
   }
 
+  recordAudit(request, {
+    userId: auth.userId,
+    action: "files_downloaded",
+    detail: { files: files.map((entry) => entry.file.name), missing }
+  });
   return createZipDownloadResponse(files, "nas-project-cloud-files.zip", missing);
 }
 

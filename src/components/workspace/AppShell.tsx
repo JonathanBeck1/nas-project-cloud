@@ -32,13 +32,15 @@ import { useViewMode } from "./ViewModeToggle";
 type AppShellProps = {
   initialData?: WorkspaceData;
   initialFiles?: CloudFile[];
+  admin: boolean;
+  viewOnlyProjectIds: string[];
 };
 
 const SEARCH_DEBOUNCE_MS = 200;
 
 type SearchStatus = "idle" | "loading" | "success" | "error";
 
-export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
+export function AppShell({ initialData, initialFiles = [], admin, viewOnlyProjectIds }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
   const [nextCursor, setNextCursor] = useState<string | null>(initialData?.nextCursor ?? null);
   const [loadMoreStatus, setLoadMoreStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -121,6 +123,13 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
   const searchErrorMessage = isQueryActive && searchStatus === "error" ? searchError : null;
   const selectedFile = visibleFiles.find((file) => file.id === selectedFileId) ?? null;
   const selectedBulkFiles = files.filter((file) => selectedFileIds.includes(file.id));
+  const viewOnly = new Set(viewOnlyProjectIds);
+  const canEditFile = (file: CloudFile) => !file.projectId || !viewOnly.has(file.projectId);
+  const editableProjects = projects.filter((project) => !viewOnly.has(project.id));
+  // Search results can be selected without being in the loaded page of files.
+  const canEditSelection = [...files, ...searchResults]
+    .filter((file) => selectedFileIds.includes(file.id))
+    .every(canEditFile);
 
   async function handleLoadMoreFiles() {
     if (!nextCursor || loadMoreStatus === "loading") {
@@ -365,12 +374,12 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     <div className="min-h-screen bg-surface text-ink">
       <div className="grid min-h-screen grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
         <div className="hidden min-h-0 md:block">
-          <Sidebar projects={projects} activeHref="/" />
+          <Sidebar projects={projects} activeHref="/" admin={admin} />
         </div>
 
         <div className="flex min-w-0 flex-col">
           <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-3 md:hidden">
-            <MobileNavTrigger projects={projects} activeHref="/" />
+            <MobileNavTrigger projects={projects} activeHref="/" admin={admin} />
             <p className="truncate text-sm font-semibold text-ink">NAS Project Cloud</p>
           </div>
           <CommandBar
@@ -397,7 +406,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                       </p>
                     ) : null}
                   </div>
-                  <ProjectDialog onCreate={handleCreateProject} />
+                  {admin ? <ProjectDialog onCreate={handleCreateProject} /> : null}
                 </div>
 
                 <div className="space-y-4 px-4 py-5">
@@ -488,12 +497,12 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                   <div aria-label={isQueryActive ? "Search results" : "Inbox files"}>
                     <BulkActionBar
                       selectedCount={selectedFileIds.length}
-                      projects={projects}
+                      projects={editableProjects}
                       categories={categories}
                       isBusy={isFileActionBusy}
                       downloadHref={selectedBulkDownloadHref}
-                      onArchive={handleArchiveSelectedFiles}
-                      onApplyOrganization={handleAssignSelectedFiles}
+                      onArchive={canEditSelection ? handleArchiveSelectedFiles : undefined}
+                      onApplyOrganization={canEditSelection ? handleAssignSelectedFiles : undefined}
                       onClearSelection={() => setSelectedFileIds([])}
                     />
                     <FileGrid
@@ -530,9 +539,10 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
               <div className="min-w-0 xl:sticky xl:top-5 xl:h-[calc(100vh-6.5rem)]">
                 <DetailDrawer
                   file={selectedFile}
-                  projects={projects}
+                  projects={editableProjects}
                   availableTags={tags}
                   isBusy={isFileActionBusy}
+                  readOnly={selectedFile !== null && !canEditFile(selectedFile)}
                   onArchive={handleArchiveFile}
                   onRename={handleRenameFile}
                   onAssignProject={handleAssignProject}

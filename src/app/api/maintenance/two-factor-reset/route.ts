@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { requireMaintenanceToken } from "@/lib/server/auth/maintenance";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -28,5 +29,11 @@ export async function POST(request: Request) {
   }
 
   repo.resetTwoFactor(user.id);
+  recordAudit(request, {
+    userId: null,
+    action: "two_factor_reset",
+    target: { type: "user", id: user.id, label: user.email },
+    detail: { via: "maintenance token" }
+  });
   return NextResponse.json({ ok: true });
 }

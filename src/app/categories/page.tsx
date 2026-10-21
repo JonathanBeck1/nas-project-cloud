@@ -26,7 +26,7 @@ export default async function CategoriesPage() {
   const usage = usageRows.map((row) => ({ categoryId: row.category_id, fileCount: row.file_count }));
 
   return (
-    <WorkspaceFrame projects={projects} activeHref="/categories">
+    <WorkspaceFrame admin={isAdmin(session)} projects={projects} activeHref="/categories">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <section className="rounded-md border border-line bg-panel px-4 py-4 shadow-panel">
           <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">Organization</p>

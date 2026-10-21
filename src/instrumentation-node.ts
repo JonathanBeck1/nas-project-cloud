@@ -1,3 +1,4 @@
+import { pruneAuditLog } from "@/lib/server/audit";
 import { formatSetupCode } from "@/lib/server/auth/setupCode";
 import { backupDatabase } from "@/lib/server/backup";
 import { getAppConfig } from "@/lib/server/config";
@@ -25,6 +26,7 @@ if (getAppConfig().previewScheduler === "on") {
     runHourlyMaintenance: async () => {
       await cleanupStaleUploads({ olderThan: new Date(Date.now() - STALE_UPLOAD_MS) });
       repo.purgeExpiredAuthState();
+      pruneAuditLog();
       await sweepOrphanPreviews();
       await backupDatabase({ db: getDatabase(), dbPath: getAppConfig().dbPath });
     }

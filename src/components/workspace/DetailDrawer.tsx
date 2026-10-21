@@ -10,6 +10,7 @@ type DetailDrawerProps = {
   projects?: Project[];
   availableTags?: Tag[];
   isBusy?: boolean;
+  readOnly?: boolean;
   onArchive?: (file: CloudFile) => void;
   onRename?: (file: CloudFile, name: string) => void;
   onAssignProject?: (file: CloudFile, projectId: string) => void;
@@ -53,6 +54,7 @@ export function DetailDrawer({
   projects = [],
   availableTags = [],
   isBusy = false,
+  readOnly = false,
   onArchive,
   onRename,
   onAssignProject,
@@ -102,7 +104,7 @@ export function DetailDrawer({
     setUpdatingShareId(null);
     setRevokingShareId(null);
 
-    if (!file || !onListShareLinks) {
+    if (!file || !onListShareLinks || readOnly) {
       return;
     }
 
@@ -141,7 +143,7 @@ export function DetailDrawer({
     return () => {
       isCurrent = false;
     };
-  }, [file, file?.id, file?.name, onListShareAccessEvents, onListShareLinks]);
+  }, [file, file?.id, file?.name, onListShareAccessEvents, onListShareLinks, readOnly]);
 
   if (!file) {
     return (
@@ -194,14 +196,16 @@ export function DetailDrawer({
         >
           Download
         </a>
-        <button
-          type="button"
-          className="inline-flex h-9 items-center justify-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink"
-          onClick={() => onArchive?.(file)}
-          disabled={isBusy}
-        >
-          Archive
-        </button>
+        {readOnly ? null : (
+          <button
+            type="button"
+            className="inline-flex h-9 items-center justify-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink"
+            onClick={() => onArchive?.(file)}
+            disabled={isBusy}
+          >
+            Archive
+          </button>
+        )}
         <button
           type="button"
           className="inline-flex h-9 items-center justify-center rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink"
@@ -211,7 +215,11 @@ export function DetailDrawer({
         </button>
       </div>
 
-      {onCreateShareLink ? (
+      {readOnly ? (
+        <p className="mt-3 text-xs leading-5 text-muted">View only. You can download this file but not change or share it.</p>
+      ) : null}
+
+      {onCreateShareLink && !readOnly ? (
         <div className="mt-4 rounded-md border border-line bg-surface p-3">
           <p className="text-sm font-semibold text-ink">Share</p>
           <label className="mt-3 block text-xs font-semibold text-muted">
@@ -506,7 +514,7 @@ export function DetailDrawer({
         </div>
       ) : null}
 
-      {onRename ? (
+      {onRename && !readOnly ? (
         <form
           className="mt-4"
           onSubmit={(event) => {
@@ -536,28 +544,30 @@ export function DetailDrawer({
         </form>
       ) : null}
 
-      <label className="mt-4 block text-sm font-semibold text-ink">
-        Project
-        <select
-          className="mt-2 h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink"
-          value={file.projectId ?? ""}
-          onChange={(event) => onAssignProject?.(file, event.target.value)}
-          disabled={isBusy}
-        >
-          <option value="">Inbox</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      {readOnly ? null : (
+        <label className="mt-4 block text-sm font-semibold text-ink">
+          Project
+          <select
+            className="mt-2 h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink"
+            value={file.projectId ?? ""}
+            onChange={(event) => onAssignProject?.(file, event.target.value)}
+            disabled={isBusy}
+          >
+            <option value="">Inbox</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <TagPicker
         file={file}
         availableTags={availableTags}
         isBusy={isBusy}
-        onAssignTags={onAssignTags}
+        onAssignTags={readOnly ? undefined : onAssignTags}
       />
 
       <dl className="mt-5 grid grid-cols-1 gap-3 text-sm">

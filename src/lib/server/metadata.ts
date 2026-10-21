@@ -2,6 +2,9 @@ import { nanoid } from "nanoid";
 import { createSetupCode } from "@/lib/server/auth/setupCode";
 import type { AppDatabase } from "@/lib/server/db";
 import type {
+  AuditAction,
+  AuditEvent,
+  AuditTargetType,
   Category,
   AuthSession,
   CloudFile,
@@ -13,11 +16,14 @@ import type {
   FileShareLink,
   FileFamily,
   FileStatus,
+  PendingInvite,
   PreviewJob,
   Project,
   ProjectAccess,
+  ProjectMember,
   ProjectStatus,
   Tag,
+  TeamMember,
   TrustedDevice,
   TrustedDeviceKind,
   UploadSession,
@@ -142,6 +148,36 @@ type UploadSessionRow = {
   completed_at: string | null;
 };
 
+type AuditEventRow = {
+  id: string;
+  created_at: string;
+  user_id: string | null;
+  user_email: string | null;
+  action: AuditAction;
+  target_type: AuditTargetType | null;
+  target_id: string | null;
+  target_label: string | null;
+  ip: string | null;
+  detail: string | null;
+};
+
+export type AuditEventInput = {
+  userId: string | null;
+  action: AuditAction;
+  target?: { type: AuditTargetType; id: string; label?: string | null };
+  ip?: string | null;
+  detail?: Record<string, unknown>;
+};
+
+export type AuditFilters = {
+  userId?: string;
+  action?: AuditAction;
+  from?: string;
+  to?: string;
+  cursor?: string | null;
+  limit: number;
+};
+
 type UserRow = {
   id: string;
   email: string;
@@ -150,6 +186,7 @@ type UserRow = {
   role: UserRole;
   created_at: string;
   updated_at: string;
+  disabled_at: string | null;
 };
 
 type DeviceRow = {
@@ -818,6 +855,76 @@ export function createMetadataRepository(db: AppDatabase) {
               `)
               .all(visibleTo);
       return rows.map(projectFromRow);
+    },
+
+    // The email is copied in so the entry still names the person after their account is removed.
+    recordAuditEvent(input: AuditEventInput): void {
+      db.prepare(`
+        insert into audit_events (id, created_at, user_id, user_email, action, target_type, target_id, target_label, ip, detail)
+        values (@id, @createdAt, @userId, (select email from users where id = @userId), @action, @targetType, @targetId,
+          @targetLabel, @ip, @detail)
+      `).run({
+        id: `audit_${nanoid(16)}`,
+        createdAt: new Date().toISOString(),
+        userId: input.userId,
+        action: input.action,
+        targetType: input.target?.type ?? null,
+        targetId: input.target?.id ?? null,
+        targetLabel: input.target?.label ?? null,
+        ip: input.ip ?? null,
+        detail: input.detail ? JSON.stringify(input.detail) : null
+      });
+    },
+
+    // Newest first. The cursor is the last entry's "createdAt|id", so pages don't shift as new entries arrive.
+    listAuditEvents(filters: AuditFilters): { events: AuditEvent[]; nextCursor: string | null } {
+      const [cursorAt, cursorId] = filters.cursor ? filters.cursor.split("|") : [null, null];
+      const rows = db
+        .prepare(`
+          select * from audit_events
+          where (@userId is null or user_id = @userId)
+            and (@action is null or action = @action)
+            and (@from is null or created_at >= @from)
+            and (@to is null or created_at < @to)
+            and (@cursorAt is null or created_at < @cursorAt or (created_at = @cursorAt and id < @cursorId))
+          order by created_at desc, id desc
+          limit @limit
+        `)
+        .all({
+          userId: filters.userId ?? null,
+          action: filters.action ?? null,
+          from: filters.from ?? null,
+          to: filters.to ?? null,
+          cursorAt,
+          cursorId,
+          limit: filters.limit + 1
+        }) as AuditEventRow[];
+      const page = rows.slice(0, filters.limit);
+      const last = page.at(-1);
+      return {
+        events: page.map(auditEventFromRow),
+        nextCursor: rows.length > filters.limit && last ? `${last.created_at}|${last.id}` : null
+      };
+    },
+
+    // Everyone the log names, including people whose accounts were removed since.
+    listAuditPeople(): { id: string; email: string }[] {
+      return db
+        .prepare<[], { id: string; email: string }>(
+          "select user_id as id, max(user_email) as email from audit_events where user_id is not null group by user_id"
+        )
+        .all();
+    },
+
+    pruneAuditEvents(olderThan: Date): number {
+      return db.prepare<[string]>("delete from audit_events where created_at < ?").run(olderThan.toISOString()).changes;
+    },
+
+    listViewOnlyProjectIds(userId: string): string[] {
+      return db
+        .prepare<[string], { project_id: string }>("select project_id from project_members where user_id = ? and access = 'view'")
+        .all(userId)
+        .map((row) => row.project_id);
     },
 
     getProjectAccess(projectId: string, userId: string): ProjectAccess | null {
@@ -1492,6 +1599,136 @@ export function createMetadataRepository(db: AppDatabase) {
       return row ? userWithPasswordHashFromRow(row) : null;
     },
 
+    listTeamMembers(): TeamMember[] {
+      return db
+        .prepare<[], UserRow & { totp_enabled_at: string | null; last_seen_at: string | null }>(`
+          select users.*, (select max(last_seen_at) from sessions where sessions.user_id = users.id) as last_seen_at
+          from users order by users.created_at
+        `)
+        .all()
+        .map((row) => ({
+          ...userWithoutPasswordHash(userWithPasswordHashFromRow(row)),
+          disabled: row.disabled_at !== null,
+          twoFactorEnabled: row.totp_enabled_at !== null,
+          lastSeenAt: row.last_seen_at
+        }));
+    },
+
+    // Owners and admins see every project, so memberships from before a promotion would only come back on a demotion.
+    updateUserRole(userId: string, role: UserRole): void {
+      db.transaction(() => {
+        db.prepare<[UserRole, string, string]>("update users set role = ?, updated_at = ? where id = ?").run(
+          role,
+          new Date().toISOString(),
+          userId
+        );
+        if (role !== "member") {
+          db.prepare<[string]>("delete from project_members where user_id = ?").run(userId);
+        }
+      })();
+    },
+
+    getActiveRole(userId: string): UserRole | null {
+      const row = db
+        .prepare<[string], { role: UserRole }>("select role from users where id = ? and disabled_at is null")
+        .get(userId);
+      return row?.role ?? null;
+    },
+
+    // Disabling ends every way the account is signed in or hands out files, not just new sign-ins.
+    setUserDisabled(userId: string, disabled: boolean): void {
+      db.transaction(() => {
+        const now = new Date().toISOString();
+        db.prepare<[string | null, string, string]>("update users set disabled_at = ?, updated_at = ? where id = ?").run(
+          disabled ? now : null,
+          now,
+          userId
+        );
+        if (disabled) {
+          for (const table of ["sessions", "devices", "device_pairing_codes", "login_challenges"]) {
+            db.prepare<[string]>(`delete from ${table} where user_id = ?`).run(userId);
+          }
+          revokeShareLinksCreatedBy(db, userId, now);
+        }
+      })();
+    },
+
+    // Their files stay; uploaded_by goes null, which leaves their Inbox files to admins.
+    deleteUser(userId: string): boolean {
+      return db.transaction(() => {
+        revokeShareLinksCreatedBy(db, userId, new Date().toISOString());
+        return db.prepare<[string]>("delete from users where id = ?").run(userId).changes === 1;
+      })();
+    },
+
+    createInvite(input: { tokenHash: string; role: UserRole; createdBy: string; expiresAt: string }): PendingInvite {
+      const invite = { id: `invite_${nanoid(12)}`, ...input, createdAt: new Date().toISOString() };
+      db.prepare(`
+        insert into invites (id, token_hash, role, created_by, created_at, expires_at)
+        values (@id, @tokenHash, @role, @createdBy, @createdAt, @expiresAt)
+      `).run(invite);
+      return { id: invite.id, role: invite.role, createdBy: invite.createdBy, createdAt: invite.createdAt, expiresAt: invite.expiresAt };
+    },
+
+    listPendingInvites(): PendingInvite[] {
+      return db
+        .prepare<[string], PendingInvite>(`
+          select id, role, created_by as createdBy, created_at as createdAt, expires_at as expiresAt
+          from invites where accepted_at is null and expires_at > ? order by created_at desc
+        `)
+        .all(new Date().toISOString());
+    },
+
+    getPendingInvite(by: { id: string } | { tokenHash: string }): PendingInvite | null {
+      const [column, value] = "id" in by ? ["id", by.id] : ["token_hash", by.tokenHash];
+      return (
+        db
+          .prepare<[string, string], PendingInvite>(`
+            select id, role, created_by as createdBy, created_at as createdAt, expires_at as expiresAt
+            from invites where ${column} = ? and accepted_at is null and expires_at > ?
+          `)
+          .get(value, new Date().toISOString()) ?? null
+      );
+    },
+
+    deleteInvite(id: string): void {
+      db.prepare<[string]>("delete from invites where id = ?").run(id);
+    },
+
+    // Claiming the invite and creating the account happen together, so one link can't make two accounts.
+    acceptInvite(input: { tokenHash: string; email: string; name: string; passwordHash: string }): User | null {
+      return db.transaction(() => {
+        const now = new Date().toISOString();
+        const invite = db
+          .prepare<[string, string], { id: string; role: UserRole }>(
+            "select id, role from invites where token_hash = ? and accepted_at is null and expires_at > ?"
+          )
+          .get(input.tokenHash, now);
+        if (!invite) return null;
+        const user = this.createUser({ email: input.email, name: input.name, passwordHash: input.passwordHash, role: invite.role });
+        db.prepare<[string, string, string]>("update invites set accepted_at = ?, accepted_by = ? where id = ?").run(
+          now,
+          user.id,
+          invite.id
+        );
+        return user;
+      })();
+    },
+
+    listProjectMembers(projectId: string): ProjectMember[] {
+      return db
+        .prepare<[string], ProjectMember>(`
+          select users.id as userId, users.name, users.email, project_members.access
+          from project_members inner join users on users.id = project_members.user_id
+          where project_members.project_id = ? order by users.name
+        `)
+        .all(projectId);
+    },
+
+    removeProjectMember(projectId: string, userId: string): void {
+      db.prepare<[string, string]>("delete from project_members where project_id = ? and user_id = ?").run(projectId, userId);
+    },
+
     // Storage sync has no signed-in user, so files it finds are attributed to the owner.
     getOwnerId(): string | null {
       const row = db
@@ -1688,7 +1925,7 @@ export function createMetadataRepository(db: AppDatabase) {
         .prepare<[string], SessionRow & { two_factor_enabled: number; role: UserRole }>(`
           select sessions.*, users.totp_enabled_at is not null as two_factor_enabled, users.role
           from sessions join users on users.id = sessions.user_id
-          where sessions.token_hash = ? limit 1
+          where sessions.token_hash = ? and users.disabled_at is null limit 1
         `)
         .get(tokenHash);
       return row ? { ...sessionFromRow(row), twoFactorEnabled: row.two_factor_enabled === 1, role: row.role } : null;
@@ -2000,6 +2237,27 @@ function uniqueSlug(db: AppDatabase, tableName: "projects" | "tags" | "categorie
   return candidate;
 }
 
+function auditEventFromRow(row: AuditEventRow): AuditEvent {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    userId: row.user_id,
+    userEmail: row.user_email,
+    action: row.action,
+    targetType: row.target_type,
+    targetId: row.target_id,
+    targetLabel: row.target_label,
+    ip: row.ip,
+    detail: row.detail ? (JSON.parse(row.detail) as Record<string, unknown>) : null
+  };
+}
+
+function revokeShareLinksCreatedBy(db: AppDatabase, userId: string, now: string): void {
+  db.prepare<[string, string]>(
+    "update file_share_links set revoked_at = ? where created_by_user_id = ? and revoked_at is null"
+  ).run(now, userId);
+}
+
 function insertRecoveryCodes(db: AppDatabase, userId: string, codeHashes: string[]): void {
   const insert = db.prepare(`
     insert into user_recovery_codes (id, user_id, code_hash, used_at, created_at)
@@ -2201,7 +2459,7 @@ function fileShareAccessEventFromRow(row: FileShareAccessEventRow): FileShareAcc
   };
 }
 
-function userWithoutPasswordHash(user: UserWithPasswordHash): User {
+function userWithoutPasswordHash(user: User): User {
   return {
     id: user.id,
     email: user.email,
@@ -2218,6 +2476,7 @@ function userWithPasswordHashFromRow(row: UserRow): UserWithPasswordHash {
     email: row.email,
     name: row.name,
     passwordHash: row.password_hash,
+    disabledAt: row.disabled_at,
     role: row.role,
     createdAt: row.created_at,
     updatedAt: row.updated_at

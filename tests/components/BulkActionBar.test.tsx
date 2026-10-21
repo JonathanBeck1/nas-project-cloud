@@ -100,4 +100,20 @@ describe("BulkActionBar", () => {
     expect(screen.getByLabelText("Category for selected files")).toHaveDisplayValue("Keep current category");
     expect(screen.getByRole("button", { name: "Apply organization" })).toBeDisabled();
   });
+
+  it("leaves out archive and organization when they aren't offered", () => {
+    render(
+      <BulkActionBar
+        selectedCount={1}
+        downloadHref="/api/files/bulk/download?fileIds=file_1"
+        onClearSelection={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("link", { name: "Download ZIP" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Clear selection" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Project for selected files")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply organization" })).not.toBeInTheDocument();
+  });
 });

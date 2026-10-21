@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { fileTarget, projectLabel, recordAudit } from "@/lib/server/audit";
 import { fileDenied, projectDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -173,6 +174,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (updated && parsed.data.tagIds !== undefined) {
     updated = repo.setFileTags(id, parsed.data.tagIds);
+  }
+
+  if (updated && update.name) {
+    recordAudit(request, { userId: auth.userId, action: "file_renamed", target: fileTarget(updated), detail: { from: file.name } });
+  }
+  if (updated && update.projectId !== undefined && update.projectId !== file.projectId) {
+    recordAudit(request, {
+      userId: auth.userId,
+      action: "file_moved",
+      target: fileTarget(updated),
+      detail: { from: projectLabel(repo, file.projectId), to: projectLabel(repo, update.projectId) }
+    });
   }
 
   return updated

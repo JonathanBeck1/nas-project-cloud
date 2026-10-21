@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { FolderKanban } from "lucide-react";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
-import { visibleTo } from "@/lib/server/auth/access";
+import { isAdmin, visibleTo } from "@/lib/server/auth/access";
 import { requirePageSession } from "@/lib/server/pageSession";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export default async function ProjectsPage() {
   const fileCounts = repo.countActiveFilesByProject();
 
   return (
-    <WorkspaceFrame projects={projects} activeHref="/projects">
+    <WorkspaceFrame admin={isAdmin(session)} projects={projects} activeHref="/projects">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <PageHeader title="Projects" eyebrow="Workspaces" description="Organize NAS files around builds, clients, prints, repairs, and recurring work." />
 

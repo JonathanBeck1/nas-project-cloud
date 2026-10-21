@@ -168,6 +168,31 @@ function migrate(db: AppDatabase) {
       primary key (project_id, user_id)
     );
 
+    -- No foreign keys: entries outlive the people and files they name, so labels are copied in.
+    create table if not exists audit_events (
+      id text primary key,
+      created_at text not null,
+      user_id text,
+      user_email text,
+      action text not null,
+      target_type text,
+      target_id text,
+      target_label text,
+      ip text,
+      detail text
+    );
+
+    create table if not exists invites (
+      id text primary key,
+      token_hash text not null unique,
+      role text not null,
+      created_by text not null,
+      created_at text not null,
+      expires_at text not null,
+      accepted_at text,
+      accepted_by text
+    );
+
     create table if not exists user_recovery_codes (
       id text primary key,
       user_id text not null references users(id) on delete cascade,
@@ -234,6 +259,9 @@ function migrate(db: AppDatabase) {
     create index if not exists project_members_user_id_idx on project_members(user_id);
     create index if not exists rate_limit_events_bucket_key_idx
       on rate_limit_events(bucket, key, occurred_at);
+    create index if not exists audit_events_created_idx on audit_events(created_at desc, id desc);
+    create index if not exists audit_events_user_idx on audit_events(user_id, created_at desc);
+    create index if not exists audit_events_action_idx on audit_events(action, created_at desc);
   `);
 
   addColumnIfMissing(db, "files", "status", "text not null default 'active'");
@@ -248,6 +276,7 @@ function migrate(db: AppDatabase) {
   addColumnIfMissing(db, "users", "totp_pending_secret", "text");
   addColumnIfMissing(db, "users", "totp_enabled_at", "text");
   addColumnIfMissing(db, "users", "totp_last_step", "integer not null default -1");
+  addColumnIfMissing(db, "users", "disabled_at", "text");
   if (addColumnIfMissing(db, "files", "uploaded_by", "text references users(id) on delete set null")) {
     // Everything stored before accounts existed was the owner's.
     db.exec("update files set uploaded_by = (select id from users where role = 'owner' order by created_at limit 1)");

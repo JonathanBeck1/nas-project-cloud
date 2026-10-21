@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { hashPassword } from "@/lib/server/auth/passwords";
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
     expiresAt: sessionExpiresAt()
   });
 
+  recordAudit(request, { userId: user.id, action: "account_created", detail: { via: "first-run setup", role: "owner" } });
   return withSessionCookie(NextResponse.json({ user }, { status: 201 }), token);
 }
 

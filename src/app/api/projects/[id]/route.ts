@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAudit } from "@/lib/server/audit";
 import { adminOnly } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -67,6 +68,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "project not found" }, { status: 404 });
   }
 
+  recordAudit(request, {
+    userId: auth.userId,
+    action: "project_updated",
+    target: { type: "project", id, label: updated.name },
+    detail: { changed: Object.keys(parsed.data) }
+  });
   return NextResponse.json({ project: updated });
 }
 
@@ -87,6 +94,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "invalid project delete" }, { status: 400 });
   }
 
+  const deleting = repo.getProjectById(id);
   let movedFiles = 0;
   if (parsed.data.fileAction === "moveToInbox") {
     const project = repo.getProjectById(id);
@@ -123,6 +131,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "project not found" }, { status: 404 });
   }
 
+  recordAudit(request, {
+    userId: auth.userId,
+    action: "project_deleted",
+    target: { type: "project", id, label: deleting?.name },
+    detail: { fileAction: parsed.data.fileAction, detachedFiles: result.detachedFiles, movedFiles }
+  });
   return NextResponse.json({ ok: true, detachedFiles: result.detachedFiles, movedFiles });
 }
 

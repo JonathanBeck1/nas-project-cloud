@@ -26,9 +26,10 @@ NAS Project Cloud has one maintainer. The aim is to acknowledge a report within 
 
 ## Threat model
 
-The app is built for a single owner on a trusted home or office network, optionally behind a reverse proxy with TLS. Reports are especially welcome for:
+The app is built for a small team on a trusted home or office network, optionally behind a reverse proxy with TLS. Owners and admins see everything; members see only the projects they're added to. Reports are especially welcome for:
 
 - getting past sign-in, two-factor, pairing, or the CSRF checks
+- a member reading or changing a file or project they weren't given, or an admin managing an account above their role
 - reading, writing, or deleting anything outside the configured storage root, including through a symlink placed in the files dataset
 - abusing share links: bypassing a password, an expiry, or a download limit
 - exposing or corrupting the SQLite database

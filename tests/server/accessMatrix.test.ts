@@ -2,12 +2,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createSessionToken, hashSessionToken, sessionExpiresAt } from "@/lib/server/auth/sessions";
+import { viewOnlyProjectIds } from "@/lib/server/auth/access";
 import { resetAppConfigForTesting } from "@/lib/server/config";
 import { type AppDatabase, createDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import type { CloudFile, Project, UserRole } from "@/lib/shared/types";
-import { Jar, call } from "../helpers/routeClient";
+import { type Person, signedInPerson } from "../helpers/people";
+import { call } from "../helpers/routeClient";
 
 const state = vi.hoisted(() => ({ db: null as unknown }));
 
@@ -35,19 +36,7 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-type Person = { id: string; jar: Jar };
-
-function person(role: UserRole, name: string): Person {
-  const repo = createMetadataRepository(db);
-  const user = repo.createUser({ email: `${name}@example.test`, name, passwordHash: "x", role });
-  db.prepare("update users set totp_enabled_at = ? where id = ?").run(new Date().toISOString(), user.id);
-  const token = createSessionToken();
-  repo.createSession({ userId: user.id, tokenHash: hashSessionToken(token), expiresAt: sessionExpiresAt() });
-  const jar = new Jar();
-  jar.cookies.set("nas_cloud_session", token);
-  jar.cookies.set("nas_cloud_csrf", "csrf-token-for-tests");
-  return { id: user.id, jar };
-}
+const person = (role: UserRole, name: string): Person => signedInPerson(db, role, name);
 
 async function upload(who: Person, name: string, project?: Project): Promise<Response> {
   const query = new URLSearchParams({ filename: name, sourceDevice: "Mac" });
@@ -125,6 +114,17 @@ describe("who sees what", () => {
     expect(await projectNames(w.editor)).toEqual(["Shared"]);
     expect(await projectNames(w.viewer)).toEqual(["Shared"]);
     expect(await projectNames(w.outsider)).toEqual([]);
+  });
+
+  it("tells the pages which projects someone can open but not change", async () => {
+    const w = await world();
+    const repo = createMetadataRepository(db);
+    const viewOnly = (who: Person, role: UserRole) => viewOnlyProjectIds(repo, { userId: who.id, role });
+
+    expect(viewOnly(w.viewer, "member")).toEqual([w.shared.id]);
+    expect(viewOnly(w.editor, "member")).toEqual([]);
+    expect(viewOnly(w.outsider, "member")).toEqual([]);
+    expect(viewOnly(w.admin, "admin")).toEqual([]);
   });
 
   it("answers 404 for a file out of reach, exactly as for one that doesn't exist", async () => {

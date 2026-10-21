@@ -28,6 +28,12 @@ function pairRequest(body: unknown) {
   });
 }
 
+vi.mock("@/lib/server/audit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/audit")>()),
+  recordAudit: vi.fn(),
+  pruneAuditLog: vi.fn(() => 0)
+}));
+
 describe("POST /api/devices/pair rate limiting", () => {
   beforeEach(() => {
     vi.clearAllMocks();

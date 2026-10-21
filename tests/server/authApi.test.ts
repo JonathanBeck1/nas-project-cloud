@@ -37,6 +37,12 @@ vi.mock("@/lib/server/rateLimit", () => ({
   clientIpFromRequest: () => "127.0.0.1"
 }));
 
+vi.mock("@/lib/server/audit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/audit")>()),
+  recordAudit: vi.fn(),
+  pruneAuditLog: vi.fn(() => 0)
+}));
+
 describe("auth API", () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { fileTarget, recordAudit } from "@/lib/server/audit";
 import { fileDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { hashSharePassword } from "@/lib/server/auth/passwords";
@@ -38,9 +39,11 @@ export async function DELETE(
 
   // Anyone who can edit the file manages its links, not only whoever created them.
   const share = repo.revokeFileShareLink(file.id, shareId);
-  return share
-    ? NextResponse.json({ share })
-    : NextResponse.json({ error: "share not found" }, { status: 404 });
+  if (!share) {
+    return NextResponse.json({ error: "share not found" }, { status: 404 });
+  }
+  recordAudit(request, { userId: auth.userId, action: "share_revoked", target: fileTarget(file), detail: { shareId } });
+  return NextResponse.json({ share });
 }
 
 export async function PATCH(
@@ -86,7 +89,14 @@ export async function PATCH(
       : {})
   });
 
-  return share
-    ? NextResponse.json({ share })
-    : NextResponse.json({ error: "share not found" }, { status: 404 });
+  if (!share) {
+    return NextResponse.json({ error: "share not found" }, { status: 404 });
+  }
+  recordAudit(request, {
+    userId: auth.userId,
+    action: "share_updated",
+    target: fileTarget(file),
+    detail: { shareId, changed: Object.keys(input) }
+  });
+  return NextResponse.json({ share });
 }

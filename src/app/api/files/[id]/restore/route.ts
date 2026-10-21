@@ -1,5 +1,6 @@
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { fileTarget, recordAudit } from "@/lib/server/audit";
 import { fileDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -61,7 +62,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "file metadata update failed" }, { status: 500 });
   }
 
-  return updated ? NextResponse.json({ file: updated }) : NextResponse.json({ error: "file not found" }, { status: 404 });
+  if (!updated) {
+    return NextResponse.json({ error: "file not found" }, { status: 404 });
+  }
+  recordAudit(request, { userId: auth.userId, action: "file_restored", target: fileTarget(file) });
+  return NextResponse.json({ file: updated });
 }
 
 function restoredRelativePath(fileId: string, filename: string): string {

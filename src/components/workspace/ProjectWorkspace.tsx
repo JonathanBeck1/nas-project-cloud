@@ -26,9 +26,10 @@ type ProjectWorkspaceProps = {
   files: CloudFile[];
   categories: Category[];
   tags: Tag[];
+  canEdit: boolean;
 };
 
-export function ProjectWorkspace({ project, files: initialFiles, categories, tags }: ProjectWorkspaceProps) {
+export function ProjectWorkspace({ project, files: initialFiles, categories, tags, canEdit }: ProjectWorkspaceProps) {
   const [files, setFiles] = useState(initialFiles);
   const [query, setQuery] = useState("");
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -227,6 +228,11 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
                 {project.name}
               </h1>
               {project.description ? <p className="mt-2 text-sm leading-6 text-muted">{project.description}</p> : null}
+              {canEdit ? null : (
+                <p className="mt-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+                  View only: browse and download
+                </p>
+              )}
             </div>
             <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end md:flex-col md:items-end">
               <dl className="grid grid-cols-3 gap-3 text-right text-xs text-muted">
@@ -270,44 +276,46 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
                 <ViewModeToggle value={viewMode} onChange={setViewMode} />
               </div>
 
-              <DropZone
-                inputId={fileInputId}
-                folderInputId={folderInputId}
-                projectId={project.id}
-                projectSlug={project.slug}
-                onUploaded={(uploadedFiles) => setFiles((currentFiles) => [...uploadedFiles, ...currentFiles])}
-              >
-                <div className="flex flex-wrap gap-2">
-                  <label
-                    htmlFor={fileInputId}
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        event.currentTarget.control?.click();
-                      }
-                    }}
-                    className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  >
-                    <UploadCloud aria-hidden="true" className="h-4 w-4" />
-                    Choose files
-                  </label>
-                  <label
-                    htmlFor={folderInputId}
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        event.currentTarget.control?.click();
-                      }
-                    }}
-                    className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  >
-                    <UploadCloud aria-hidden="true" className="h-4 w-4" />
-                    Choose folder
-                  </label>
-                </div>
-              </DropZone>
+              {canEdit ? (
+                <DropZone
+                  inputId={fileInputId}
+                  folderInputId={folderInputId}
+                  projectId={project.id}
+                  projectSlug={project.slug}
+                  onUploaded={(uploadedFiles) => setFiles((currentFiles) => [...uploadedFiles, ...currentFiles])}
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <label
+                      htmlFor={fileInputId}
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.currentTarget.control?.click();
+                        }
+                      }}
+                      className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      <UploadCloud aria-hidden="true" className="h-4 w-4" />
+                      Choose files
+                    </label>
+                    <label
+                      htmlFor={folderInputId}
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.currentTarget.control?.click();
+                        }
+                      }}
+                      className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-panel transition hover:border-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      <UploadCloud aria-hidden="true" className="h-4 w-4" />
+                      Choose folder
+                    </label>
+                  </div>
+                </DropZone>
+              ) : null}
             </div>
 
             {message ? (
@@ -325,7 +333,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
               selectedCount={selectedFileIds.length}
               isBusy={isFileActionBusy}
               downloadHref={selectedBulkDownloadHref}
-              onArchive={archiveSelectedFiles}
+              onArchive={canEdit ? archiveSelectedFiles : undefined}
               onClearSelection={() => setSelectedFileIds([])}
             />
             <FileGrid
@@ -334,7 +342,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
               selectedFileIds={selectedFileIds}
               selectionMode="multiple"
               mode={viewMode}
-              emptyMessage="Choose files or a folder to add project assets here."
+              emptyMessage={canEdit ? "Choose files or a folder to add project assets here." : "No files in this project yet."}
               onSelectFile={(file) => setSelectedFileId(file.id)}
               onToggleSelected={toggleSelectedFile}
             />
@@ -347,6 +355,7 @@ export function ProjectWorkspace({ project, files: initialFiles, categories, tag
           projects={[project]}
           availableTags={tags}
           isBusy={isFileActionBusy}
+          readOnly={!canEdit}
           onArchive={archiveSingleFile}
           onRename={renameSingleFile}
           onAssignProject={assignProject}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fileTarget, recordAudit } from "@/lib/server/audit";
 import { type Actor, projectDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -15,10 +16,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  return withUploadSessionLock(id, () => completeSession(id, auth));
+  return withUploadSessionLock(id, () => completeSession(request, id, auth));
 }
 
-async function completeSession(id: string, actor: Actor) {
+async function completeSession(request: Request, id: string, actor: Actor) {
   const repo = createMetadataRepository(getDatabase());
   // Upload sessions are private to whoever opened them, admins included.
   const session = repo.getUploadSession(id);
@@ -97,5 +98,11 @@ async function completeSession(id: string, actor: Actor) {
 
   enqueuePreviewForFile(repo, file);
   const completed = repo.completeUploadSession(id, { storagePath: stored.relativePath });
+  recordAudit(request, {
+    userId: session.userId,
+    action: "file_uploaded",
+    target: fileTarget(file),
+    detail: { path: file.storagePath, sizeBytes: file.sizeBytes }
+  });
   return NextResponse.json({ file, session: completed }, { status: 201 });
 }

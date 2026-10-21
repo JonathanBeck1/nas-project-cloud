@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { createRecoveryCodes, hashRecoveryCode } from "@/lib/server/auth/recoveryCodes";
 import { base32Decode, verifyTotp } from "@/lib/server/auth/totp";
@@ -46,5 +47,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "two-factor is already on" }, { status: 409 });
   }
 
+  recordAudit(request, { userId: auth.userId, action: "two_factor_enabled" });
   return NextResponse.json({ recoveryCodes });
 }

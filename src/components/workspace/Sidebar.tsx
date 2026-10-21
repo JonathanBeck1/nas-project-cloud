@@ -13,8 +13,10 @@ import {
   MonitorUp,
   PackageOpen,
   Ruler,
+  ScrollText,
   Settings,
   Tags,
+  Users,
   Video
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -29,18 +31,33 @@ type NavItem = {
   href: string;
 };
 
-const libraryItems: NavItem[] = [
-  { label: "Inbox", icon: Inbox, href: "/" },
-  { label: "Projects", icon: FolderKanban, href: "/projects" },
-  { label: "Categories", icon: Tags, href: "/categories" },
-  { label: "Tags", icon: Hash, href: "/tags" }
-];
+// Categories, tags and people are managed by admins, so members don't get links to pages that would 404.
+function libraryItems(admin: boolean): NavItem[] {
+  return [
+    { label: "Inbox", icon: Inbox, href: "/" },
+    { label: "Projects", icon: FolderKanban, href: "/projects" },
+    ...(admin
+      ? [
+          { label: "Categories", icon: Tags, href: "/categories" },
+          { label: "Tags", icon: Hash, href: "/tags" }
+        ]
+      : [])
+  ];
+}
 
-const systemItems: NavItem[] = [
-  { label: "Devices", icon: HardDrive, href: "/devices" },
-  { label: "Archive", icon: Archive, href: "/archive" },
-  { label: "Settings", icon: Settings, href: "/settings" }
-];
+function systemItems(admin: boolean): NavItem[] {
+  return [
+    ...(admin
+      ? [
+          { label: "People", icon: Users, href: "/people" },
+          { label: "Audit log", icon: ScrollText, href: "/audit" }
+        ]
+      : []),
+    { label: "Devices", icon: HardDrive, href: "/devices" },
+    { label: "Archive", icon: Archive, href: "/archive" },
+    { label: "Settings", icon: Settings, href: "/settings" }
+  ];
+}
 
 const smartViewIcons: Partial<Record<SmartViewKey, LucideIcon>> = {
   recent: Clock3,
@@ -101,7 +118,15 @@ function projectItems(projects: Project[]): NavItem[] {
   }));
 }
 
-export function Sidebar({ projects = [], activeHref = "/" }: { projects?: Project[]; activeHref?: string }) {
+export function Sidebar({
+  projects = [],
+  activeHref = "/",
+  admin
+}: {
+  projects?: Project[];
+  activeHref?: string;
+  admin: boolean;
+}) {
   return (
     <aside className="flex h-full w-full flex-col border-r border-line bg-panel/95">
       <div className="border-b border-line px-4 py-4">
@@ -112,10 +137,10 @@ export function Sidebar({ projects = [], activeHref = "/" }: { projects?: Projec
         aria-label="Workspace"
         className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-3 py-4"
       >
-        <NavigationGroup title="Library" items={libraryItems} activeHref={activeHref} />
+        <NavigationGroup title="Library" items={libraryItems(admin)} activeHref={activeHref} />
         {projects.length > 0 ? <NavigationGroup title="Projects" items={projectItems(projects)} activeHref={activeHref} /> : null}
         <NavigationGroup title="Smart Views" items={smartViewItems} activeHref={activeHref} />
-        <NavigationGroup title="System" items={systemItems} activeHref={activeHref} />
+        <NavigationGroup title="System" items={systemItems(admin)} activeHref={activeHref} />
       </nav>
       <div className="space-y-3 border-t border-line px-3 py-3">
         <ThemeToggle />

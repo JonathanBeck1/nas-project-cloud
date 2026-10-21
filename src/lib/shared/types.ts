@@ -55,6 +55,82 @@ export type User = {
 
 export type UserWithPasswordHash = User & {
   passwordHash: string;
+  disabledAt: string | null;
+};
+
+// What the People page shows about each account.
+export type TeamMember = User & {
+  disabled: boolean;
+  twoFactorEnabled: boolean;
+  lastSeenAt: string | null;
+};
+
+export type PendingInvite = {
+  id: string;
+  role: UserRole;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export const AUDIT_ACTIONS = [
+  "sign_in",
+  "sign_in_failed",
+  "sign_out",
+  "account_created",
+  "two_factor_enabled",
+  "recovery_codes_replaced",
+  "two_factor_reset",
+  "invite_created",
+  "invite_revoked",
+  "user_role_changed",
+  "user_disabled",
+  "user_enabled",
+  "user_removed",
+  "device_paired",
+  "device_removed",
+  "project_created",
+  "project_updated",
+  "project_deleted",
+  "project_member_set",
+  "project_member_removed",
+  "file_uploaded",
+  "file_downloaded",
+  "files_downloaded",
+  "project_downloaded",
+  "file_renamed",
+  "file_moved",
+  "file_archived",
+  "file_restored",
+  "file_deleted",
+  "share_created",
+  "share_updated",
+  "share_revoked",
+  "audit_exported"
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+export type AuditTargetType = "user" | "invite" | "device" | "project" | "file" | "share";
+
+export type AuditEvent = {
+  id: string;
+  createdAt: string;
+  userId: string | null;
+  userEmail: string | null;
+  action: AuditAction;
+  targetType: AuditTargetType | null;
+  targetId: string | null;
+  targetLabel: string | null;
+  ip: string | null;
+  detail: Record<string, unknown> | null;
+};
+
+export type ProjectMember = {
+  userId: string;
+  name: string;
+  email: string;
+  access: ProjectAccess;
 };
 
 export type TrustedDevice = {
