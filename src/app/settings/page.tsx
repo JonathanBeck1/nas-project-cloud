@@ -29,7 +29,7 @@ export default async function SettingsPage() {
   ];
 
   return (
-    <WorkspaceFrame projects={projects} activeHref="/settings">
+    <WorkspaceFrame admin={isAdmin(session)} projects={projects} activeHref="/settings">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <section className="rounded-md border border-line bg-panel px-4 py-4 shadow-panel">
           <div className="flex items-start gap-3">

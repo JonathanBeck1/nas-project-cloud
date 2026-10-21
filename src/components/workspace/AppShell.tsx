@@ -32,13 +32,14 @@ import { useViewMode } from "./ViewModeToggle";
 type AppShellProps = {
   initialData?: WorkspaceData;
   initialFiles?: CloudFile[];
+  admin: boolean;
 };
 
 const SEARCH_DEBOUNCE_MS = 200;
 
 type SearchStatus = "idle" | "loading" | "success" | "error";
 
-export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
+export function AppShell({ initialData, initialFiles = [], admin }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
   const [nextCursor, setNextCursor] = useState<string | null>(initialData?.nextCursor ?? null);
   const [loadMoreStatus, setLoadMoreStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -365,12 +366,12 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
     <div className="min-h-screen bg-surface text-ink">
       <div className="grid min-h-screen grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
         <div className="hidden min-h-0 md:block">
-          <Sidebar projects={projects} activeHref="/" />
+          <Sidebar projects={projects} activeHref="/" admin={admin} />
         </div>
 
         <div className="flex min-w-0 flex-col">
           <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-3 md:hidden">
-            <MobileNavTrigger projects={projects} activeHref="/" />
+            <MobileNavTrigger projects={projects} activeHref="/" admin={admin} />
             <p className="truncate text-sm font-semibold text-ink">NAS Project Cloud</p>
           </div>
           <CommandBar
@@ -397,7 +398,7 @@ export function AppShell({ initialData, initialFiles = [] }: AppShellProps) {
                       </p>
                     ) : null}
                   </div>
-                  <ProjectDialog onCreate={handleCreateProject} />
+                  {admin ? <ProjectDialog onCreate={handleCreateProject} /> : null}
                 </div>
 
                 <div className="space-y-4 px-4 py-5">

@@ -168,6 +168,17 @@ function migrate(db: AppDatabase) {
       primary key (project_id, user_id)
     );
 
+    create table if not exists invites (
+      id text primary key,
+      token_hash text not null unique,
+      role text not null,
+      created_by text not null,
+      created_at text not null,
+      expires_at text not null,
+      accepted_at text,
+      accepted_by text
+    );
+
     create table if not exists user_recovery_codes (
       id text primary key,
       user_id text not null references users(id) on delete cascade,
@@ -248,6 +259,7 @@ function migrate(db: AppDatabase) {
   addColumnIfMissing(db, "users", "totp_pending_secret", "text");
   addColumnIfMissing(db, "users", "totp_enabled_at", "text");
   addColumnIfMissing(db, "users", "totp_last_step", "integer not null default -1");
+  addColumnIfMissing(db, "users", "disabled_at", "text");
   if (addColumnIfMissing(db, "files", "uploaded_by", "text references users(id) on delete set null")) {
     // Everything stored before accounts existed was the owner's.
     db.exec("update files set uploaded_by = (select id from users where role = 'owner' order by created_at limit 1)");

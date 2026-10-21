@@ -55,6 +55,29 @@ export type User = {
 
 export type UserWithPasswordHash = User & {
   passwordHash: string;
+  disabledAt: string | null;
+};
+
+// What the People page shows about each account.
+export type TeamMember = User & {
+  disabled: boolean;
+  twoFactorEnabled: boolean;
+  lastSeenAt: string | null;
+};
+
+export type PendingInvite = {
+  id: string;
+  role: UserRole;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export type ProjectMember = {
+  userId: string;
+  name: string;
+  email: string;
+  access: ProjectAccess;
 };
 
 export type TrustedDevice = {

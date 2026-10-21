@@ -7,7 +7,7 @@ import { MobileNavTrigger } from "@/components/workspace/MobileNavTrigger";
 describe("MobileNavTrigger", () => {
   it("opens the navigation drawer when the hamburger is clicked", async () => {
     const user = userEvent.setup();
-    render(<MobileNavTrigger projects={[]} activeHref="/" />);
+    render(<MobileNavTrigger admin projects={[]} activeHref="/" />);
 
     expect(screen.queryByRole("dialog", { name: "Workspace navigation" })).not.toBeInTheDocument();
 
@@ -20,7 +20,7 @@ describe("MobileNavTrigger", () => {
 
   it("closes the drawer when a navigation link is clicked", async () => {
     const user = userEvent.setup();
-    render(<MobileNavTrigger projects={[]} activeHref="/" />);
+    render(<MobileNavTrigger admin projects={[]} activeHref="/" />);
 
     await user.click(screen.getByRole("button", { name: "Open navigation" }));
     await screen.findByRole("dialog", { name: "Workspace navigation" });
@@ -34,7 +34,7 @@ describe("MobileNavTrigger", () => {
 
   it("closes the drawer when Escape is pressed", async () => {
     const user = userEvent.setup();
-    render(<MobileNavTrigger projects={[]} activeHref="/" />);
+    render(<MobileNavTrigger admin projects={[]} activeHref="/" />);
 
     await user.click(screen.getByRole("button", { name: "Open navigation" }));
     await screen.findByRole("dialog", { name: "Workspace navigation" });
