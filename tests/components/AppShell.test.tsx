@@ -642,6 +642,29 @@ describe("AppShell", () => {
     expect(within(screen.getByLabelText("Inbox files")).queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
   });
 
+  it("doesn't offer bulk edits for a view-only search result that isn't in the loaded files", async () => {
+    const user = userEvent.setup();
+    const olderDrawing: CloudFile = { ...notesFile, id: "file_old", name: "old-drawing.pdf", projectId: "proj_view" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(() => Promise.resolve(new Response(JSON.stringify({ files: [olderDrawing], truncated: false }), { status: 200 })))
+    );
+    render(
+      <AppShell
+        admin={false}
+        viewOnlyProjectIds={["proj_view"]}
+        initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }}
+      />
+    );
+
+    await user.type(screen.getByRole("searchbox", { name: "Search files" }), "drawing");
+    await user.click(await screen.findByRole("checkbox", { name: "Select old-drawing.pdf" }));
+
+    expect(screen.getByText("1 selected")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply organization" })).not.toBeInTheDocument();
+  });
+
 });
 
 function deferred<T>() {

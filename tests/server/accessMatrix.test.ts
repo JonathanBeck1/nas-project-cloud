@@ -119,8 +119,7 @@ describe("who sees what", () => {
   it("tells the pages which projects someone can open but not change", async () => {
     const w = await world();
     const repo = createMetadataRepository(db);
-    const projects = repo.listProjects();
-    const viewOnly = (who: Person, role: UserRole) => viewOnlyProjectIds(repo, { userId: who.id, role }, projects);
+    const viewOnly = (who: Person, role: UserRole) => viewOnlyProjectIds(repo, { userId: who.id, role });
 
     expect(viewOnly(w.viewer, "member")).toEqual([w.shared.id]);
     expect(viewOnly(w.editor, "member")).toEqual([]);

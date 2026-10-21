@@ -33,7 +33,7 @@ export default async function ArchivePage() {
 
         <ArchiveWorkspace
           initialFiles={archivedFiles}
-          viewOnlyProjectIds={viewOnlyProjectIds(repo, session, projects)}
+          viewOnlyProjectIds={viewOnlyProjectIds(repo, session)}
         />
       </div>
     </WorkspaceFrame>

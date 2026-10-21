@@ -126,7 +126,10 @@ export function AppShell({ initialData, initialFiles = [], admin, viewOnlyProjec
   const viewOnly = new Set(viewOnlyProjectIds);
   const canEditFile = (file: CloudFile) => !file.projectId || !viewOnly.has(file.projectId);
   const editableProjects = projects.filter((project) => !viewOnly.has(project.id));
-  const canEditSelection = selectedBulkFiles.every(canEditFile);
+  // Search results can be selected without being in the loaded page of files.
+  const canEditSelection = [...files, ...searchResults]
+    .filter((file) => selectedFileIds.includes(file.id))
+    .every(canEditFile);
 
   async function handleLoadMoreFiles() {
     if (!nextCursor || loadMoreStatus === "loading") {

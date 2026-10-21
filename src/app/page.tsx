@@ -14,7 +14,7 @@ export default async function Home() {
     <AppShell
       admin={isAdmin(session)}
       initialData={data}
-      viewOnlyProjectIds={viewOnlyProjectIds(repo, session, data.projects)}
+      viewOnlyProjectIds={viewOnlyProjectIds(repo, session)}
     />
   );
 }
