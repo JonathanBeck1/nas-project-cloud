@@ -17,7 +17,7 @@ const project: Project = {
 
 describe("Sidebar", () => {
   it("renders real links for every workspace destination", () => {
-    const { container } = render(<Sidebar projects={[project]} activeHref="/categories" />);
+    const { container } = render(<Sidebar admin projects={[project]} activeHref="/categories" />);
 
     expect(screen.getByRole("link", { name: "Inbox" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Projects" })).toHaveAttribute("href", "/projects");
@@ -30,5 +30,17 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
     expect(screen.getByRole("link", { name: "Categories" })).toHaveAttribute("aria-current", "page");
     expect([...container.querySelectorAll("a")].map((link) => link.getAttribute("href"))).not.toContain("#");
+  });
+
+  it("links admins to People and keeps admin-only pages out of a member's sidebar", () => {
+    const { unmount } = render(<Sidebar admin projects={[]} activeHref="/" />);
+    expect(screen.getByRole("link", { name: "People" })).toHaveAttribute("href", "/people");
+    unmount();
+
+    render(<Sidebar admin={false} projects={[]} activeHref="/" />);
+    expect(screen.queryByRole("link", { name: "Categories" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Tags" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "People" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
   });
 });

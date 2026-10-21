@@ -55,7 +55,8 @@ export async function POST(request: Request) {
   const user = repo.getUserByEmail(email);
   // Derive even for an unknown email, so response time does not reveal which accounts exist.
   const valid = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
-  if (!user || !valid) {
+  // A disabled account gets the same answer as a wrong password.
+  if (!user || !valid || user.disabledAt) {
     return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
   }
 

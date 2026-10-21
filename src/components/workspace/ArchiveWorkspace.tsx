@@ -8,9 +8,10 @@ import { formatBytes } from "./FileGrid";
 
 type ArchiveWorkspaceProps = {
   initialFiles: CloudFile[];
+  viewOnlyProjectIds: string[];
 };
 
-export function ArchiveWorkspace({ initialFiles }: ArchiveWorkspaceProps) {
+export function ArchiveWorkspace({ initialFiles, viewOnlyProjectIds }: ArchiveWorkspaceProps) {
   const [files, setFiles] = useState(initialFiles);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -80,6 +81,7 @@ export function ArchiveWorkspace({ initialFiles }: ArchiveWorkspaceProps) {
           <ul className="divide-y divide-line" aria-label="Archived files">
             {files.map((file) => {
               const isBusy = busyFileId === file.id;
+              const isViewOnly = file.projectId !== null && viewOnlyProjectIds.includes(file.projectId);
 
               return (
                 <li key={file.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
@@ -90,28 +92,32 @@ export function ArchiveWorkspace({ initialFiles }: ArchiveWorkspaceProps) {
                     </p>
                     <p className="mt-1 break-words text-xs text-muted">{file.storagePath}</p>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleRestore(file)}
-                      disabled={isBusy}
-                      aria-label={`Restore ${file.name}`}
-                      className="inline-flex h-8 items-center gap-2 rounded-md border border-line bg-surface px-2.5 text-xs font-semibold text-ink transition hover:border-muted disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <ArchiveRestore aria-hidden="true" className="h-3.5 w-3.5" />
-                      Restore
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handlePermanentDelete(file)}
-                      disabled={isBusy}
-                      aria-label={`Permanently delete ${file.name}`}
-                      className="inline-flex h-8 items-center gap-2 rounded-md border border-red-200 bg-red-50 px-2.5 text-xs font-semibold text-red-700 transition hover:border-red-300 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
-                      Delete
-                    </button>
-                  </div>
+                  {isViewOnly ? (
+                    <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.08em] text-muted">View only</span>
+                  ) : (
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRestore(file)}
+                        disabled={isBusy}
+                        aria-label={`Restore ${file.name}`}
+                        className="inline-flex h-8 items-center gap-2 rounded-md border border-line bg-surface px-2.5 text-xs font-semibold text-ink transition hover:border-muted disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <ArchiveRestore aria-hidden="true" className="h-3.5 w-3.5" />
+                        Restore
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePermanentDelete(file)}
+                        disabled={isBusy}
+                        aria-label={`Permanently delete ${file.name}`}
+                        className="inline-flex h-8 items-center gap-2 rounded-md border border-red-200 bg-red-50 px-2.5 text-xs font-semibold text-red-700 transition hover:border-red-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </li>
               );
             })}

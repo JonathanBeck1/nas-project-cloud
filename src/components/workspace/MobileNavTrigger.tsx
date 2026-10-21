@@ -9,9 +9,10 @@ import type { Project } from "@/lib/shared/types";
 type MobileNavTriggerProps = {
   projects: Project[];
   activeHref: string;
+  admin: boolean;
 };
 
-export function MobileNavTrigger({ projects, activeHref }: MobileNavTriggerProps) {
+export function MobileNavTrigger({ projects, activeHref, admin }: MobileNavTriggerProps) {
   const [open, setOpen] = useState(false);
 
   const handleNavigationClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -54,7 +55,7 @@ export function MobileNavTrigger({ projects, activeHref }: MobileNavTriggerProps
             </Dialog.Close>
           </div>
           <div className="min-h-0 flex-1" onClick={handleNavigationClick}>
-            <Sidebar projects={projects} activeHref={activeHref} />
+            <Sidebar projects={projects} activeHref={activeHref} admin={admin} />
           </div>
         </Dialog.Content>
       </Dialog.Portal>
