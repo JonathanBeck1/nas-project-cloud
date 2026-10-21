@@ -53,6 +53,9 @@ export async function DELETE(request: Request, { params }: Params) {
 
   const { id, userId } = await params;
   const repo = createMetadataRepository(getDatabase());
+  if (!repo.getProjectById(id)) {
+    return NextResponse.json({ error: "project not found" }, { status: 404 });
+  }
   repo.removeProjectMember(id, userId);
   return NextResponse.json({ members: repo.listProjectMembers(id) });
 }

@@ -85,7 +85,7 @@ export function PeopleWorkspace({ people: initialPeople, invites: initialInvites
     run(async () => {
       await request(`/api/users/${person.id}`, "PATCH", { disabled });
       await refreshPeople();
-    }, disabled ? `${person.name} is disabled and signed out everywhere.` : `${person.name} can sign in again.`);
+    }, disabled ? `${person.name} is disabled, signed out everywhere, and their share links stopped working.` : `${person.name} can sign in again.`);
 
   const resetTwoFactor = (person: TeamMember) => {
     if (!window.confirm(`Reset two-factor for ${person.name}? They're signed out and set it up again at their next sign-in.`)) return;
@@ -96,7 +96,7 @@ export function PeopleWorkspace({ people: initialPeople, invites: initialInvites
   };
 
   const remove = (person: TeamMember) => {
-    if (!window.confirm(`Remove ${person.name}? Their files stay. Files they kept outside any project become visible to admins only.`)) return;
+    if (!window.confirm(`Remove ${person.name}? Their files stay, and files they kept outside any project become visible to admins only. Their share links stop working.`)) return;
     void run(async () => {
       await request(`/api/users/${person.id}`, "DELETE");
       setPeople((current) => current.filter((entry) => entry.id !== person.id));

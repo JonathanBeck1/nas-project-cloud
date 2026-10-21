@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { currentActor } from "@/lib/server/auth/access";
 import { resetAppConfigForTesting } from "@/lib/server/config";
 import { type AppDatabase, createDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -162,6 +163,34 @@ describe("people", () => {
     await expect(again.json()).resolves.toEqual({ twoFactorRequired: true });
   });
 
+  it("revokes the share links someone made when they're disabled or removed", async () => {
+    const owner = person("owner", "owner");
+    const member = person("member", "member");
+    const leaver = person("member", "leaver");
+    const shareFrom = async (who: Person) => {
+      const uploaded = await call(who.jar, "POST", "@/app/api/files/route", `/api/files?filename=${who.id}.txt&sourceDevice=Mac`, {
+        raw: Buffer.from("contract")
+      });
+      const { file } = await json<{ file: CloudFile }>(uploaded);
+      const created = await call(who.jar, "POST", "@/app/api/files/[id]/shares/route", `/api/files/${file.id}/shares`, {
+        params: { id: file.id },
+        body: { expiresInHours: 24 }
+      });
+      expect(created.status).toBe(201);
+      return (await json<{ share: { id: string } }>(created)).share.id;
+    };
+    const revokedAt = (shareId: string) =>
+      (db.prepare("select revoked_at from file_share_links where id = ?").get(shareId) as { revoked_at: string | null }).revoked_at;
+    const memberShare = await shareFrom(member);
+    const leaverShare = await shareFrom(leaver);
+
+    await call(owner.jar, "PATCH", userRoute(), `/api/users/${member.id}`, { params: { id: member.id }, body: { disabled: true } });
+    await call(owner.jar, "DELETE", userRoute(), `/api/users/${leaver.id}`, { params: { id: leaver.id } });
+
+    expect(revokedAt(memberShare)).not.toBeNull();
+    expect(revokedAt(leaverShare)).not.toBeNull();
+  });
+
   it("keeps a removed person's uploads, leaving their Inbox files to admins", async () => {
     const owner = person("owner", "owner");
     const member = person("member", "member");
@@ -197,6 +226,17 @@ describe("people", () => {
     expect((await patch(owner, otherAdmin, { role: "member" })).status).toBe(200);
     expect((await patch(owner, otherOwner, { role: "admin" })).status).toBe(200);
     expect((await patch(member, admin, { role: "member" })).status).toBe(403);
+  });
+
+  it("rechecks the acting account right before changing anyone", () => {
+    const owner = person("owner", "owner");
+    const repo = createMetadataRepository(db);
+    const asOfSignIn = { userId: owner.id, role: "owner" as const };
+
+    repo.updateUserRole(owner.id, "admin");
+    expect(currentActor(repo, asOfSignIn)).toEqual({ userId: owner.id, role: "admin" });
+    repo.setUserDisabled(owner.id, true);
+    expect(currentActor(repo, asOfSignIn)).toBeNull();
   });
 
   it("resets someone's two-factor, signing them out so their next sign-in goes to setup", async () => {
@@ -246,5 +286,28 @@ describe("project members", () => {
     });
     expect(removed.status).toBe(200);
     expect(await visible()).toBe(0);
+  });
+
+  it("drops a member's project access when they're promoted, so a later demotion starts from nothing", async () => {
+    const owner = person("owner", "owner");
+    const member = person("member", "member");
+    const repo = createMetadataRepository(db);
+    const project = repo.createProject({ name: "Client" });
+    repo.setProjectMember(project.id, member.id, "view");
+    const patch = (body: unknown) => call(owner.jar, "PATCH", userRoute(), `/api/users/${member.id}`, { params: { id: member.id }, body });
+
+    expect((await patch({ role: "admin" })).status).toBe(200);
+    expect(repo.listProjectMembers(project.id)).toEqual([]);
+    expect((await patch({ role: "member" })).status).toBe(200);
+    expect(repo.listProjects(member.id)).toEqual([]);
+  });
+
+  it("answers 404 when removing a member from a project that doesn't exist", async () => {
+    const owner = person("owner", "owner");
+    const member = person("member", "member");
+    const removed = await call(owner.jar, "DELETE", "@/app/api/projects/[id]/members/[userId]/route", `/api/projects/proj_missing/members/${member.id}`, {
+      params: { id: "proj_missing", userId: member.id }
+    });
+    expect(removed.status).toBe(404);
   });
 });

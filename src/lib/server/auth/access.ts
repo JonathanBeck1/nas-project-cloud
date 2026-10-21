@@ -4,7 +4,8 @@ import type { ProjectAccess, UserRole } from "@/lib/shared/types";
 
 export type Actor = { userId: string; role: UserRole };
 
-type Repo = Pick<ReturnType<typeof createMetadataRepository>, "getProjectAccess">;
+type FullRepo = ReturnType<typeof createMetadataRepository>;
+type Repo = Pick<FullRepo, "getProjectAccess">;
 
 export function isAdmin(actor: Actor): boolean {
   return actor.role === "owner" || actor.role === "admin";
@@ -56,8 +57,7 @@ export function projectDenied(repo: Repo, actor: Actor, projectId: string, need:
   return deniedResponse(projectAccess(repo, actor, projectId), need, "project not found");
 }
 
-// Owners manage everyone and admins manage members. Nobody acts on their own account here,
-// so the owner doing the managing always remains, and there is never a team without one.
+// Owners manage everyone, admins manage members, nobody manages themselves: so an owner always remains.
 export function canManageUser(actor: Actor, target: { id: string; role: UserRole }): boolean {
   if (actor.userId === target.id) return false;
   if (actor.role === "owner") return true;
@@ -66,4 +66,10 @@ export function canManageUser(actor: Actor, target: { id: string; role: UserRole
 
 export function canGrantRole(actor: Actor, role: UserRole): boolean {
   return actor.role === "owner" || (actor.role === "admin" && role === "member");
+}
+
+// Read after the request's last await, right before the write, so two owners acting on each other at once can't both pass.
+export function currentActor(repo: Pick<FullRepo, "getActiveRole">, actor: Actor): Actor | null {
+  const role = repo.getActiveRole(actor.userId);
+  return role ? { userId: actor.userId, role } : null;
 }
