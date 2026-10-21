@@ -84,6 +84,12 @@ const openSession: UploadSession = {
   completedAt: null
 };
 
+vi.mock("@/lib/server/audit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/audit")>()),
+  recordAudit: vi.fn(),
+  pruneAuditLog: vi.fn(() => 0)
+}));
+
 describe("upload sessions API module", () => {
   beforeEach(() => {
     vi.clearAllMocks();

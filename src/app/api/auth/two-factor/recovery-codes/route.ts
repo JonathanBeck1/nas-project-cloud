@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { createRecoveryCodes, hashRecoveryCode } from "@/lib/server/auth/recoveryCodes";
 import { checkTotpCode, consumeCodeAttempt } from "@/lib/server/auth/twoFactor";
@@ -37,5 +38,6 @@ export async function POST(request: Request) {
 
   const recoveryCodes = createRecoveryCodes();
   repo.replaceRecoveryCodes(auth.userId, recoveryCodes.map(hashRecoveryCode));
+  recordAudit(request, { userId: auth.userId, action: "recovery_codes_replaced" });
   return NextResponse.json({ recoveryCodes });
 }

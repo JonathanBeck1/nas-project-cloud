@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   config: { previewScheduler: "on", dbPath: "/data/nas-cloud.sqlite" },
   requeueStalePreviewJobs: vi.fn(() => ({ requeued: 0, failed: 0 })),
   purgeExpiredAuthState: vi.fn(() => ({ sessions: 0, pairingCodes: 0, rateLimitEvents: 0 })),
+  pruneAuditLog: vi.fn(() => 0),
   countUsers: vi.fn(() => 1),
   getOrCreateSetupCode: vi.fn(() => "ABCDEFGHJKMN"),
   startPreviewScheduler: vi.fn(),
@@ -29,6 +30,8 @@ vi.mock("@/lib/server/uploadCleanup", () => ({ cleanupStaleUploads: mocks.cleanu
 vi.mock("@/lib/server/previews/cleanup", () => ({ sweepOrphanPreviews: mocks.sweepOrphanPreviews }));
 vi.mock("@/lib/server/backup", () => ({ backupDatabase: mocks.backupDatabase }));
 
+vi.mock("@/lib/server/audit", () => ({ pruneAuditLog: mocks.pruneAuditLog }));
+
 describe("node instrumentation", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -47,6 +50,7 @@ describe("node instrumentation", () => {
     await runHourlyMaintenance();
     expect(mocks.cleanupStaleUploads).toHaveBeenCalledWith({ olderThan: expect.any(Date) });
     expect(mocks.purgeExpiredAuthState).toHaveBeenCalledTimes(2);
+    expect(mocks.pruneAuditLog).toHaveBeenCalledTimes(1);
     expect(mocks.sweepOrphanPreviews).toHaveBeenCalledTimes(1);
     expect(mocks.backupDatabase).toHaveBeenCalledWith({ db: {}, dbPath: "/data/nas-cloud.sqlite" });
   });

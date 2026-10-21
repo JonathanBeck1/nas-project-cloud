@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { createSessionToken, hashSessionToken, sessionExpiresAt } from "@/lib/server/auth/sessions";
 import { withSessionCookie } from "@/lib/server/auth/http";
 import { hashPairingCode } from "@/lib/server/auth/pairing";
@@ -89,6 +90,12 @@ export async function POST(request: Request) {
     expiresAt: sessionExpiresAt()
   });
 
+  recordAudit(request, {
+    userId: pairing.userId,
+    action: "device_paired",
+    target: { type: "device", id: device.id, label: device.name },
+    detail: { kind: device.kind }
+  });
   return withSessionCookie(NextResponse.json({ device }), token);
 }
 

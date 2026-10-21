@@ -46,6 +46,12 @@ const project = {
   updatedAt: "2026-04-30T12:00:00.000Z"
 };
 
+vi.mock("@/lib/server/audit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/audit")>()),
+  recordAudit: vi.fn(),
+  pruneAuditLog: vi.fn(() => 0)
+}));
+
 describe("projects API", () => {
   beforeEach(() => {
     vi.clearAllMocks();

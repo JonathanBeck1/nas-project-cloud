@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { adminOnly, canManageUser, currentActor } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -27,5 +28,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   repo.resetTwoFactor(id);
+  recordAudit(request, { userId: auth.userId, action: "two_factor_reset", target: { type: "user", id, label: target.email } });
   return NextResponse.json({ ok: true });
 }

@@ -17,6 +17,12 @@ vi.mock("@/lib/server/db", () => ({ getDatabase: vi.fn(() => mocks.db) }));
 vi.mock("@/lib/server/metadata", () => ({ createMetadataRepository: vi.fn(() => mocks.repo) }));
 vi.mock("@/lib/server/auth/guards", () => ({ requireApiSession: mocks.requireApiSession }));
 
+vi.mock("@/lib/server/audit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/audit")>()),
+  recordAudit: vi.fn(),
+  pruneAuditLog: vi.fn(() => 0)
+}));
+
 describe("device pairing API", () => {
   beforeEach(() => {
     vi.clearAllMocks();

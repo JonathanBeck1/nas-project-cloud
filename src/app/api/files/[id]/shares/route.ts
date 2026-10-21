@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { fileTarget, recordAudit } from "@/lib/server/audit";
 import { fileDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { hashSharePassword } from "@/lib/server/auth/passwords";
@@ -61,6 +62,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     passwordHash: parsed.data?.password ? await hashSharePassword(parsed.data.password) : null
   });
 
+  recordAudit(request, {
+    userId: auth.userId,
+    action: "share_created",
+    target: fileTarget(file),
+    detail: { shareId: share.id, expiresAt: share.expiresAt, maxDownloads: share.maxDownloads, passwordProtected: share.passwordProtected }
+  });
   return NextResponse.json(
     {
       share,

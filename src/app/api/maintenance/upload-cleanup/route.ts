@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { pruneAuditLog } from "@/lib/server/audit";
 import { requireMaintenanceAuth } from "@/lib/server/auth/maintenance";
 import { backupDatabase } from "@/lib/server/backup";
 import { getAppConfig } from "@/lib/server/config";
@@ -20,8 +21,9 @@ export async function POST(request: Request) {
   });
   // With the in-process scheduler off, this cron call is the only periodic job there is.
   const purged = createMetadataRepository(getDatabase()).purgeExpiredAuthState();
+  const auditEventsPruned = pruneAuditLog();
   const previews = await sweepOrphanPreviews();
   const backup = await backupDatabase({ db: getDatabase(), dbPath: getAppConfig().dbPath });
 
-  return NextResponse.json({ ...result, purged, previews, backup });
+  return NextResponse.json({ ...result, purged, auditEventsPruned, previews, backup });
 }

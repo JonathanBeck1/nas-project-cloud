@@ -14,6 +14,8 @@ import { describe, expect, it } from "vitest";
 type Policy = "public" | "self" | "any" | "list" | "file" | "project" | "admin" | "token";
 
 const POLICIES: Record<string, Policy> = {
+  "audit GET": "admin",
+  "audit/export GET": "admin",
   "auth/login POST": "public",
   "auth/login/verify POST": "public",
   "auth/logout POST": "public",

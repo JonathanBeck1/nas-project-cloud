@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { projectDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -45,6 +46,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
   }
 
+  recordAudit(request, {
+    userId: auth.userId,
+    action: "project_downloaded",
+    target: { type: "project", id, label: project.name },
+    detail: { fileCount: files.length, missing }
+  });
   return createZipDownloadResponse(files, `${project.slug}.zip`, missing);
 }
 

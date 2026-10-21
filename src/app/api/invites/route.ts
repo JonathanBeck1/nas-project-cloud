@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAudit } from "@/lib/server/audit";
 import { adminOnly, canGrantRole } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { createSessionToken, hashSessionToken } from "@/lib/server/auth/sessions";
@@ -50,5 +51,11 @@ export async function POST(request: Request) {
     expiresAt: new Date(Date.now() + INVITE_LIFETIME_MS).toISOString()
   });
 
+  recordAudit(request, {
+    userId: auth.userId,
+    action: "invite_created",
+    target: { type: "invite", id: invite.id },
+    detail: { role: invite.role, expiresAt: invite.expiresAt }
+  });
   return NextResponse.json({ invite, path: `/invite/${token}` }, { status: 201 });
 }
