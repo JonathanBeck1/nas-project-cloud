@@ -33,13 +33,14 @@ type AppShellProps = {
   initialData?: WorkspaceData;
   initialFiles?: CloudFile[];
   admin: boolean;
+  viewOnlyProjectIds: string[];
 };
 
 const SEARCH_DEBOUNCE_MS = 200;
 
 type SearchStatus = "idle" | "loading" | "success" | "error";
 
-export function AppShell({ initialData, initialFiles = [], admin }: AppShellProps) {
+export function AppShell({ initialData, initialFiles = [], admin, viewOnlyProjectIds }: AppShellProps) {
   const [files, setFiles] = useState<CloudFile[]>(initialData?.files ?? initialFiles);
   const [nextCursor, setNextCursor] = useState<string | null>(initialData?.nextCursor ?? null);
   const [loadMoreStatus, setLoadMoreStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -122,6 +123,10 @@ export function AppShell({ initialData, initialFiles = [], admin }: AppShellProp
   const searchErrorMessage = isQueryActive && searchStatus === "error" ? searchError : null;
   const selectedFile = visibleFiles.find((file) => file.id === selectedFileId) ?? null;
   const selectedBulkFiles = files.filter((file) => selectedFileIds.includes(file.id));
+  const viewOnly = new Set(viewOnlyProjectIds);
+  const canEditFile = (file: CloudFile) => !file.projectId || !viewOnly.has(file.projectId);
+  const editableProjects = projects.filter((project) => !viewOnly.has(project.id));
+  const canEditSelection = selectedBulkFiles.every(canEditFile);
 
   async function handleLoadMoreFiles() {
     if (!nextCursor || loadMoreStatus === "loading") {
@@ -489,12 +494,12 @@ export function AppShell({ initialData, initialFiles = [], admin }: AppShellProp
                   <div aria-label={isQueryActive ? "Search results" : "Inbox files"}>
                     <BulkActionBar
                       selectedCount={selectedFileIds.length}
-                      projects={projects}
+                      projects={editableProjects}
                       categories={categories}
                       isBusy={isFileActionBusy}
                       downloadHref={selectedBulkDownloadHref}
-                      onArchive={handleArchiveSelectedFiles}
-                      onApplyOrganization={handleAssignSelectedFiles}
+                      onArchive={canEditSelection ? handleArchiveSelectedFiles : undefined}
+                      onApplyOrganization={canEditSelection ? handleAssignSelectedFiles : undefined}
                       onClearSelection={() => setSelectedFileIds([])}
                     />
                     <FileGrid
@@ -531,9 +536,10 @@ export function AppShell({ initialData, initialFiles = [], admin }: AppShellProp
               <div className="min-w-0 xl:sticky xl:top-5 xl:h-[calc(100vh-6.5rem)]">
                 <DetailDrawer
                   file={selectedFile}
-                  projects={projects}
+                  projects={editableProjects}
                   availableTags={tags}
                   isBusy={isFileActionBusy}
+                  readOnly={selectedFile !== null && !canEditFile(selectedFile)}
                   onArchive={handleArchiveFile}
                   onRename={handleRenameFile}
                   onAssignProject={handleAssignProject}

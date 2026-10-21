@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { viewOnlyProjectIds } from "@/lib/server/auth/access";
 import { resetAppConfigForTesting } from "@/lib/server/config";
 import { type AppDatabase, createDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -113,6 +114,18 @@ describe("who sees what", () => {
     expect(await projectNames(w.editor)).toEqual(["Shared"]);
     expect(await projectNames(w.viewer)).toEqual(["Shared"]);
     expect(await projectNames(w.outsider)).toEqual([]);
+  });
+
+  it("tells the pages which projects someone can open but not change", async () => {
+    const w = await world();
+    const repo = createMetadataRepository(db);
+    const projects = repo.listProjects();
+    const viewOnly = (who: Person, role: UserRole) => viewOnlyProjectIds(repo, { userId: who.id, role }, projects);
+
+    expect(viewOnly(w.viewer, "member")).toEqual([w.shared.id]);
+    expect(viewOnly(w.editor, "member")).toEqual([]);
+    expect(viewOnly(w.outsider, "member")).toEqual([]);
+    expect(viewOnly(w.admin, "admin")).toEqual([]);
   });
 
   it("answers 404 for a file out of reach, exactly as for one that doesn't exist", async () => {

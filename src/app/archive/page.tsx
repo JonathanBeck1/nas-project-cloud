@@ -2,7 +2,7 @@ import React from "react";
 import { Archive } from "lucide-react";
 import { ArchiveWorkspace } from "@/components/workspace/ArchiveWorkspace";
 import { WorkspaceFrame } from "@/components/workspace/WorkspaceFrame";
-import { isAdmin, visibleTo } from "@/lib/server/auth/access";
+import { isAdmin, viewOnlyProjectIds, visibleTo } from "@/lib/server/auth/access";
 import { requirePageSession } from "@/lib/server/pageSession";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,10 @@ export default async function ArchivePage() {
           </div>
         </section>
 
-        <ArchiveWorkspace initialFiles={archivedFiles} />
+        <ArchiveWorkspace
+          initialFiles={archivedFiles}
+          viewOnlyProjectIds={viewOnlyProjectIds(repo, session, projects)}
+        />
       </div>
     </WorkspaceFrame>
   );
