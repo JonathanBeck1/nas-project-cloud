@@ -24,6 +24,11 @@ export function projectAccess(repo: Repo, actor: Actor, projectId: string): Proj
   return isAdmin(actor) ? "edit" : repo.getProjectAccess(projectId, actor.userId);
 }
 
+// The client hides edit controls for files in these; the routes refuse the edits regardless.
+export function viewOnlyProjectIds(repo: Pick<FullRepo, "listViewOnlyProjectIds">, actor: Actor): string[] {
+  return isAdmin(actor) ? [] : repo.listViewOnlyProjectIds(actor.userId);
+}
+
 // A file outside every project belongs to whoever uploaded it.
 export function fileAccess(
   repo: Repo,

@@ -44,7 +44,7 @@ describe("ProjectWorkspace", () => {
 
   it("switches to gallery view and saves the same preference as the home page", async () => {
     const user = userEvent.setup();
-    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} canEdit />);
 
     await user.click(screen.getByRole("button", { name: "Gallery view" }));
 
@@ -56,14 +56,14 @@ describe("ProjectWorkspace", () => {
   it("opens in the view mode saved on the home page", async () => {
     window.localStorage.setItem("nas-cloud:viewMode", "list");
 
-    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} canEdit />);
 
     await waitFor(() => expect(screen.getByRole("table", { name: "Files" })).toBeVisible());
     expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("renders project files and project metadata", () => {
-    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} canEdit />);
 
     expect(screen.getByRole("heading", { name: "Garage Build" })).toBeVisible();
     expect(screen.getByText("Parts")).toBeVisible();
@@ -72,7 +72,7 @@ describe("ProjectWorkspace", () => {
   });
 
   it("links to a project zip export", () => {
-    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} canEdit />);
 
     expect(screen.getByRole("link", { name: "Download project ZIP" })).toHaveAttribute(
       "href",
@@ -82,7 +82,7 @@ describe("ProjectWorkspace", () => {
 
   it("exposes a selected-file zip link for checked project files", async () => {
     const user = userEvent.setup();
-    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} canEdit />);
 
     await user.click(screen.getByRole("checkbox", { name: "Select bracket.stl" }));
 
@@ -108,7 +108,7 @@ describe("ProjectWorkspace", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ProjectWorkspace project={project} files={[]} categories={[]} tags={[]} />);
+    render(<ProjectWorkspace project={project} files={[]} categories={[]} tags={[]} canEdit />);
 
     await user.upload(screen.getByLabelText("Choose files"), new File(["plan"], "wiring.pdf", { type: "application/pdf" }));
 
@@ -127,7 +127,7 @@ describe("ProjectWorkspace", () => {
   });
 
   it("exposes a folder picker for project uploads", () => {
-    render(<ProjectWorkspace project={project} files={[]} categories={[]} tags={[]} />);
+    render(<ProjectWorkspace project={project} files={[]} categories={[]} tags={[]} canEdit />);
 
     const folderInput = screen.getByLabelText("Choose folder");
     expect(folderInput).toHaveAttribute("type", "file");
@@ -136,7 +136,7 @@ describe("ProjectWorkspace", () => {
 
   it("shows detail drawer actions for the selected project file", async () => {
     const user = userEvent.setup();
-    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} canEdit />);
 
     await user.click(screen.getByRole("button", { name: "bracket.stl" }));
 
@@ -159,7 +159,7 @@ describe("ProjectWorkspace", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} canEdit />);
 
     await user.click(screen.getByRole("button", { name: "bracket.stl" }));
     await user.click(screen.getByRole("button", { name: "Archive" }));
@@ -186,7 +186,7 @@ describe("ProjectWorkspace", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} />);
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} canEdit />);
 
     await user.click(screen.getByRole("button", { name: "bracket.stl" }));
     await user.clear(screen.getByLabelText("File name"));
@@ -204,5 +204,29 @@ describe("ProjectWorkspace", () => {
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Renamed bracket-v2.stl");
     expect(screen.getByRole("button", { name: "bracket-v2.stl" })).toBeVisible();
+  });
+
+  it("gives viewers browse and download only", async () => {
+    const user = userEvent.setup();
+    render(<ProjectWorkspace project={project} files={[fileFixture]} categories={[]} tags={[]} canEdit={false} />);
+
+    expect(screen.getByText("View only: browse and download")).toBeVisible();
+    expect(screen.queryByText("Choose files")).not.toBeInTheDocument();
+    expect(screen.queryByText("Choose folder")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: "Select bracket.stl" }));
+    expect(screen.getByRole("link", { name: "Download ZIP" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "bracket.stl" }));
+    expect(screen.getByRole("link", { name: "Download" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
+  });
+
+  it("tells viewers an empty project is empty instead of inviting an upload", () => {
+    render(<ProjectWorkspace project={project} files={[]} categories={[]} tags={[]} canEdit={false} />);
+
+    expect(screen.getByText("No files in this project yet.")).toBeVisible();
   });
 });

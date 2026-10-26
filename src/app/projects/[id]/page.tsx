@@ -18,7 +18,8 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const session = await requirePageSession();
   const { db, repo } = session;
   const { id } = await params;
-  if (!projectAccess(repo, session, id)) {
+  const access = projectAccess(repo, session, id);
+  if (!access) {
     notFound();
   }
   const data = loadProjectWorkspaceData(id, db);
@@ -29,7 +30,13 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   return (
     <WorkspaceFrame admin={isAdmin(session)} projects={repo.listProjects(visibleTo(session))} activeHref={`/projects/${id}`}>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
-        <ProjectWorkspace project={data.project} files={data.files} categories={data.categories} tags={data.tags} />
+        <ProjectWorkspace
+          project={data.project}
+          files={data.files}
+          categories={data.categories}
+          tags={data.tags}
+          canEdit={access === "edit"}
+        />
         {isAdmin(session) ? (
           <>
             <ProjectMembersCard

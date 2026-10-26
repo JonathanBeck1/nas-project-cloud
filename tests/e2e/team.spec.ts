@@ -6,7 +6,7 @@ async function csrf(page: Page): Promise<string> {
   return decodeURIComponent(cookie?.value ?? "");
 }
 
-test("an invited member joins, sees only the projects they're added to, and is locked out when disabled", async ({
+test("an invited member joins, can only browse a project they view, and is locked out when disabled", async ({
   page,
   browser
 }) => {
@@ -39,15 +39,32 @@ test("an invited member joins, sees only the projects they're added to, and is l
     headers: { "x-nas-csrf": await csrf(page) },
     data: { name: projectName }
   });
-  const { project } = (await created.json()) as { project: { id: string } };
+  const { project } = (await created.json()) as { project: { id: string; slug: string } };
   await page.goto(`/projects/${project.id}`);
   await page.getByLabel("Person to add").selectOption({ label: "Teammate (teammate@example.local)" });
   await page.getByLabel("Access for the new member").selectOption("view");
   await page.getByRole("button", { name: "Add" }).click();
   await expect(page.getByRole("list", { name: "Project members" })).toContainText("Teammate");
 
+  const query = new URLSearchParams({ filename: "site-plan.txt", sourceDevice: "Mac", projectId: project.id, projectSlug: project.slug });
+  const upload = await page.request.post(`/api/files?${query}`, {
+    headers: { "x-nas-csrf": await csrf(page) },
+    data: Buffer.from("site plan")
+  });
+  expect(upload.status()).toBe(201);
+
   await memberPage.goto("/projects");
-  await expect(memberPage.getByRole("link", { name: projectName }).first()).toBeVisible();
+  await memberPage.getByRole("link", { name: projectName }).first().click();
+  await expect(memberPage.getByText("View only: browse and download")).toBeVisible();
+  await expect(memberPage.getByText("Choose files")).toHaveCount(0);
+  const sitePlan = memberPage.getByRole("button", { name: "site-plan.txt" });
+  // On a cold dev server the first click can land before the page hydrates.
+  await expect(async () => {
+    await sitePlan.click();
+    await expect(sitePlan).toHaveAttribute("aria-pressed", "true", { timeout: 1000 });
+  }).toPass();
+  await expect(memberPage.getByRole("link", { name: "Download", exact: true })).toBeVisible();
+  await expect(memberPage.getByRole("button", { name: "Archive" })).toHaveCount(0);
 
   await page.goto("/people");
   await page.getByRole("listitem").filter({ hasText: "teammate@example.local" }).getByRole("button", { name: "Disable" }).click();

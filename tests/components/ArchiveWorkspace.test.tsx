@@ -43,7 +43,7 @@ describe("ArchiveWorkspace", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ArchiveWorkspace initialFiles={[archivedFile]} />);
+    render(<ArchiveWorkspace initialFiles={[archivedFile]} viewOnlyProjectIds={[]} />);
 
     await user.click(screen.getByRole("button", { name: "Restore manual.pdf" }));
 
@@ -66,7 +66,7 @@ describe("ArchiveWorkspace", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ArchiveWorkspace initialFiles={[archivedFile]} />);
+    render(<ArchiveWorkspace initialFiles={[archivedFile]} viewOnlyProjectIds={[]} />);
 
     await user.click(screen.getByRole("button", { name: "Permanently delete manual.pdf" }));
 
@@ -79,5 +79,15 @@ describe("ArchiveWorkspace", () => {
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Deleted manual.pdf");
     expect(screen.queryByText("manual.pdf")).not.toBeInTheDocument();
+  });
+
+  it("doesn't offer restore or delete for a file in a view-only project", () => {
+    render(
+      <ArchiveWorkspace initialFiles={[{ ...archivedFile, projectId: "proj_view" }]} viewOnlyProjectIds={["proj_view"]} />
+    );
+
+    expect(screen.getByText("View only")).toBeVisible();
+    expect(screen.queryByRole("button", { name: `Restore ${archivedFile.name}` })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: `Permanently delete ${archivedFile.name}` })).not.toBeInTheDocument();
   });
 });

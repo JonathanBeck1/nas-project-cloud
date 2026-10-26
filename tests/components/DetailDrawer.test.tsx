@@ -337,4 +337,36 @@ describe("DetailDrawer", () => {
     expect(screen.getByLabelText("Add tag")).toBeDisabled();
     expect(screen.getByText("No tags yet.")).toBeVisible();
   });
+
+  it("offers only download and copy for a view-only file, and doesn't ask for its share links", () => {
+    const onListShareLinks = vi.fn(async () => []);
+    const reference: Tag = { id: "tag_ref", name: "Reference", slug: "reference" };
+
+    render(
+      <DetailDrawer
+        file={{ ...fixture, tags: [reference] }}
+        projects={[project]}
+        availableTags={[reference]}
+        readOnly
+        onArchive={vi.fn()}
+        onRename={vi.fn()}
+        onAssignProject={vi.fn()}
+        onAssignTags={vi.fn()}
+        onCreateShareLink={vi.fn()}
+        onListShareLinks={onListShareLinks}
+      />
+    );
+
+    expect(screen.getByRole("link", { name: "Download" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Copy path" })).toBeVisible();
+    expect(screen.getByText(/View only/)).toBeVisible();
+    expect(screen.getByText("Reference")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Project")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create share link" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove tag Reference" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Add tag")).not.toBeInTheDocument();
+    expect(onListShareLinks).not.toHaveBeenCalled();
+  });
 });

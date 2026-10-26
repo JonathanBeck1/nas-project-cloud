@@ -67,7 +67,7 @@ describe("AppShell", () => {
   });
 
   it("renders the primary workspace landmarks and real navigation entries", () => {
-    const { container } = render(<AppShell admin initialData={{ files: [], projects: [project], categories: [], tags: [] }} />);
+    const { container } = render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [], projects: [project], categories: [], tags: [] }} />);
 
     expect(screen.getByRole("navigation", { name: "Workspace" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Search files" })).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe("AppShell", () => {
   });
 
   it("doesn't offer members a New Project button, since only admins create projects", () => {
-    render(<AppShell admin={false} initialData={{ files: [], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin={false} viewOnlyProjectIds={[]} initialData={{ files: [], projects: [], categories: [], tags: [] }} />);
 
     expect(screen.queryByRole("button", { name: "New Project" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Categories" })).toBeNull();
@@ -98,7 +98,7 @@ describe("AppShell", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin />);
+    render(<AppShell admin viewOnlyProjectIds={[]} />);
 
     const file = new File(["hello"], "manual.pdf", { type: "application/pdf" });
     fireEvent.drop(screen.getByText(/Drop files here/), {
@@ -121,7 +121,7 @@ describe("AppShell", () => {
     const user = userEvent.setup();
     const inputClick = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
 
-    render(<AppShell admin />);
+    render(<AppShell admin viewOnlyProjectIds={[]} />);
 
     const uploadControl = screen.getByText("Choose files");
 
@@ -142,7 +142,7 @@ describe("AppShell", () => {
     const user = userEvent.setup();
     const inputClick = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
 
-    render(<AppShell admin />);
+    render(<AppShell admin viewOnlyProjectIds={[]} />);
 
     await user.click(screen.getByRole("button", { name: "Upload" }));
 
@@ -164,7 +164,7 @@ describe("AppShell", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin />);
+    render(<AppShell admin viewOnlyProjectIds={[]} />);
 
     await user.click(screen.getByRole("button", { name: "New Project" }));
     await user.type(screen.getByLabelText("Project name"), "Print Parts");
@@ -187,7 +187,7 @@ describe("AppShell", () => {
 
   it("selects a file and shows its actions in the detail drawer", async () => {
     const user = userEvent.setup();
-    render(<AppShell admin initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
 
     await user.click(screen.getByRole("button", { name: "manual.pdf" }));
 
@@ -215,7 +215,7 @@ describe("AppShell", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin initialData={{ files: [uploadedFile, secondFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile, secondFile], projects: [], categories: [], tags: [] }} />);
 
     await user.type(screen.getByRole("searchbox", { name: "Search files" }), "render");
 
@@ -247,7 +247,7 @@ describe("AppShell", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin initialData={{ files: [uploadedFile, imageFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile, imageFile], projects: [], categories: [], tags: [] }} />);
 
     await user.click(screen.getByRole("button", { name: "manual.pdf" }));
 
@@ -275,7 +275,7 @@ describe("AppShell", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
 
     await user.type(screen.getByRole("searchbox", { name: "Search files" }), "manual");
 
@@ -294,7 +294,7 @@ describe("AppShell", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(
-      <AppShell admin initialData={{ files: [uploadedFile], nextCursor: "c1", projects: [], categories: [], tags: [] }} />
+      <AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], nextCursor: "c1", projects: [], categories: [], tags: [] }} />
     );
     await user.click(screen.getByRole("checkbox", { name: "Select manual.pdf" }));
     await user.click(screen.getByRole("button", { name: "Load more files" }));
@@ -313,7 +313,7 @@ describe("AppShell", () => {
     );
 
     render(
-      <AppShell admin initialData={{ files: [uploadedFile], nextCursor: "c1", projects: [], categories: [], tags: [] }} />
+      <AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], nextCursor: "c1", projects: [], categories: [], tags: [] }} />
     );
     await user.click(screen.getByRole("button", { name: "Load more files" }));
 
@@ -331,13 +331,13 @@ describe("AppShell", () => {
     );
 
     const { unmount } = render(
-      <AppShell admin initialData={{ files: [uploadedFile], nextCursor: null, projects: [], categories: [], tags: [] }} />
+      <AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], nextCursor: null, projects: [], categories: [], tags: [] }} />
     );
     expect(screen.queryByRole("button", { name: "Load more files" })).not.toBeInTheDocument();
     unmount();
 
     render(
-      <AppShell admin initialData={{ files: [uploadedFile], nextCursor: "c1", projects: [], categories: [], tags: [] }} />
+      <AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], nextCursor: "c1", projects: [], categories: [], tags: [] }} />
     );
     await user.type(screen.getByRole("searchbox", { name: "Search files" }), "render");
 
@@ -346,7 +346,7 @@ describe("AppShell", () => {
 
   it("toggles between grid, gallery and list view, persisting the choice in localStorage", async () => {
     const user = userEvent.setup();
-    render(<AppShell admin initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
 
     const gridButton = screen.getByRole("button", { name: "Grid view" });
     const listButton = screen.getByRole("button", { name: "List view" });
@@ -375,14 +375,14 @@ describe("AppShell", () => {
 
   it("restores a saved gallery view and ignores an unknown saved value", async () => {
     window.localStorage.setItem("nas-cloud:viewMode", "gallery");
-    const { unmount } = render(<AppShell admin initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+    const { unmount } = render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Gallery view" })).toHaveAttribute("aria-pressed", "true"));
     expect(screen.getByRole("list", { name: "Files" })).toBeVisible();
     unmount();
 
     window.localStorage.setItem("nas-cloud:viewMode", "mosaic");
-    render(<AppShell admin initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Grid view" })).toHaveAttribute("aria-pressed", "true"));
   });
@@ -390,7 +390,7 @@ describe("AppShell", () => {
   it("restores the saved view mode from localStorage on mount", async () => {
     window.localStorage.setItem("nas-cloud:viewMode", "list");
 
-    render(<AppShell admin initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
 
     await waitFor(() => expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute("aria-pressed", "true"));
     expect(screen.getByRole("table", { name: "Files" })).toBeVisible();
@@ -407,7 +407,7 @@ describe("AppShell", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
 
     await user.type(screen.getByRole("searchbox", { name: "Search files" }), "manual");
 
@@ -422,7 +422,7 @@ describe("AppShell", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }} />);
 
     await user.click(screen.getByRole("button", { name: "manual.pdf" }));
     await user.click(screen.getByRole("button", { name: "Archive" }));
@@ -443,7 +443,7 @@ describe("AppShell", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin initialData={{ files: [uploadedFile, notesFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile, notesFile], projects: [], categories: [], tags: [] }} />);
 
     await user.click(screen.getByRole("checkbox", { name: "Select manual.pdf" }));
     await user.click(screen.getByRole("checkbox", { name: "Select notes.txt" }));
@@ -469,7 +469,7 @@ describe("AppShell", () => {
   it("exposes a zip download link for selected files", async () => {
     const user = userEvent.setup();
 
-    render(<AppShell admin initialData={{ files: [uploadedFile, notesFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile, notesFile], projects: [], categories: [], tags: [] }} />);
 
     await user.click(screen.getByRole("checkbox", { name: "Select manual.pdf" }));
     await user.click(screen.getByRole("checkbox", { name: "Select notes.txt" }));
@@ -503,7 +503,7 @@ describe("AppShell", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin initialData={{ files: [uploadedFile, notesFile], projects: [project], categories: [cadCategory], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile, notesFile], projects: [project], categories: [cadCategory], tags: [] }} />);
 
     await user.click(screen.getByRole("checkbox", { name: "Select manual.pdf" }));
     await user.click(screen.getByRole("checkbox", { name: "Select notes.txt" }));
@@ -542,7 +542,7 @@ describe("AppShell", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin initialData={{ files: [inProject], projects: [project], categories: [cadCategory], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [inProject], projects: [project], categories: [cadCategory], tags: [] }} />);
 
     await user.click(screen.getByRole("checkbox", { name: "Select manual.pdf" }));
     await user.selectOptions(screen.getByLabelText("Category for selected files"), "cat_cad");
@@ -568,7 +568,7 @@ describe("AppShell", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin initialData={{ files: [uploadedFile], projects: [project], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile], projects: [project], categories: [], tags: [] }} />);
 
     await user.click(screen.getByRole("button", { name: "manual.pdf" }));
     await user.selectOptions(screen.getByLabelText("Project"), "proj_123");
@@ -603,7 +603,7 @@ describe("AppShell", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AppShell admin initialData={{ files: [uploadedFile, notesFile], projects: [], categories: [], tags: [] }} />);
+    render(<AppShell admin viewOnlyProjectIds={[]} initialData={{ files: [uploadedFile, notesFile], projects: [], categories: [], tags: [] }} />);
 
     await user.click(screen.getByRole("button", { name: "manual.pdf" }));
     await user.click(screen.getByRole("button", { name: "Archive" }));
@@ -615,6 +615,56 @@ describe("AppShell", () => {
     expect(screen.getByRole("button", { name: "notes.txt" })).toHaveAttribute("aria-pressed", "true");
     expect(within(screen.getByRole("complementary", { name: "File details" })).getByText("notes.txt")).toBeVisible();
   });
+  it("treats files in view-only projects as read-only and doesn't offer those projects as destinations", async () => {
+    const user = userEvent.setup();
+    const sharedProject: Project = { ...project, id: "proj_view", name: "Shared Drawings", slug: "shared-drawings" };
+    const viewOnlyFile: CloudFile = { ...notesFile, id: "file_view", name: "drawing.pdf", projectId: "proj_view" };
+    render(
+      <AppShell
+        admin={false}
+        viewOnlyProjectIds={["proj_view"]}
+        initialData={{ files: [uploadedFile, viewOnlyFile], projects: [project, sharedProject], categories: [], tags: [] }}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "drawing.pdf" }));
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("href", "/api/files/file_view/download");
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "manual.pdf" }));
+    expect(screen.getByRole("button", { name: "Archive" })).toBeVisible();
+    const destinations = within(screen.getByLabelText("Project")).getAllByRole("option").map((option) => option.textContent);
+    expect(destinations).toEqual(["Inbox", "Printer Upgrade"]);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select drawing.pdf" }));
+    expect(screen.getByRole("link", { name: "Download ZIP" })).toBeVisible();
+    expect(screen.queryByLabelText("Project for selected files")).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText("Inbox files")).queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+  });
+
+  it("doesn't offer bulk edits for a view-only search result that isn't in the loaded files", async () => {
+    const user = userEvent.setup();
+    const olderDrawing: CloudFile = { ...notesFile, id: "file_old", name: "old-drawing.pdf", projectId: "proj_view" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(() => Promise.resolve(new Response(JSON.stringify({ files: [olderDrawing], truncated: false }), { status: 200 })))
+    );
+    render(
+      <AppShell
+        admin={false}
+        viewOnlyProjectIds={["proj_view"]}
+        initialData={{ files: [uploadedFile], projects: [], categories: [], tags: [] }}
+      />
+    );
+
+    await user.type(screen.getByRole("searchbox", { name: "Search files" }), "drawing");
+    await user.click(await screen.findByRole("checkbox", { name: "Select old-drawing.pdf" }));
+
+    expect(screen.getByText("1 selected")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply organization" })).not.toBeInTheDocument();
+  });
+
 });
 
 function deferred<T>() {

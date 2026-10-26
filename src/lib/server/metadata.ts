@@ -824,6 +824,13 @@ export function createMetadataRepository(db: AppDatabase) {
       return rows.map(projectFromRow);
     },
 
+    listViewOnlyProjectIds(userId: string): string[] {
+      return db
+        .prepare<[string], { project_id: string }>("select project_id from project_members where user_id = ? and access = 'view'")
+        .all(userId)
+        .map((row) => row.project_id);
+    },
+
     getProjectAccess(projectId: string, userId: string): ProjectAccess | null {
       const row = db
         .prepare<[string, string], { access: ProjectAccess }>(

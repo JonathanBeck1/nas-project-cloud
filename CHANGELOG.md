@@ -29,6 +29,13 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Members see only what they can use.** Categories, Tags and People
   links, the New Project button, and project settings are hidden from
   members.
+- **Viewers see only download controls.** In a project where a member has
+  view access, the upload buttons are gone, and the file drawer, bulk bar
+  and Archive page offer download and copy path but no rename, move, tags,
+  share links, archive, restore or delete. The home page leaves view-only
+  projects out of the places a file can be moved to. The project page's bulk
+  bar no longer shows project and category pickers that had no Apply action
+  there.
 
 ### Security
 
