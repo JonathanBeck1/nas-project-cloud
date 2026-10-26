@@ -94,6 +94,12 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   them.
 - **A test lists every API route with its access policy,** so a new route
   can't ship checking only that someone is signed in.
+- **zod 4.6.7** fixes memory exhaustion when an array fails validation
+  element by element
+  ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)).
+  Only signed-in routes validate arrays with zod here (the bulk file actions
+  and file tags); the public routes parse their small, size-capped bodies by
+  hand. zod moves from 3.25 to 4, with no change to what the routes accept.
 
 ### Changed
 
