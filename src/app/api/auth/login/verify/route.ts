@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { cookieFromRequest } from "@/lib/server/auth/guards";
@@ -41,12 +42,18 @@ export async function POST(request: Request) {
     : checkRecoveryCode(repo, challenge.userId, recoveryCode);
   // Deleting the challenge is what claims it, so one challenge can't become two sessions.
   if (!valid || !repo.deleteLoginChallenge(challenge.id)) {
+    recordAudit(request, { userId: challenge.userId, action: "sign_in_failed", detail: { reason: "wrong code" } });
     return NextResponse.json({ error: "invalid code" }, { status: 401 });
   }
   resetCodeAttempts(challenge.userId);
 
   const user = repo.getUserById(challenge.userId);
   const sessionToken = startBrowserSession(repo, challenge.userId, challenge.deviceName);
+  recordAudit(request, {
+    userId: challenge.userId,
+    action: "sign_in",
+    detail: { method: code ? "authenticator code" : "recovery code" }
+  });
   return clearLoginChallengeCookie(withSessionCookie(NextResponse.json({ user }), sessionToken));
 }
 

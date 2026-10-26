@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAudit } from "@/lib/server/audit";
 import { adminOnly } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -26,7 +27,8 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const { id, userId } = await params;
   const repo = createMetadataRepository(getDatabase());
-  if (!repo.getProjectById(id)) {
+  const project = repo.getProjectById(id);
+  if (!project) {
     return NextResponse.json({ error: "project not found" }, { status: 404 });
   }
   const user = repo.getUserById(userId);
@@ -38,6 +40,12 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   repo.setProjectMember(id, userId, parsed.data.access);
+  recordAudit(request, {
+    userId: auth.userId,
+    action: "project_member_set",
+    target: { type: "project", id, label: project.name },
+    detail: { member: user.email, access: parsed.data.access }
+  });
   return NextResponse.json({ members: repo.listProjectMembers(id) });
 }
 
@@ -53,9 +61,16 @@ export async function DELETE(request: Request, { params }: Params) {
 
   const { id, userId } = await params;
   const repo = createMetadataRepository(getDatabase());
-  if (!repo.getProjectById(id)) {
+  const project = repo.getProjectById(id);
+  if (!project) {
     return NextResponse.json({ error: "project not found" }, { status: 404 });
   }
   repo.removeProjectMember(id, userId);
+  recordAudit(request, {
+    userId: auth.userId,
+    action: "project_member_removed",
+    target: { type: "project", id, label: project.name },
+    detail: { member: repo.getUserById(userId)?.email ?? userId }
+  });
   return NextResponse.json({ members: repo.listProjectMembers(id) });
 }

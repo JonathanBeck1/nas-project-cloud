@@ -27,6 +27,12 @@ vi.mock("@/lib/server/smartViews", () => ({
   listSmartViewFiles: mocks.listSmartViewFiles
 }));
 
+vi.mock("@/lib/server/audit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/audit")>()),
+  recordAudit: vi.fn(),
+  pruneAuditLog: vi.fn(() => 0)
+}));
+
 describe("workspace API modules", () => {
   beforeEach(() => {
     vi.clearAllMocks();

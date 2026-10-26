@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { fileTarget, projectLabel, recordAudit } from "@/lib/server/audit";
 import { fileDenied, projectDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -34,12 +35,14 @@ export async function POST(request: Request) {
   }
 
   const repo = createMetadataRepository(getDatabase());
+  const projectBefore = new Map<string, string | null>();
 
   for (const id of new Set(parsed.data.fileIds)) {
     const file = repo.getFileById(id);
     if (!file) {
       return NextResponse.json({ error: "file not found" }, { status: 404 });
     }
+    projectBefore.set(file.id, file.projectId);
     const denied = fileDenied(repo, auth, file, "edit");
     if (denied) {
       return denied;
@@ -65,5 +68,16 @@ export async function POST(request: Request) {
   }
 
   const files = repo.bulkUpdateFiles(parsed.data);
+  for (const file of files) {
+    const from = projectBefore.get(file.id) ?? null;
+    if (from !== file.projectId) {
+      recordAudit(request, {
+        userId: auth.userId,
+        action: "file_moved",
+        target: fileTarget(file),
+        detail: { from: projectLabel(repo, from), to: projectLabel(repo, file.projectId) }
+      });
+    }
+  }
   return NextResponse.json({ files });
 }

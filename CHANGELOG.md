@@ -29,6 +29,25 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Members see only what they can use.** Categories, Tags and People
   links, the New Project button, and project settings are hidden from
   members.
+- **Audit log.** Admins get an **Audit log** page under System. It records:
+  - sign-ins and failed sign-ins, with the reason (the caller still only sees
+    "invalid credentials");
+  - two-factor being turned on or reset, and recovery codes being replaced;
+  - invites, new accounts, role changes, disabling and removing accounts;
+  - devices being paired or removed;
+  - projects being created, edited or deleted, and project access changes;
+  - uploads, downloads, ZIP downloads, renames, moves, archives, restores and
+    permanent deletes;
+  - share links being created, edited or revoked;
+  - exports of the log itself.
+
+  Filter by person, action and date, and export the result as CSV; cells a
+  spreadsheet would run as formulas are escaped. Entries keep the person's
+  email, so they still say who after an account is removed. Previews and
+  thumbnails aren't recorded, nor are later byte ranges of a download a video
+  player seeks through. IP addresses are recorded when
+  `NAS_CLOUD_TRUST_PROXY` is on. Entries older than 365 days are deleted by
+  the hourly maintenance and the `/api/maintenance/upload-cleanup` cron call.
 - **Viewers see only download controls.** In a project where a member has
   view access, the upload buttons are gone, and the file drawer, bulk bar
   and Archive page offer download and copy path but no rename, move, tags,

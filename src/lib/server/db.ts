@@ -168,6 +168,20 @@ function migrate(db: AppDatabase) {
       primary key (project_id, user_id)
     );
 
+    -- No foreign keys: entries outlive the people and files they name, so labels are copied in.
+    create table if not exists audit_events (
+      id text primary key,
+      created_at text not null,
+      user_id text,
+      user_email text,
+      action text not null,
+      target_type text,
+      target_id text,
+      target_label text,
+      ip text,
+      detail text
+    );
+
     create table if not exists invites (
       id text primary key,
       token_hash text not null unique,
@@ -245,6 +259,9 @@ function migrate(db: AppDatabase) {
     create index if not exists project_members_user_id_idx on project_members(user_id);
     create index if not exists rate_limit_events_bucket_key_idx
       on rate_limit_events(bucket, key, occurred_at);
+    create index if not exists audit_events_created_idx on audit_events(created_at desc, id desc);
+    create index if not exists audit_events_user_idx on audit_events(user_id, created_at desc);
+    create index if not exists audit_events_action_idx on audit_events(action, created_at desc);
   `);
 
   addColumnIfMissing(db, "files", "status", "text not null default 'active'");

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
 import { DUMMY_PASSWORD_HASH, hashPassword, needsRehash, verifyPassword } from "@/lib/server/auth/passwords";
@@ -57,6 +58,11 @@ export async function POST(request: Request) {
   const valid = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
   // A disabled account gets the same answer as a wrong password.
   if (!user || !valid || user.disabledAt) {
+    recordAudit(request, {
+      userId: user?.id ?? null,
+      action: "sign_in_failed",
+      detail: { email, reason: !user ? "no such account" : !valid ? "wrong password" : "account disabled" }
+    });
     return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
   }
 
@@ -81,6 +87,7 @@ export async function POST(request: Request) {
   }
 
   const token = startBrowserSession(repo, user.id, deviceName);
+  recordAudit(request, { userId: user.id, action: "sign_in", detail: { method: "password only, two-factor not set up" } });
   return withSessionCookie(
     NextResponse.json({
       user: {

@@ -53,7 +53,8 @@ Even with HTTPS in front, the app's own port answers anyone who can reach it. Li
 
 - Give everyone their own account: invite them from **People** (admins only). An invite link works once, for 7 days, so send it privately. Each person sets their own password and must set up two-factor before they can see anything.
 - Pick the smallest role that works. **Owners** and **admins** see every project. **Members** see only the projects they're added to, from each project's Members card, plus files they uploaded outside any project. Make someone a viewer when they only need to read and download.
-- When someone leaves, disable or remove their account on the same day. Either signs them out everywhere at once. Removing an account keeps the files they uploaded.
+- When someone leaves, disable or remove their account on the same day. Either signs them out everywhere at once and revokes the share links they made. Removing an account keeps the files they uploaded.
+- Check the **Audit log** (admins, under System) now and then. It records sign-ins and failed sign-ins, account and access changes, and uploads, downloads, moves, archives, deletes and share links, for 365 days. Export it as CSV to keep it longer. IP addresses are recorded only when `NAS_CLOUD_TRUST_PROXY` is on behind a reverse proxy.
 - Use a long, unique password for the owner account, stored in a password manager, and don't share it.
 - Two-factor sign-in is required, so a stolen password alone doesn't get in. Keep the recovery codes in a password manager, and set `NAS_CLOUD_MAINTENANCE_TOKEN`: it's the only way to reset two-factor if the phone and the codes are both lost.
 - Sign out on shared computers. The Devices page lists every signed-in device, and removing one ends its session.
@@ -61,8 +62,9 @@ Even with HTTPS in front, the app's own port answers anyone who can reach it. Li
 
 ## What the app doesn't do yet
 
-- **No audit trail** of who viewed, downloaded, moved or deleted files inside the app. Share-link downloads are the only access that's recorded.
+- **The audit log lives in the app's own database.** An owner or admin, or anyone with the NAS's disk, could edit it. For a record nobody inside can change, export it regularly to storage they can't reach.
+- **Viewing isn't recorded.** Opening a file's preview or thumbnail leaves no entry; downloads do.
 - **No single sign-on (SAML/OIDC)** and **no malware scanning** of uploads.
 - **No certification.** It has one maintainer and hasn't had an outside penetration test or compliance audit (SOC 2, HIPAA and the like).
 
-An audit log is being added, and this page will change when it lands. For regulated data, such as health, financial or legal records, get a professional security review before relying on the app, and check what your obligations require.
+For regulated data, such as health, financial or legal records, get a professional security review before relying on the app, and check what your obligations require.

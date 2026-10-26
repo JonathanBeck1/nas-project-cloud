@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { withSessionCookie } from "@/lib/server/auth/http";
 import { hashPassword } from "@/lib/server/auth/passwords";
 import { hashSessionToken, startBrowserSession } from "@/lib/server/auth/sessions";
@@ -45,7 +46,8 @@ export async function POST(request: Request) {
 
   const repo = createMetadataRepository(getDatabase());
   const tokenHash = hashSessionToken(token);
-  if (!repo.getPendingInvite({ tokenHash })) {
+  const invite = repo.getPendingInvite({ tokenHash });
+  if (!invite) {
     return NextResponse.json({ error: "this invite has expired or was already used" }, { status: 404 });
   }
   if (repo.getUserByEmail(email)) {
@@ -66,6 +68,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "this invite has expired or was already used" }, { status: 404 });
   }
 
+  recordAudit(request, {
+    userId: user.id,
+    action: "account_created",
+    target: { type: "invite", id: invite.id },
+    detail: { via: "invite", role: user.role }
+  });
   return withSessionCookie(NextResponse.json({ user }, { status: 201 }), startBrowserSession(repo, user.id, deviceName));
 }
 

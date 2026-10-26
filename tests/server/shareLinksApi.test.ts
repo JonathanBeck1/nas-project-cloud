@@ -69,6 +69,12 @@ vi.mock("@/lib/server/storage", () => ({
   createStorageService: vi.fn(() => mocks.storage)
 }));
 
+vi.mock("@/lib/server/audit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/audit")>()),
+  recordAudit: vi.fn(),
+  pruneAuditLog: vi.fn(() => 0)
+}));
+
 describe("share links API", () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fileTarget, recordAudit } from "@/lib/server/audit";
 import { fileDenied } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -29,6 +30,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     .resolveReadPath(file.storagePath)
     .catch(() => null);
   const response = absolutePath ? await createFileDownloadResponse(request, file, absolutePath) : null;
+  // A player seeking through a video asks for later byte ranges; only the start of a download is an entry.
+  const range = request.headers.get("range");
+  if (response?.ok && (!range || range.startsWith("bytes=0-"))) {
+    recordAudit(request, { userId: auth.userId, action: "file_downloaded", target: fileTarget(file) });
+  }
 
   return response ?? NextResponse.json({ error: "file not found" }, { status: 404 });
 }

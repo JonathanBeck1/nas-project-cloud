@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fileTarget, recordAudit } from "@/lib/server/audit";
 import { projectDenied, visibleTo } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -143,6 +144,12 @@ export async function POST(request: Request) {
   }
 
   enqueuePreviewForFile(repo, file);
+  recordAudit(request, {
+    userId: auth.userId,
+    action: "file_uploaded",
+    target: fileTarget(file),
+    detail: { path: file.storagePath, sizeBytes: file.sizeBytes }
+  });
   return NextResponse.json({ file }, { status: 201 });
 }
 

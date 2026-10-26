@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { adminOnly, canGrantRole } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -25,5 +26,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 
   repo.deleteInvite(id);
+  recordAudit(request, { userId: auth.userId, action: "invite_revoked", target: { type: "invite", id }, detail: { role: invite.role } });
   return NextResponse.json({ ok: true });
 }

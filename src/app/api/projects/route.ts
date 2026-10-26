@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAudit } from "@/lib/server/audit";
 import { adminOnly, visibleTo } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
 
   const repo = createMetadataRepository(getDatabase());
   const project = repo.createProject(parsed.data);
+  recordAudit(request, { userId: auth.userId, action: "project_created", target: { type: "project", id: project.id, label: project.name } });
 
   return NextResponse.json({ project }, { status: 201 });
 }

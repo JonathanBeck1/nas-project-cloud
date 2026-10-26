@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAudit } from "@/lib/server/audit";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
 import { createMetadataRepository } from "@/lib/server/metadata";
@@ -15,10 +16,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 
   const repo = createMetadataRepository(getDatabase());
+  const device = repo.listDevices(auth.userId).find((candidate) => candidate.id === id);
   const revoked = repo.revokeDevice(auth.userId, id);
   if (!revoked) {
     return NextResponse.json({ error: "device not found" }, { status: 404 });
   }
 
+  recordAudit(request, { userId: auth.userId, action: "device_removed", target: { type: "device", id, label: device?.name } });
   return NextResponse.json({ ok: true });
 }

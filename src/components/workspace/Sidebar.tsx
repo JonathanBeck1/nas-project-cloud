@@ -13,6 +13,7 @@ import {
   MonitorUp,
   PackageOpen,
   Ruler,
+  ScrollText,
   Settings,
   Tags,
   Users,
@@ -46,7 +47,12 @@ function libraryItems(admin: boolean): NavItem[] {
 
 function systemItems(admin: boolean): NavItem[] {
   return [
-    ...(admin ? [{ label: "People", icon: Users, href: "/people" }] : []),
+    ...(admin
+      ? [
+          { label: "People", icon: Users, href: "/people" },
+          { label: "Audit log", icon: ScrollText, href: "/audit" }
+        ]
+      : []),
     { label: "Devices", icon: HardDrive, href: "/devices" },
     { label: "Archive", icon: Archive, href: "/archive" },
     { label: "Settings", icon: Settings, href: "/settings" }

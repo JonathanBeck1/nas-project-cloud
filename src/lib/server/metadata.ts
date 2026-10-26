@@ -2,6 +2,9 @@ import { nanoid } from "nanoid";
 import { createSetupCode } from "@/lib/server/auth/setupCode";
 import type { AppDatabase } from "@/lib/server/db";
 import type {
+  AuditAction,
+  AuditEvent,
+  AuditTargetType,
   Category,
   AuthSession,
   CloudFile,
@@ -143,6 +146,36 @@ type UploadSessionRow = {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+};
+
+type AuditEventRow = {
+  id: string;
+  created_at: string;
+  user_id: string | null;
+  user_email: string | null;
+  action: AuditAction;
+  target_type: AuditTargetType | null;
+  target_id: string | null;
+  target_label: string | null;
+  ip: string | null;
+  detail: string | null;
+};
+
+export type AuditEventInput = {
+  userId: string | null;
+  action: AuditAction;
+  target?: { type: AuditTargetType; id: string; label?: string | null };
+  ip?: string | null;
+  detail?: Record<string, unknown>;
+};
+
+export type AuditFilters = {
+  userId?: string;
+  action?: AuditAction;
+  from?: string;
+  to?: string;
+  cursor?: string | null;
+  limit: number;
 };
 
 type UserRow = {
@@ -822,6 +855,69 @@ export function createMetadataRepository(db: AppDatabase) {
               `)
               .all(visibleTo);
       return rows.map(projectFromRow);
+    },
+
+    // The email is copied in so the entry still names the person after their account is removed.
+    recordAuditEvent(input: AuditEventInput): void {
+      db.prepare(`
+        insert into audit_events (id, created_at, user_id, user_email, action, target_type, target_id, target_label, ip, detail)
+        values (@id, @createdAt, @userId, (select email from users where id = @userId), @action, @targetType, @targetId,
+          @targetLabel, @ip, @detail)
+      `).run({
+        id: `audit_${nanoid(16)}`,
+        createdAt: new Date().toISOString(),
+        userId: input.userId,
+        action: input.action,
+        targetType: input.target?.type ?? null,
+        targetId: input.target?.id ?? null,
+        targetLabel: input.target?.label ?? null,
+        ip: input.ip ?? null,
+        detail: input.detail ? JSON.stringify(input.detail) : null
+      });
+    },
+
+    // Newest first. The cursor is the last entry's "createdAt|id", so pages don't shift as new entries arrive.
+    listAuditEvents(filters: AuditFilters): { events: AuditEvent[]; nextCursor: string | null } {
+      const [cursorAt, cursorId] = filters.cursor ? filters.cursor.split("|") : [null, null];
+      const rows = db
+        .prepare(`
+          select * from audit_events
+          where (@userId is null or user_id = @userId)
+            and (@action is null or action = @action)
+            and (@from is null or created_at >= @from)
+            and (@to is null or created_at < @to)
+            and (@cursorAt is null or created_at < @cursorAt or (created_at = @cursorAt and id < @cursorId))
+          order by created_at desc, id desc
+          limit @limit
+        `)
+        .all({
+          userId: filters.userId ?? null,
+          action: filters.action ?? null,
+          from: filters.from ?? null,
+          to: filters.to ?? null,
+          cursorAt,
+          cursorId,
+          limit: filters.limit + 1
+        }) as AuditEventRow[];
+      const page = rows.slice(0, filters.limit);
+      const last = page.at(-1);
+      return {
+        events: page.map(auditEventFromRow),
+        nextCursor: rows.length > filters.limit && last ? `${last.created_at}|${last.id}` : null
+      };
+    },
+
+    // Everyone the log names, including people whose accounts were removed since.
+    listAuditPeople(): { id: string; email: string }[] {
+      return db
+        .prepare<[], { id: string; email: string }>(
+          "select user_id as id, max(user_email) as email from audit_events where user_id is not null group by user_id"
+        )
+        .all();
+    },
+
+    pruneAuditEvents(olderThan: Date): number {
+      return db.prepare<[string]>("delete from audit_events where created_at < ?").run(olderThan.toISOString()).changes;
     },
 
     listViewOnlyProjectIds(userId: string): string[] {
@@ -2139,6 +2235,21 @@ function uniqueSlug(db: AppDatabase, tableName: "projects" | "tags" | "categorie
   }
 
   return candidate;
+}
+
+function auditEventFromRow(row: AuditEventRow): AuditEvent {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    userId: row.user_id,
+    userEmail: row.user_email,
+    action: row.action,
+    targetType: row.target_type,
+    targetId: row.target_id,
+    targetLabel: row.target_label,
+    ip: row.ip,
+    detail: row.detail ? (JSON.parse(row.detail) as Record<string, unknown>) : null
+  };
 }
 
 function revokeShareLinksCreatedBy(db: AppDatabase, userId: string, now: string): void {

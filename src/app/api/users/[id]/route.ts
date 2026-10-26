@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAudit } from "@/lib/server/audit";
 import { adminOnly, canGrantRole, canManageUser, currentActor } from "@/lib/server/auth/access";
 import { requireApiSession } from "@/lib/server/auth/guards";
 import { getDatabase } from "@/lib/server/db";
@@ -39,11 +40,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "you can't change this account" }, { status: 403 });
   }
 
-  if (parsed.data.role) {
+  const subject = { type: "user" as const, id, label: target.email };
+  if (parsed.data.role && parsed.data.role !== target.role) {
     repo.updateUserRole(id, parsed.data.role);
+    recordAudit(request, {
+      userId: auth.userId,
+      action: "user_role_changed",
+      target: subject,
+      detail: { from: target.role, to: parsed.data.role }
+    });
   }
   if (parsed.data.disabled !== undefined) {
     repo.setUserDisabled(id, parsed.data.disabled);
+    recordAudit(request, { userId: auth.userId, action: parsed.data.disabled ? "user_disabled" : "user_enabled", target: subject });
   }
 
   return NextResponse.json({ user: repo.listTeamMembers().find((user) => user.id === id) });
@@ -71,5 +80,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 
   repo.deleteUser(id);
+  recordAudit(request, { userId: auth.userId, action: "user_removed", target: { type: "user", id, label: target.email } });
   return NextResponse.json({ ok: true });
 }
