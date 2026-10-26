@@ -65,6 +65,55 @@ have accounts.
   bar no longer shows project and category pickers that had no Apply action
   there.
 
+### Added
+
+- **Team accounts.** Owners and admins invite people from the new
+  **People** page with a one-time link that works for 7 days. The invitee
+  sets their own email and password, then sets up two-factor before they
+  can see anything. People also lists every account and lets you:
+  - change someone's role;
+  - disable or re-enable an account (disabling signs them out everywhere at
+    once and revokes the share links they made);
+  - reset their two-factor;
+  - remove the account, keeping their files and revoking their share links.
+    Files they kept outside any project become visible to admins only.
+
+  Owners manage everyone and admins manage members only. Nobody can change
+  their own account there, so a team always keeps an owner. Promoting a
+  member to admin or owner drops their project memberships, since they now
+  see every project.
+- **Project members.** Each project page has a Members card for admins.
+  Add members as editors or viewers, change their access, or remove them.
+- **Members see only what they can use.** Categories, Tags and People
+  links, the New Project button, and project settings are hidden from
+  members.
+- **Audit log.** Admins get an **Audit log** page under System. It records:
+  - sign-ins and failed sign-ins, with the reason (the caller still only sees
+    "invalid credentials");
+  - two-factor being turned on or reset, and recovery codes being replaced;
+  - invites, new accounts, role changes, disabling and removing accounts;
+  - devices being paired or removed;
+  - projects being created, edited or deleted, and project access changes;
+  - uploads, downloads, ZIP downloads, renames, moves, archives, restores and
+    permanent deletes;
+  - share links being created, edited or revoked;
+  - exports of the log itself.
+
+  Filter by person, action and date, and export the result as CSV; cells a
+  spreadsheet would run as formulas are escaped. Entries keep the person's
+  email, so they still say who after an account is removed. Previews and
+  thumbnails aren't recorded, nor are later byte ranges of a download a video
+  player seeks through. IP addresses are recorded when
+  `NAS_CLOUD_TRUST_PROXY` is on. Entries older than 365 days are deleted by
+  the hourly maintenance and the `/api/maintenance/upload-cleanup` cron call.
+- **Viewers see only download controls.** In a project where a member has
+  view access, the upload buttons are gone, and the file drawer, bulk bar
+  and Archive page offer download and copy path but no rename, move, tags,
+  share links, archive, restore or delete. The home page leaves view-only
+  projects out of the places a file can be moved to. The project page's bulk
+  bar no longer shows project and category pickers that had no Apply action
+  there.
+
 ### Security
 
 - **Two-factor sign-in, required for every account.** Signing in now takes
