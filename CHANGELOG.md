@@ -112,6 +112,12 @@ have accounts.
   and a sharp older than 0.35.5, while the image runs on Alpine (musl) and
   0.6.0 already shipped sharp 0.35.5, and the app has no Server Actions.
   Builds on other platforms should upgrade.
+- **zod 4.6.7** fixes memory exhaustion when an array fails validation
+  element by element
+  ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)).
+  Only signed-in routes validate arrays with zod here (the bulk file actions
+  and file tags); the public routes parse their small, size-capped bodies by
+  hand. zod moves from 3.25 to 4, with no change to what the routes accept.
 
 `npm audit --omit=dev` reports no known vulnerabilities in this release.
 
