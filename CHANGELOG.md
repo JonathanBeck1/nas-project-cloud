@@ -5,7 +5,16 @@ All notable changes to NAS Project Cloud are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.7.0] - 2026-10-26
+
+The team release. You can now invite people, give each one owner, admin or
+member access, and decide project by project who can edit and who can only
+view; every route and page checks it. Signing in takes a code from an
+authenticator app as well as the password, an audit log records who did
+what, and pages refuse scripts the server didn't put there. Read the
+migration notes before upgrading: the first page you see afterwards is
+two-factor setup, and rolling back to 0.6.0 needs care once other people
+have accounts.
 
 ### Added
 
@@ -94,12 +103,23 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   them.
 - **A test lists every API route with its access policy,** so a new route
   can't ship checking only that someone is signed in.
+- **Next.js 15.5.28** fixes a remote code execution in the image
+  optimization API with SVG files
+  ([GHSA-2464-fhr4-w9xw](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw))
+  and a denial of service through Server Actions
+  ([GHSA-p3m5-59mp-jv5r](https://github.com/vercel/next.js/security/advisories/GHSA-p3m5-59mp-jv5r)).
+  Neither reached the published image: the first needs glibc-based Linux
+  and a sharp older than 0.35.5, while the image runs on Alpine (musl) and
+  0.6.0 already shipped sharp 0.35.5, and the app has no Server Actions.
+  Builds on other platforms should upgrade.
 - **zod 4.6.7** fixes memory exhaustion when an array fails validation
   element by element
   ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)).
   Only signed-in routes validate arrays with zod here (the bulk file actions
   and file tags); the public routes parse their small, size-capped bodies by
   hand. zod moves from 3.25 to 4, with no change to what the routes accept.
+
+`npm audit --omit=dev` reports no known vulnerabilities in this release.
 
 ### Changed
 
@@ -118,6 +138,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Migration notes
 
+- **Upgrading from 0.6.0** applies the schema changes on first start: new
+  tables for invites, project members, recovery codes, pending sign-ins and
+  the audit log, and new columns on users and files. Take the usual
+  snapshot first.
 - **The next page you open after upgrading is "Set up two-factor".** Have an
   authenticator app ready. Turning it on signs out your other browsers and
   paired devices; sign in or pair them again.
@@ -126,6 +150,11 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Files already in the library are attributed to the owner.** Files
   storage sync finds later are too, since nobody uploaded them through the
   app.
+- **Rolling back to 0.6.0 is safe only while the owner is the only
+  account.** 0.6.0 starts on the upgraded database, but it checks neither
+  two-factor nor permissions and doesn't know about disabled accounts, so
+  every account that can sign in sees and changes everything. Remove every
+  other account first, or restore the snapshot you took before upgrading.
 
 ## [0.6.0] - 2026-10-18
 
